@@ -1,8 +1,8 @@
 """The real OpenVLA+LIBERO rollout backend (GPU-only body).
 
-This is the concrete `RolloutBackend` the harness uses on a GPU host. Only the
+This is the concrete `RolloutBackend` the harness uses on a GPU host. The
 CPU-observable contract is exercised in tests here; the closed-loop rollout body
-is implemented and verified on the GPU machine, following the reference harness.
+is to be implemented on this GPU host (Phase C), following the reference harness.
 
 Defaults are grounded in the reference OpenVLA+LIBERO project:
   * model_id        openvla/openvla-7b-finetuned-libero-spatial
@@ -42,7 +42,7 @@ def _require_openvla_stack() -> Any:
     try:
         import torch  # noqa: F401  (presence check only)
         import transformers  # noqa: F401
-    except ImportError as exc:  # pragma: no cover - exercised only where deps exist
+    except ImportError as exc:
         raise OpenVLABackendUnavailable(
             "The OpenVLA rollout backend needs the GPU stack (torch, transformers, "
             "openvla, LIBERO). Install the 'gpu' extra on a CUDA host and run there; "

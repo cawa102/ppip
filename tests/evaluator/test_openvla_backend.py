@@ -1,18 +1,24 @@
 """Contract of the real OpenVLA rollout backend (the GPU boundary).
 
-The rollout body runs only on a GPU host, so here we pin the CPU-observable
+On the GPU host the OpenVLA/torch stack is importable. We pin the CPU-observable
 contract: the backend conforms to RolloutBackend, carries the reference-grounded
-defaults, and fails loudly with an actionable error when the OpenVLA/LIBERO stack
-is not importable (as on this machine) instead of failing obscurely deep inside a
-rollout.
+defaults, its dependency guard passes when the stack is present, and it still fails
+loudly with an actionable error if the stack is ever missing (simulated here so the
+check does not depend on the host) rather than failing obscurely deep in a rollout.
 """
 
 from __future__ import annotations
 
+import sys
+
 import pytest
 
 from evaluator.backends import RolloutBackend
-from evaluator.openvla_backend import OpenVLABackendUnavailable, OpenVLARolloutBackend
+from evaluator.openvla_backend import (
+    OpenVLABackendUnavailable,
+    OpenVLARolloutBackend,
+    _require_openvla_stack,
+)
 from tests.support import make_candidate
 
 
@@ -27,7 +33,19 @@ def test_backend_conforms_to_protocol_and_has_reference_defaults():
     assert backend.num_steps_wait == 10
 
 
-def test_run_rollouts_without_gpu_stack_raises_actionable_error():
+def test_require_openvla_stack_passes_on_gpu_host():
+    # On the GPU host the OpenVLA/torch stack is importable, so the guard returns
+    # torch instead of raising OpenVLABackendUnavailable.
+    import torch
+
+    assert _require_openvla_stack() is torch
+
+
+def test_run_rollouts_raises_actionable_error_when_stack_missing(monkeypatch):
+    # Defensive contract: if the GPU stack is ever unimportable, fail loudly and
+    # actionably up front rather than obscurely deep inside a rollout. Simulate the
+    # missing stack by making `import torch` raise, independent of the host.
+    monkeypatch.setitem(sys.modules, "torch", None)
     backend = OpenVLARolloutBackend()
     with pytest.raises(OpenVLABackendUnavailable) as excinfo:
         backend.run_rollouts(candidate=make_candidate(), seeds=[0], rollouts_per_candidate=1)
