@@ -1,0 +1,52 @@
+# AutoPPIA-VLA search conditions.
+#
+# Every condition is compared under the SAME evaluation budget (equal number of
+# candidates x task pairs x seeds x rollouts) and the SAME fixed evaluator. The
+# only thing that varies is how candidates are proposed. `budget_stage` selects
+# one stage from evaluation_budgets.yaml and applies it to all conditions, so the
+# scientific budget is identical across the comparison by construction.
+
+budget_stage: pilot
+
+conditions:
+  random_search:
+    generator: random
+    uses_feedback: false
+    uses_memory: false
+    uses_skill: false
+    description: Random valid candidates sampled inside placement/style bounds.
+
+  human_ppia:
+    generator: human
+    uses_feedback: false
+    uses_memory: false
+    uses_skill: false
+    description: Hand-designed PPIA-style visual prompts (human baseline).
+
+  one_shot_llm:
+    generator: llm
+    uses_feedback: false
+    uses_memory: false
+    uses_skill: false
+    description: One batch of LLM-proposed candidates with no feedback loop.
+
+  loop_no_memory:
+    generator: loop
+    uses_feedback: true
+    uses_memory: false
+    uses_skill: false
+    description: Iterative loop conditioned only on the latest score.
+
+  loop_with_memory:
+    generator: loop
+    uses_feedback: true
+    uses_memory: true
+    uses_skill: false
+    description: Iterative loop conditioned on prior run history and failures.
+
+  loop_with_skill:
+    generator: loop
+    uses_feedback: true
+    uses_memory: true
+    uses_skill: true
+    description: Iterative loop guided by the fixed red-team program/skill file.

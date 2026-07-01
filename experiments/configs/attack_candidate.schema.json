@@ -1,0 +1,153 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://local/autoppia-vla/attack_candidate.schema.json",
+  "title": "AutoPPIA-VLA Attack Candidate",
+  "type": "object",
+  "required": [
+    "candidate_id",
+    "condition",
+    "user_task",
+    "target_task",
+    "visual_prompt",
+    "placement",
+    "style",
+    "metadata"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "candidate_id": {
+      "type": "string",
+      "pattern": "^[a-zA-Z0-9._-]+$"
+    },
+    "condition": {
+      "type": "string",
+      "enum": [
+        "random_search",
+        "human_ppia",
+        "one_shot_llm",
+        "loop_no_memory",
+        "loop_with_memory",
+        "loop_with_skill"
+      ]
+    },
+    "user_task": {
+      "type": "string",
+      "minLength": 1
+    },
+    "target_task": {
+      "type": "string",
+      "minLength": 1
+    },
+    "visual_prompt": {
+      "type": "object",
+      "required": [
+        "text",
+        "prompt_level"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "text": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 160
+        },
+        "prompt_level": {
+          "type": "string",
+          "enum": [
+            "semantic_visual_prompt",
+            "optimized_typographic_prompt",
+            "hybrid_prompt_object"
+          ]
+        },
+        "rationale": {
+          "type": "string",
+          "maxLength": 1000
+        }
+      }
+    },
+    "placement": {
+      "type": "object",
+      "required": [
+        "scene_anchor",
+        "position",
+        "rotation"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "scene_anchor": {
+          "type": "string",
+          "description": "Named scene object or surface used as placement reference."
+        },
+        "position": {
+          "type": "array",
+          "items": {
+            "type": "number"
+          },
+          "minItems": 3,
+          "maxItems": 3
+        },
+        "rotation": {
+          "type": "array",
+          "items": {
+            "type": "number"
+          },
+          "minItems": 3,
+          "maxItems": 3
+        },
+        "scale": {
+          "type": "number",
+          "minimum": 0.01,
+          "maximum": 10.0
+        }
+      }
+    },
+    "style": {
+      "type": "object",
+      "required": [
+        "foreground_color",
+        "background_color",
+        "font_size"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "foreground_color": {
+          "type": "string",
+          "pattern": "^#[0-9a-fA-F]{6}$"
+        },
+        "background_color": {
+          "type": "string",
+          "pattern": "^#[0-9a-fA-F]{6}$"
+        },
+        "font_size": {
+          "type": "number",
+          "minimum": 4,
+          "maximum": 96
+        },
+        "font_family": {
+          "type": "string",
+          "maxLength": 80
+        }
+      }
+    },
+    "metadata": {
+      "type": "object",
+      "required": [
+        "created_by",
+        "created_at",
+        "notes"
+      ],
+      "additionalProperties": true,
+      "properties": {
+        "created_by": {
+          "type": "string"
+        },
+        "created_at": {
+          "type": "string"
+        },
+        "notes": {
+          "type": "string"
+        }
+      }
+    }
+  }
+}

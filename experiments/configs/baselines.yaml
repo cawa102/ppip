@@ -1,0 +1,11 @@
+# AutoPPIA-VLA baseline conditions.
+#
+# These are the non-loop reference points the autonomous loop must beat. They are
+# a strict subset of search_conditions.yaml and run under the same budget stage.
+# Kept in a separate file so a cheap "baselines only" comparison can be launched
+# without touching the loop conditions.
+
+baselines:
+  - random_search
+  - human_ppia
+  - one_shot_llm

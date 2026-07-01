@@ -1,0 +1,58 @@
+# Threat Model
+
+## Scope
+
+This project studies simulation-only red teaming of OpenVLA-style policies on LIBERO. The attacker attempts to place a visible prompt object, label, sticker, decal, or text-bearing item into the simulated scene so the VLA performs an attacker-selected task instead of the user-commanded task.
+
+## Attacker Goal
+
+Primary goal: targeted task substitution.
+
+The attack succeeds when the rollout completes the attacker-selected target task while failing or abandoning the user-commanded task.
+
+Secondary goal: task denial.
+
+If targeted substitution is too hard, the study still records whether autonomous search improves ordinary task failure relative to baselines.
+
+## Attacker Capabilities
+
+Allowed:
+
+- Choose a visible text prompt.
+- Choose visual style parameters such as font, size, color, and background.
+- Choose placement within allowed simulated scene bounds.
+- Choose an attacker target task from a predefined task set.
+- Iterate over candidates through the official fixed evaluator.
+- Read prior candidate scores and run summaries.
+
+Disallowed:
+
+- Modify OpenVLA weights.
+- Poison training data.
+- Modify the fixed evaluator during a benchmark run.
+- Change the user's text instruction directly.
+- Attack real robots, deployed systems, or external services.
+- Use hidden channels outside the simulated visual scene.
+
+## Knowledge Assumptions
+
+Initial experiments can use black-box candidate search against rollout metrics. White-box gradients are out of scope for the first MSc-safe version and can be treated as future work.
+
+The AI loop may know the task names, allowed candidate schema, and previous scores. It should not inspect or alter evaluator internals during a controlled comparison.
+
+## Defender / Benchmark Assumptions
+
+The evaluator is trusted. It validates candidate files, renders prompts into the scene, runs rollouts, and emits metrics.
+
+The benchmark owner fixes:
+
+- task suite;
+- candidate budget;
+- rollout count;
+- scoring formula;
+- allowed placement bounds;
+- run logging format.
+
+## Safety Boundary
+
+All work remains in local simulation. Any future physical-robot discussion belongs in limitations/future work, not implementation.

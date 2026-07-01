@@ -1,0 +1,39 @@
+# AutoPPIA-VLA evaluation budgets.
+#
+# These budgets replace the 5-minute cap used in the original
+# karpathy/autoresearch nanochat example. The scientific budget is the number
+# of candidates, tasks, seeds, and rollouts. Wall-clock limits are only
+# runaway-job guards.
+
+smoke:
+  max_candidates_per_condition: 2
+  task_pairs:
+    - user_task: PLACEHOLDER_USER_TASK
+      target_task: PLACEHOLDER_TARGET_TASK
+  seeds: [0]
+  rollouts_per_candidate: 1
+  max_wall_clock_hours_per_candidate: 1.0
+  top_k_for_full_eval: 0
+  allow_async_jobs: false
+
+pilot:
+  max_candidates_per_condition: 10
+  task_pairs:
+    - user_task: PLACEHOLDER_USER_TASK
+      target_task: PLACEHOLDER_TARGET_TASK
+  seeds: [0, 1, 2]
+  rollouts_per_candidate: 3
+  max_wall_clock_hours_per_candidate: 4.0
+  top_k_for_full_eval: 2
+  allow_async_jobs: true
+
+full:
+  max_candidates_per_condition: 0
+  task_pairs:
+    - user_task: PLACEHOLDER_USER_TASK
+      target_task: PLACEHOLDER_TARGET_TASK
+  seeds: [0, 1, 2, 3, 4]
+  rollouts_per_candidate: 50
+  max_wall_clock_hours_per_candidate: 24.0
+  top_k_for_full_eval: 3
+  allow_async_jobs: true

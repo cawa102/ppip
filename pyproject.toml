@@ -1,0 +1,58 @@
+[project]
+name = "autoppia-vla"
+version = "0.0.1"
+description = "Simulation-only harness measuring autonomous research loops for physical prompt injection on OpenVLA/LIBERO."
+requires-python = ">=3.10"
+# Core harness dependencies. These are enough to run every GPU-free component
+# (candidate validation, scoring, the search loop, aggregation). The OpenVLA /
+# LIBERO / torch stack is intentionally NOT here -- it lives in the optional
+# `gpu` group so the harness can be developed and tested on a CPU-only machine.
+dependencies = [
+    "jsonschema>=4.18",
+    "pyyaml>=6.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8",
+    "pytest-cov>=5",
+    "ruff>=0.6",
+    "mypy>=1.11",
+    "types-PyYAML",
+    "types-jsonschema",
+]
+# Installed only on the GPU evaluation machine; pinned exact versions are
+# recorded once the real OpenVLARolloutBackend is wired up (see Task 2 / Task 7).
+gpu = [
+    # "torch",
+    # "openvla",
+    # "libero",
+    # "robosuite",
+    # "mujoco",
+]
+
+[tool.pytest.ini_options]
+pythonpath = ["src", "experiments/results"]
+testpaths = ["tests"]
+addopts = "-ra"
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP", "SIM"]
+
+[tool.mypy]
+python_version = "3.10"
+mypy_path = "src"
+packages = ["evaluator", "autoresearch_loop", "rendering"]
+strict = true
+warn_unused_ignores = true
+
+# Optional GPU-only dependencies, absent on the CPU dev/test machine. The backend
+# imports them lazily behind a runtime guard, so mypy should not require stubs.
+[[tool.mypy.overrides]]
+module = ["torch", "transformers"]
+ignore_missing_imports = true

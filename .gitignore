@@ -1,0 +1,44 @@
+# Local Python/cache files
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+
+# Coverage artifacts
+.coverage
+.coverage.*
+htmlcov/
+coverage.xml
+
+# Environments
+.venv/
+venv/
+env/
+
+# Heavy/local research artifacts
+runs/*
+!runs/README.md
+data/external/*
+!data/external/README.md
+data/processed/*
+!data/processed/README.md
+*.ckpt
+*.safetensors
+*.pt
+*.pth
+*.mp4
+*.mov
+*.avi
+
+# Local secrets/config
+.env
+.env.*
+
+# Claude Code personal (machine-local) settings
+.claude/settings.local.json
+
+# OS/editor
+.DS_Store
+.idea/
+.vscode/
