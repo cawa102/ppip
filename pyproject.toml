@@ -21,14 +21,23 @@ dev = [
     "types-PyYAML",
     "types-jsonschema",
 ]
-# Installed only on the GPU evaluation machine; pinned exact versions are
-# recorded once the real OpenVLARolloutBackend is wired up (see Task 2 / Task 7).
+# GPU evaluation stack. On this host we do NOT `pip install` this group -- we reuse
+# the proven, already-working uv venv at `~/vla-injection/.venv` (see third_party/README.md).
+# These pins document that environment for reproducibility. torch is a +cu121 build
+# (needs the PyTorch CUDA index); openvla (`prismatic`) is editable from `~/openvla`;
+# `libero` is not installed -- it is imported via `PYTHONPATH=~/LIBERO`.
 gpu = [
-    # "torch",
-    # "openvla",
-    # "libero",
-    # "robosuite",
-    # "mujoco",
+    # "torch==2.2.0",            # +cu121 build
+    # "transformers==4.40.1",
+    # "tokenizers==0.19.1",
+    # "timm==0.9.10",
+    # "accelerate==0.30.1",
+    # "draccus==0.8.0",
+    # "robosuite==1.4.1",
+    # "mujoco==3.9.0",
+    # "numpy<2",                 # torch 2.2.0 / OpenVLA stack pin the NumPy 1.x ABI
+    # openvla  -> editable install from ~/openvla  (import prismatic)
+    # libero   -> PYTHONPATH=~/LIBERO              (from libero.libero import benchmark)
 ]
 
 [tool.pytest.ini_options]
