@@ -53,10 +53,24 @@ Simulation-only. **No** physical-robot experiments, real-user/external-system ta
 
 ## Toolchain & commands
 
-No dependency manifest or test harness exists yet. Intended toolchain (inferred from `.gitignore`): Python with **ruff** (lint), **mypy** (types), **pytest** (tests). Establishing `pyproject.toml`/requirements + the OpenVLA/LIBERO/robosuite/MuJoCo environment is part of early implementation (record exact commit hashes of third-party repos under `third_party/`). When adding tooling, prefer these three and wire them so a single test can be run in isolation (the plan's per-task "test scenarios" are written to be unit-testable). `runs/*`, `data/{external,processed}/*`, and model weights (`*.ckpt/*.safetensors/*.pt`) are git-ignored — only READMEs and summaries are tracked.
+Toolchain: Python with **ruff** (lint), **mypy --strict** (types), **pytest** (tests) — see `pyproject.toml`. On the GPU host, run the suite with the proven env: `~/vla-injection/.venv/bin/python -m pytest` (import root is `src/` + `experiments/results`); type-check isolated via `uvx --with types-PyYAML --with types-jsonschema --with "numpy<2" --with Pillow mypy`. The OpenVLA/LIBERO/robosuite/MuJoCo stack is reused, not rebuilt (see `third_party/README.md` + the `gpu-env-vla-injection` memory); exact third-party commit hashes are recorded under `third_party/`. `runs/*`, `data/{external,processed}/*`, and model weights (`*.ckpt/*.safetensors/*.pt`) are git-ignored — only READMEs and summaries are tracked.
+
+## Living documentation (MANDATORY)
+
+Keep the project's documents **living** — update them in the *same change* as the work,
+never in a separate "docs later" pass. Stale docs are treated as bugs.
+
+- `docs/research/research-log.md` is the **living progress tracker**: a "Status at a glance"
+  checklist (tick items as they land) plus dated chronological entries. Update it whenever a
+  unit of work completes.
+- Keep the point-in-time snapshots consistent with it: the "Implementation Status" section of
+  `docs/plans/2026-07-01-autoppia-vla.md`, this `CLAUDE.md`, and the affected module READMEs.
+- When a decision is made (scope, suite, metric, mechanism), record it in the relevant
+  `docs/research/*` file as part of the same commit.
 
 ## Authoritative references (read before non-trivial work)
 
+- `docs/research/research-log.md` — the living status + progress log (read first for *where things stand*).
 - `docs/plans/2026-07-01-autoppia-vla.md` — task-by-task implementation plan with per-task interfaces, files, and test scenarios. The source of truth for *what to build next*.
 - `docs/research/experiment-protocol.md` — budget model, metrics, score formula, conditions.
 - `docs/research/threat-model.md`, `literature-map.md`, `risk-register.md` — scope and prior-work differentiation (esp. vs SABER text-perturbation and vanilla PPIA).
