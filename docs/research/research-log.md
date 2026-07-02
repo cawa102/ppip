@@ -22,7 +22,7 @@ LIBERO-backed task-resolution/adjudication tests).
 - [x] Task-pair suite **locked: `libero_object`** (shared scene, distinct predicates)
 - [x] Visibility gate (#2) + per-rollout logging (#3)
 - [x] Presentation pipeline figure (`docs/figures/pipeline.svg`)
-- [ ] `OpenVLARolloutBackend.run_rollouts` — the closed loop (inject → OpenVLA → predicates → visibility → log) — **IN PROGRESS** (plan `docs/plans/2026-07-02-openvla-rollout-backend.md`; CPU-pure seams **A** task-resolution + **B** predicate-adjudication done; GPU seams C–D + smoke E next)
+- [ ] `OpenVLARolloutBackend.run_rollouts` — the closed loop (inject → OpenVLA → predicates → visibility → log) — **IN PROGRESS** (plan `docs/plans/2026-07-02-openvla-rollout-backend.md`; done: **A** task-resolution, **B** predicate-adjudication, **C** model-load/env-build seams; next: **D** episode loop + **E** GPU smoke)
 - [ ] Async `submit_evaluation` job path
 - [ ] Pilot study (plan Task 7)
 - [ ] Task 1 threat-model / literature polish confirmed "dissertation-ready"
@@ -61,6 +61,15 @@ LIBERO-backed task-resolution/adjudication tests).
   **purely** (no sim/LLM/heuristic) and are unit-tested off-GPU. `goal_state` is an immutable
   tuple-of-tuples (post-review hardening). `python-reviewer` pass: 1 HIGH (mutable verdict
   data) + 3 MED addressed. Suite: 116 tests green.
+- **`run_rollouts` seam C (GPU model-load / env-build).** Added `_build_cfg` (the OpenVLA
+  helper config — `center_crop=True` essential), `_load_policy` (bf16 + **sdpa**, loaded
+  directly since the box lacks flash-attn), and `_build_env` (`libero_object` scene for the
+  resolved user task) to `openvla_backend.py`, ported from the verified reference smoke.
+  Confirmed the OpenVLA `experiments.robot.*` helpers import cleanly from ppip's cwd via the
+  editable install — the `experiments` namespace package merges ppip's + OpenVLA's trees with
+  no submodule-name clash, so **no `sys.path` hacking** is needed. GPU behavior is covered by
+  `@requires_gpu` tests (skipped unless `PPIP_GPU_TESTS=1`) run once in the Task E smoke to
+  avoid loading the 7B model repeatedly. 117 tests green, 2 GPU tests skipped.
 
 ## 2026-07-01
 

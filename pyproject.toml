@@ -69,5 +69,5 @@ warn_unused_ignores = true
 # imports them lazily behind a runtime guard, so mypy should not require stubs.
 # LIBERO is host-provided via PYTHONPATH (not pip-installed) and ships no stubs.
 [[tool.mypy.overrides]]
-module = ["torch", "transformers", "libero.*"]
+module = ["torch", "transformers", "libero.*", "experiments.robot.*"]
 ignore_missing_imports = true

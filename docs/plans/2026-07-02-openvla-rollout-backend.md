@@ -78,7 +78,7 @@
 
 ---
 
-- [ ] Task C: GPU seam — model load + env build
+- [x] Task C: GPU seam — model load + env build
 
 **Files:**
 - Modify: `src/evaluator/openvla_backend.py`

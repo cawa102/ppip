@@ -29,14 +29,21 @@ Intended rollout body (per candidate, for each seed x rollout):
 
 from __future__ import annotations
 
+from types import SimpleNamespace
 from typing import Any
 
+from evaluator.libero_tasks import ResolvedTask
 from evaluator.metrics import RolloutOutcome
 
 _DEFAULT_MODEL_ID = "openvla/openvla-7b-finetuned-libero-object"
 _DEFAULT_UNNORM_KEY = "libero_object"
 _DEFAULT_MAX_STEPS = 280
 _DEFAULT_NUM_STEPS_WAIT = 10
+# The GPU host has not built flash-attn (the OpenVLA/LIBERO stack ran with sdpa);
+# load directly with sdpa rather than OpenVLA's get_vla(), which hardcodes flash-attn.
+_ATTN_IMPL = "sdpa"
+# Camera/render resolution the reference LIBERO eval uses before center-crop/resize.
+_ENV_RESOLUTION = 256
 
 
 class OpenVLABackendUnavailable(RuntimeError):
@@ -69,6 +76,7 @@ class OpenVLARolloutBackend:
         max_steps: int = _DEFAULT_MAX_STEPS,
         num_steps_wait: int = _DEFAULT_NUM_STEPS_WAIT,
         device: str = "cuda",
+        center_crop: bool = True,
     ) -> None:
         self.model_id = model_id
         self.unnorm_key = unnorm_key
@@ -76,6 +84,69 @@ class OpenVLARolloutBackend:
         self.max_steps = max_steps
         self.num_steps_wait = num_steps_wait
         self.device = device
+        self.center_crop = center_crop
+
+    def _build_cfg(self) -> SimpleNamespace:
+        """Build the config the OpenVLA helpers read (get_action, image resize).
+
+        A subset of run_libero_eval's GenerateConfig, verified against the pinned
+        OpenVLA source: get_action reads model_family/pretrained_checkpoint/unnorm_key/
+        center_crop; get_image_resize_size reads model_family. center_crop=True is
+        essential -- the LIBERO fine-tunes trained with random-crop augmentation.
+        """
+        return SimpleNamespace(
+            model_family="openvla",
+            pretrained_checkpoint=self.model_id,
+            load_in_8bit=False,
+            load_in_4bit=False,
+            center_crop=self.center_crop,
+            unnorm_key=self.unnorm_key,
+            task_suite_name=self.task_suite,
+        )
+
+    def _load_policy(self) -> tuple[Any, Any, SimpleNamespace, Any]:
+        """Load the OpenVLA policy once (GPU). Mirrors the verified reference load.
+
+        Returns ``(model, processor, cfg, resize_size)``. Loads bf16 with sdpa attention
+        on ``self.device``; for an HF hub id the action norm-stats are embedded, so no
+        local dataset_statistics.json is needed.
+        """
+        torch = _require_openvla_stack()
+        from experiments.robot.robot_utils import get_image_resize_size
+        from transformers import AutoModelForVision2Seq, AutoProcessor
+
+        cfg = self._build_cfg()
+        processor = AutoProcessor.from_pretrained(self.model_id, trust_remote_code=True)
+        model = AutoModelForVision2Seq.from_pretrained(
+            self.model_id,
+            attn_implementation=_ATTN_IMPL,
+            torch_dtype=torch.bfloat16,
+            low_cpu_mem_usage=True,
+            trust_remote_code=True,
+        ).to(torch.device(self.device))
+        resize_size = get_image_resize_size(cfg)
+        return model, processor, cfg, resize_size
+
+    def _build_env(self, resolved: ResolvedTask) -> tuple[Any, Any, str, list[str]]:
+        """Build the LIBERO env for a resolved task (GPU/EGL).
+
+        Returns ``(env, initial_states, task_description, obj_of_interest)``. The env is
+        the *user* task's scene; because the suite shares one scene, the target task's
+        objects are also present for adjudication.
+        """
+        _require_openvla_stack()
+        from experiments.robot.libero.libero_utils import get_libero_env
+        from libero.libero import benchmark
+
+        cfg = self._build_cfg()
+        suite = benchmark.get_benchmark_dict()[self.task_suite]()
+        task = suite.get_task(resolved.task_id)
+        initial_states = suite.get_task_init_states(resolved.task_id)
+        env, task_description = get_libero_env(
+            task, cfg.model_family, resolution=_ENV_RESOLUTION
+        )
+        obj_of_interest = [str(o) for o in env.obj_of_interest]
+        return env, initial_states, task_description, obj_of_interest
 
     def run_rollouts(
         self,
