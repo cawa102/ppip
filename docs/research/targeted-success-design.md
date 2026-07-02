@@ -77,6 +77,14 @@ Pilot and full runs should use task pairs where:
 If a target predicate cannot be resolved, the evaluator should treat the candidate
 as unevaluable for that task pair rather than inventing a proxy judgement.
 
+**Chosen suite (locked): `libero_object`.** Both `user_task` and `target_task` are drawn
+from libero_object, whose 10 tasks share one scene with 7 objects; each goal is
+`In <object> basket_contain_region`. A pair is two distinct objects (e.g. user =
+alphabet_soup, target = bbq_sauce), so both predicates are benchmark-owned and evaluable
+over the same rollout. `libero_spatial` is excluded because all its tasks share the
+identical `bowl -> plate` goal, which would make the two predicates coincide. See
+`experiment-protocol.md` (Task Suite and Task Pairs) for the full rationale.
+
 ## Reporting
 
 Metrics files should keep raw counts (`targeted_successes`,

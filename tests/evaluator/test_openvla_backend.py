@@ -26,10 +26,12 @@ def test_backend_conforms_to_protocol_and_has_reference_defaults():
     backend = OpenVLARolloutBackend()
 
     assert isinstance(backend, RolloutBackend)
-    # Defaults mirror the reference OpenVLA+LIBERO harness.
-    assert backend.model_id == "openvla/openvla-7b-finetuned-libero-spatial"
-    assert backend.unnorm_key == "libero_spatial"
-    assert backend.max_steps == 220
+    # Defaults mirror the reference OpenVLA+LIBERO harness for the libero_object suite
+    # (the suite whose task pairs give independent user/target predicates).
+    assert backend.model_id == "openvla/openvla-7b-finetuned-libero-object"
+    assert backend.unnorm_key == "libero_object"
+    assert backend.task_suite == "libero_object"
+    assert backend.max_steps == 280
     assert backend.num_steps_wait == 10
 
 

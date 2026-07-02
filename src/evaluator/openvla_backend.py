@@ -4,10 +4,14 @@ This is the concrete `RolloutBackend` the harness uses on a GPU host. The
 CPU-observable contract is exercised in tests here; the closed-loop rollout body
 is to be implemented on this GPU host (Phase C), following the reference harness.
 
-Defaults are grounded in the reference OpenVLA+LIBERO project:
-  * model_id        openvla/openvla-7b-finetuned-libero-spatial
-  * unnorm_key      libero_spatial   (action de-normalisation stats key)
-  * max_steps       220              (libero_spatial episode cap)
+Defaults are grounded in the reference OpenVLA+LIBERO project. The task suite is
+`libero_object`: its 10 tasks share one scene with 7 objects, and each goal places a
+distinct object in the basket -- so a user/target task pair has independent,
+benchmark-native success predicates (the targeted-vs-commanded distinction the study
+needs). See docs/research/targeted-success-design.md.
+  * model_id        openvla/openvla-7b-finetuned-libero-object
+  * unnorm_key      libero_object    (action de-normalisation stats key)
+  * max_steps       280              (libero_object episode cap; spatial=220, goal=300)
   * num_steps_wait  10               (no-op settle steps at episode start)
 
 Intended rollout body (per candidate, for each seed x rollout):
@@ -29,9 +33,9 @@ from typing import Any
 
 from evaluator.metrics import RolloutOutcome
 
-_DEFAULT_MODEL_ID = "openvla/openvla-7b-finetuned-libero-spatial"
-_DEFAULT_UNNORM_KEY = "libero_spatial"
-_DEFAULT_MAX_STEPS = 220
+_DEFAULT_MODEL_ID = "openvla/openvla-7b-finetuned-libero-object"
+_DEFAULT_UNNORM_KEY = "libero_object"
+_DEFAULT_MAX_STEPS = 280
 _DEFAULT_NUM_STEPS_WAIT = 10
 
 
@@ -61,7 +65,7 @@ class OpenVLARolloutBackend:
         *,
         model_id: str = _DEFAULT_MODEL_ID,
         unnorm_key: str = _DEFAULT_UNNORM_KEY,
-        task_suite: str = "libero_spatial",
+        task_suite: str = "libero_object",
         max_steps: int = _DEFAULT_MAX_STEPS,
         num_steps_wait: int = _DEFAULT_NUM_STEPS_WAIT,
         device: str = "cuda",

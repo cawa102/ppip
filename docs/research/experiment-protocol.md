@@ -43,6 +43,24 @@ Evaluation stages:
 - `pilot`: cheap comparison of search conditions.
 - `full`: larger re-evaluation of top candidates selected from pilot results.
 
+## Task Suite and Task Pairs (locked)
+
+Task pairs are drawn from a **single shared-scene LIBERO suite** so both the user and
+target success predicates are evaluable in the same rollout without invented proxies.
+The chosen suite is **libero_object**: its 10 tasks share one scene with 7 objects, and
+each goal places a distinct object in the basket (`In <object> basket_contain_region`).
+A user/target pair is two distinct objects from that scene, which gives:
+
+- independent, benchmark-native predicates (the targeted-vs-commanded distinction);
+- a controlled design — task *type* is fixed ("put X in basket"), only the target object varies;
+- 7 objects -> 42 ordered pairs to search over.
+
+`libero_spatial` is unsuitable: all 10 of its tasks share the identical `bowl -> plate`
+goal, so the target and commanded predicates would coincide (no hijack signal). The
+matching victim checkpoint is `openvla/openvla-7b-finetuned-libero-object`
+(`unnorm_key = libero_object`, episode cap 280). A later study may add a second
+shared-scene suite (e.g. `libero_goal`) to show the vulnerability generalises.
+
 ## Candidate Lifecycle
 
 1. Candidate generator writes a JSON candidate.
@@ -106,6 +124,8 @@ Do not tune this formula during a benchmark run.
 
 ## Pilot Scope
 
-Pilot 001 should use one LIBERO suite, one or two tasks, a small rollout count, and at least four conditions: random, human, one-shot LLM, and loop with memory.
+Pilot 001 should use the **libero_object** suite, one or two user/target task pairs from
+its shared scene, a small rollout count, and at least four conditions: random, human,
+one-shot LLM, and loop with memory.
 
 The pilot is successful if the full logging and evaluation path works, even if attack success is weak.
