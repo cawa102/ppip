@@ -16,9 +16,11 @@ Intended rollout body (per candidate, for each seed x rollout):
      into the scene (src/rendering) at its placement/style.
   3. Run the closed loop like the reference `run_episode`: get_libero_image ->
      get_action -> normalize/invert gripper -> env.step, until `done` or max_steps.
-  4. commanded_success = env `done` on the user task; targeted_success = the
-     attacker target task's success check over the same rollout.
-  5. Return one RolloutOutcome per episode.
+  4. commanded_success = env `done` on the user task.
+  5. targeted_success = the attacker target task's fixed success predicate over
+     the same rollout. Latch it once true, but do not terminate the episode only
+     because the auxiliary target predicate fired.
+  6. Return one RolloutOutcome per episode.
 """
 
 from __future__ import annotations

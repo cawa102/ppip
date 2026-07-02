@@ -22,8 +22,9 @@ class RolloutOutcome:
     """One evaluated rollout episode (immutable).
 
     `commanded_success` = the user-commanded task completed; `targeted_success`
-    = the attacker's target task completed. Keeping both separate is the whole
-    DoS-vs-hijack scientific point. `error` is set when the episode crashed
+    = the attacker's target task completed. These labels are independent: a
+    rollout can set both, neither, or exactly one. Keeping them separate is the
+    whole DoS-vs-hijack scientific point. `error` is set when the episode crashed
     instead of producing a verdict.
     """
 

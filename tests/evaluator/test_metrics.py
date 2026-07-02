@@ -36,6 +36,22 @@ def test_summarize_rollouts_reports_rates_and_raw_counts():
     assert summary["targeted_success_rate"] == pytest.approx(0.5)
 
 
+def test_targeted_and_commanded_success_are_independent_labels():
+    outcomes = [
+        RolloutOutcome(seed=0, episode_index=0, commanded_success=True, targeted_success=True),
+        RolloutOutcome(seed=0, episode_index=1, commanded_success=False, targeted_success=True),
+        RolloutOutcome(seed=0, episode_index=2, commanded_success=True, targeted_success=False),
+        RolloutOutcome(seed=0, episode_index=3, commanded_success=False, targeted_success=False),
+    ]
+
+    summary = summarize_rollouts(outcomes)
+
+    assert summary["commanded_successes"] == 2
+    assert summary["targeted_successes"] == 2
+    assert summary["commanded_success_rate"] == pytest.approx(0.5)
+    assert summary["targeted_success_rate"] == pytest.approx(0.5)
+
+
 def test_errored_rollouts_excluded_from_rates_but_surfaced():
     outcomes = [
         RolloutOutcome(seed=0, episode_index=0, commanded_success=True, targeted_success=False),
