@@ -352,13 +352,17 @@ Immediate next step after this setup: complete Task 1 by expanding the threat mo
 > **Living status is `docs/research/research-log.md`** ("Status at a glance" + dated
 > entries). This section is the point-in-time snapshot; keep both current.
 
-**On the GPU host (updated 2026-07-02).** The GPU-free core harness *and* the rendering
-layer (Option A injection) are implemented and tested — **103 tests, `ruff` + `mypy
---strict` clean**, run with `~/vla-injection/.venv/bin/python -m pytest`. The live
-`OpenVLARolloutBackend.run_rollouts` closed loop is the remaining GPU piece. The task-pair
-suite is locked to **`libero_object`**; the matching checkpoint is cached. Rendering is
-verified on GPU (label injected into a live scene, renders in agentview). Decisions
-settled: `targeted_success` adjudication, visibility gate (#2), per-rollout logging (#3).
+**On the GPU host (updated 2026-07-02).** The GPU-free core harness, the rendering layer
+(Option A injection), *and* the `OpenVLARolloutBackend.run_rollouts` closed loop are
+implemented and tested — **129 CPU tests + 6 GPU tests green, `ruff` + `mypy --strict`
+clean**, run with `~/vla-injection/.venv/bin/python -m pytest` (LIBERO-backed tests need
+`PYTHONPATH=$HOME/LIBERO`; real-model tests need `PPIP_GPU_TESTS=1`). `run_rollouts` is
+**verified end-to-end on GPU 1** (`runs/smoke-001/`: pipeline runs, 0 errored rollouts,
+prompt visible, fits one A5000). The task-pair suite is locked to **`libero_object`**; the
+matching checkpoint is cached. Decisions settled: `targeted_success` adjudication (via the
+benchmark predicates, CPU-pure in `adjudicate.py`), visibility gate (#2), per-rollout
+logging (#3). **Adjudicability constraint** discovered + documented: each libero_object task
+has only 7 objects, so a target is adjudicable only if its object is in the user scene.
 
 **Toolchain (GPU host):** reuse the proven uv venv `~/vla-injection/.venv` (Python 3.10,
 torch 2.2.0+cu121, OpenVLA editable, LIBERO via `PYTHONPATH=~/LIBERO`, `MUJOCO_GL=egl`).
@@ -372,7 +376,9 @@ free GPU (`CUDA_VISIBLE_DEVICES=<idx>`) — the box is shared.
 - `src/evaluator/budgets.py` — `load_evaluation_budget` (stage selection, required-field checks).
 - `src/evaluator/backends.py` — `RolloutBackend` Protocol (the GPU seam).
 - `src/evaluator/eval_attack.py` — `evaluate_candidate` (validate → rollouts → summarize → score → write metrics; invalid/failed candidates penalized, not crashed).
-- `src/evaluator/openvla_backend.py` — `OpenVLARolloutBackend` skeleton, reference-grounded defaults; rollout body raises on the CPU host (implement on GPU).
+- `src/evaluator/openvla_backend.py` — `OpenVLARolloutBackend`: reference-grounded defaults, GPU seams (`_load_policy`, `_build_env`, `_policy_action`, `_segmentation`, …), and the `run_rollouts` closed loop (implemented + GPU-verified).
+- `src/evaluator/libero_tasks.py` — `resolve_task` (candidate task string → libero_object task + goal predicates), `parse_goal_state`; raises on no-match/ambiguous/unknown-suite (CPU-pure).
+- `src/evaluator/adjudicate.py` — `eval_goal_state` (target goal predicates over live `object_states` via LIBERO `eval_predicate_fn`; `UnevaluableGoalError` on empty/missing-object — CPU-pure verdict logic).
 - `src/autoresearch_loop/ledger.py` — append-only ledger, `select_incumbent`, duplicate-id rejection.
 - `src/autoresearch_loop/run_loop.py` — `record_result`, `run_search_condition` (budget-bounded, ledger-resumable).
 - `src/autoresearch_loop/candidate_writer.py` — `generate_random_candidate` (always-valid `random_search` baseline), `write_candidate`.
@@ -389,10 +395,14 @@ free GPU (`CUDA_VISIBLE_DEVICES=<idx>`) — the box is shared.
 - `src/evaluator/rollout_logging.py` — per-rollout artifacts under `runs/<id>/candidates/<cid>/` (#3).
 - `src/evaluator/metrics.py` — `RolloutOutcome.prompt_visibility` + summary aggregation.
 
-**Deferred to the GPU host (remaining):**
-1. `OpenVLARolloutBackend.run_rollouts` — the closed loop that ties the pieces together:
-   `inject_prompt` → OpenVLA `get_action` loop under `user_task` → adjudicate `commanded`/`targeted`
-   (benchmark predicates) → `prompt_visibility` → per-rollout logging, one `RolloutOutcome` per episode.
-   Rendering, geom injection, and logging are done and verified; this wires them.
+**Done (2026-07-02):**
+- `OpenVLARolloutBackend.run_rollouts` — the closed loop tying the pieces together:
+  `inject_prompt` → OpenVLA `get_action` loop under `user_task` → adjudicate `commanded`/`targeted`
+  (benchmark predicates, latched non-terminating) → `prompt_visibility` → per-rollout logging, one
+  `RolloutOutcome` per episode; per-episode error isolation. **Verified end-to-end on GPU** (`runs/smoke-001/`).
+
+**Remaining:**
+1. **Label-readability tuning** — the smoke label renders *mirrored* over the gripper; flip the
+   camera-facing texture / adjust `placement.rotation`+`position` so the policy can read it (attack efficacy).
 2. The async `submit_evaluation` job path (long OpenVLA jobs); the synchronous, resumable loop already models the control flow.
-3. Task 7 pilot with real rollouts. End-to-end plumbing (propose→validate→evaluate→ledger→aggregate) is already proven via `tests/test_pipeline_integration.py` with the fake backend.
+3. Task 7 pilot with real rollouts (fill the `pilot`/`full` budget `task_pairs` with adjudicable pairs). End-to-end plumbing (propose→validate→evaluate→ledger→aggregate) is proven via `tests/test_pipeline_integration.py` + the `runs/smoke-001/` real rollout.

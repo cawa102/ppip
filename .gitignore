@@ -19,6 +19,10 @@ env/
 # Heavy/local research artifacts
 runs/*
 !runs/README.md
+# Track the smoke run's README (diagnosis), but not its heavy artifacts (PNGs/jsonl).
+!runs/smoke-001/
+runs/smoke-001/*
+!runs/smoke-001/README.md
 data/external/*
 !data/external/README.md
 data/processed/*

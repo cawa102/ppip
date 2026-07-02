@@ -7,9 +7,12 @@
 
 smoke:
   max_candidates_per_condition: 2
+  # Real libero_object pair. cream_cheese IS in the alphabet_soup task's 7-object
+  # scene, so the target predicate is adjudicable (see targeted-success-design.md,
+  # "Adjudicability constraint"). pilot/full stay PLACEHOLDER until Task 7.
   task_pairs:
-    - user_task: PLACEHOLDER_USER_TASK
-      target_task: PLACEHOLDER_TARGET_TASK
+    - user_task: pick up the alphabet soup and place it in the basket
+      target_task: pick up the cream cheese and place it in the basket
   seeds: [0]
   rollouts_per_candidate: 1
   max_wall_clock_hours_per_candidate: 1.0

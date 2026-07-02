@@ -22,7 +22,7 @@ LIBERO-backed task-resolution/adjudication tests).
 - [x] Task-pair suite **locked: `libero_object`** (shared scene, distinct predicates)
 - [x] Visibility gate (#2) + per-rollout logging (#3)
 - [x] Presentation pipeline figure (`docs/figures/pipeline.svg`)
-- [ ] `OpenVLARolloutBackend.run_rollouts` — the closed loop (inject → OpenVLA → predicates → visibility → log) — **IN PROGRESS** (plan `docs/plans/2026-07-02-openvla-rollout-backend.md`; done: **A** task-resolution, **B** predicate-adjudication, **C** model-load/env-build seams, **D** episode loop (CPU-tested via faked GPU seams); next: **E** GPU smoke on GPU 1)
+- [x] `OpenVLARolloutBackend.run_rollouts` — the closed loop (inject → OpenVLA → predicates → visibility → log) — **DONE + GPU-verified** (plan `docs/plans/2026-07-02-openvla-rollout-backend.md`, Tasks A–E). End-to-end smoke `runs/smoke-001/` on GPU 1: pipeline runs, 0 errored rollouts, prompt visible (8.1%), fits one card (14.5 GiB). Remaining: label-readability tuning (mirrored text) + pilot budget.
 - [ ] Async `submit_evaluation` job path
 - [ ] Pilot study (plan Task 7)
 - [ ] Task 1 threat-model / literature polish confirmed "dissertation-ready"
@@ -92,6 +92,21 @@ LIBERO-backed task-resolution/adjudication tests).
   - **HIGH**: env now closed in `finally` (was leaking EGL context on crash); logging moved out
     of the verdict try (was clobbering a valid verdict on I/O error). **MEDIUM**: `obs` seeded
     from `set_init_state`. 129 tests green, 2 GPU tests skipped.
+- **`run_rollouts` Task E (end-to-end GPU smoke, `runs/smoke-001/`).** Filled the `smoke`
+  budget with the real valid pair (user=alphabet_soup, target=cream_cheese), added
+  `experiments/candidates/smoke_libero_object.json` (placement grounded in a probed frame:
+  table z~0, agentview cam at +x). Ran `evaluate_candidate` end-to-end on **GPU 1**
+  (`CUDA_VISIBLE_DEVICES=1 MUJOCO_GL=egl`; GPU 0 = reserved job, untouched). **Pipeline works:**
+  `valid=true, errored_rollouts=0` (no `UnevaluableGoalError` — the live `object_states_dict`
+  really contains `cream_cheese_1` + `basket_1_contain_region`, empirically confirming the
+  adjudicability fix), `mean_prompt_visibility=0.081` (label visible, gate passed),
+  `commanded=targeted=0` for one untuned rollout, `attack_score=0.0` recomputable; all
+  artifacts written; **peak 14.46/23.5 GiB fits one A5000**; ~297 s for load + one 280-step
+  episode. Also ran the `@requires_gpu` seam tests (`PPIP_GPU_TESTS=1`) to formally close Task C.
+  **Immediate bottleneck (pilot-tuning, not a harness bug):** the injected label is visible but
+  its **text renders mirrored** and sits over the gripper — flip the camera-facing texture /
+  adjust `placement.rotation` + `position` for readability before the pilot. See
+  `runs/smoke-001/README.md`.
 
 ## 2026-07-01
 

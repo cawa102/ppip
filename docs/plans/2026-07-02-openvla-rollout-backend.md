@@ -135,7 +135,7 @@
 
 ---
 
-- [ ] Task E: Real task pair + end-to-end smoke run
+- [x] Task E: Real task pair + end-to-end smoke run
 
 **Files:**
 - Modify: `experiments/configs/evaluation_budgets.yaml` (replace `PLACEHOLDER_*` in `smoke.task_pairs` with a real libero_object pair, e.g. user = "pick up the alphabet soup and place it in the basket", target = "pick up the bbq sauce and place it in the basket")
