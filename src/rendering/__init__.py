@@ -12,6 +12,7 @@ from rendering.text_prompt import (
     render_prompt_from_candidate,
     render_prompt_texture,
 )
+from rendering.visibility import prompt_pixel_fraction, visibility_overlay
 
 __all__ = [
     "PromptGeom",
@@ -19,7 +20,9 @@ __all__ = [
     "build_prompt_geom",
     "inject_prompt",
     "parse_hex_color",
+    "prompt_pixel_fraction",
     "render_prompt_from_candidate",
     "render_prompt_texture",
+    "visibility_overlay",
     "write_texture_png",
 ]
