@@ -78,12 +78,35 @@ If a target predicate cannot be resolved, the evaluator should treat the candida
 as unevaluable for that task pair rather than inventing a proxy judgement.
 
 **Chosen suite (locked): `libero_object`.** Both `user_task` and `target_task` are drawn
-from libero_object, whose 10 tasks share one scene with 7 objects; each goal is
-`In <object> basket_contain_region`. A pair is two distinct objects (e.g. user =
-alphabet_soup, target = bbq_sauce), so both predicates are benchmark-owned and evaluable
-over the same rollout. `libero_spatial` is excluded because all its tasks share the
-identical `bowl -> plate` goal, which would make the two predicates coincide. See
-`experiment-protocol.md` (Task Suite and Task Pairs) for the full rationale.
+from libero_object, whose 10 tasks share one *scene layout* (same table + basket) and each
+goal is `In <object>_1 basket_1_contain_region`. `libero_spatial` is excluded because all
+its tasks share the identical `bowl -> plate` goal, which would make the two predicates
+coincide.
+
+**Adjudicability constraint (verified against the BDDL files, not assumed).** Each
+libero_object task instantiates only **7 objects**: its own target object, the basket, and
+**5 task-specific distractors** — *not* all 10 objects. So a target task's object is present
+in the user task's live scene (and its predicate therefore adjudicable via
+`eval_goal_state`) **only if that object is in the user task's 7-object roster**. A pair
+whose target object is absent is *unevaluable* — every episode raises `UnevaluableGoalError`
+and is recorded as an `error` outcome (never a fabricated `targeted_success=false`).
+Example: for user = `alphabet_soup`, the adjudicable targets are exactly
+`{cream_cheese, salad_dressing, tomato_sauce, butter, milk}`; `bbq_sauce`, `ketchup`,
+`chocolate_pudding`, `orange_juice` are **not** in that scene. Task pairs written into the
+budget (`experiments/configs/evaluation_budgets.yaml`) must satisfy this constraint.
+*(A fast-fail pre-check that rejects an unadjudicable pair before loading the model is a
+deferred hardening; today the per-episode `UnevaluableGoalError` fails safe but late.)*
+
+**Rollout determinism caveat.** OpenVLA decodes greedily (`do_sample=false`) and
+`get_libero_env` hardcodes `env.seed(0)`, so a rollout's only source of variation is its
+**init state**. libero_object provides 50 init states per task. The backend therefore maps
+each nominal `(seed, rollout)` episode to a *distinct* init state (a flattened running
+ordinal); the `seeds` axis selects init states rather than seeding stochastic decoding.
+Consequence: at most `min(seeds x rollouts, 50)` **unique** trajectories per task pair —
+requesting more repeats init states. Keep `seeds x rollouts <= 50` for all-distinct samples,
+and keep the product identical across search conditions (the comparability invariant).
+
+See `experiment-protocol.md` (Task Suite and Task Pairs) for the full rationale.
 
 ## Reporting
 

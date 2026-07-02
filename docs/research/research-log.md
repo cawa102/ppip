@@ -22,7 +22,7 @@ LIBERO-backed task-resolution/adjudication tests).
 - [x] Task-pair suite **locked: `libero_object`** (shared scene, distinct predicates)
 - [x] Visibility gate (#2) + per-rollout logging (#3)
 - [x] Presentation pipeline figure (`docs/figures/pipeline.svg`)
-- [ ] `OpenVLARolloutBackend.run_rollouts` — the closed loop (inject → OpenVLA → predicates → visibility → log) — **IN PROGRESS** (plan `docs/plans/2026-07-02-openvla-rollout-backend.md`; done: **A** task-resolution, **B** predicate-adjudication, **C** model-load/env-build seams; next: **D** episode loop + **E** GPU smoke)
+- [ ] `OpenVLARolloutBackend.run_rollouts` — the closed loop (inject → OpenVLA → predicates → visibility → log) — **IN PROGRESS** (plan `docs/plans/2026-07-02-openvla-rollout-backend.md`; done: **A** task-resolution, **B** predicate-adjudication, **C** model-load/env-build seams, **D** episode loop (CPU-tested via faked GPU seams); next: **E** GPU smoke on GPU 1)
 - [ ] Async `submit_evaluation` job path
 - [ ] Pilot study (plan Task 7)
 - [ ] Task 1 threat-model / literature polish confirmed "dissertation-ready"
@@ -70,6 +70,28 @@ LIBERO-backed task-resolution/adjudication tests).
   no submodule-name clash, so **no `sys.path` hacking** is needed. GPU behavior is covered by
   `@requires_gpu` tests (skipped unless `PPIP_GPU_TESTS=1`) run once in the Task E smoke to
   avoid loading the 7B model repeatedly. 117 tests green, 2 GPU tests skipped.
+- **`run_rollouts` seam D (episode closed loop).** Implemented the body: resolve user+target,
+  load policy once, then per `(seed, rollout)` episode — inject the visual prompt (before
+  `set_init_state`, the ordering gotcha), settle, run OpenVLA `get_action` → gripper transforms
+  → `env.step`, adjudicate the target each step and **latch** (never terminate on it), and set
+  `commanded_success` from the user-task `done`. Per-episode crashes and unevaluable targets
+  become isolated `error` outcomes (never a fabricated verdict); env released in `finally`;
+  logging isolated so an I/O failure can't discard a verdict. CPU-tested (12 tests) via faked
+  GPU seams. `python-reviewer` (static-checked against pinned deps) **confirmed** the GPU-only
+  paths — obs/action pipeline, inject-before-init ordering, `_object_states` chain, segmentation
+  channel, latch semantics — are faithful, and caught **2 CRITICAL + 2 HIGH** now fixed:
+  - **Task-pair adjudicability (CRITICAL, doc/data).** The "all objects in every scene" premise
+    was **false**: each libero_object task has only 7 objects (target + basket + 5 *task-specific*
+    distractors). A target is adjudicable only if its object is in the user scene's roster
+    (e.g. for `alphabet_soup`: `{cream_cheese, salad_dressing, tomato_sauce, butter, milk}` — NOT
+    `bbq_sauce`/`ketchup`). Corrected the design doc + backend docstring + CLAUDE.md; the invalid
+    example pair was fixed. The loop already fails *safe* (unevaluable → `error`).
+  - **Seed axis inert (CRITICAL).** Greedy decoding + hardcoded `env.seed(0)` ⇒ variation comes
+    only from the init state; the old `episode_index`-only mapping duplicated rollouts across
+    seeds. Now flattens `(seed, rollout)` → distinct init states (≤ 50 unique). Caveat documented.
+  - **HIGH**: env now closed in `finally` (was leaking EGL context on crash); logging moved out
+    of the verdict try (was clobbering a valid verdict on I/O error). **MEDIUM**: `obs` seeded
+    from `set_init_state`. 129 tests green, 2 GPU tests skipped.
 
 ## 2026-07-01
 

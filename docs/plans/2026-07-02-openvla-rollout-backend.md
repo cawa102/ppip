@@ -103,7 +103,7 @@
 
 ---
 
-- [ ] Task D: GPU seam — episode closed loop + run_rollouts body
+- [x] Task D: GPU seam — episode closed loop + run_rollouts body
 
 **Files:**
 - Modify: `src/evaluator/openvla_backend.py`
