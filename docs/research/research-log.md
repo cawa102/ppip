@@ -6,8 +6,9 @@ plan is `docs/plans/2026-07-01-autoppia-vla.md`.
 
 ## Status at a glance (updated 2026-07-02)
 
-GPU-free core harness: implemented + tested — **103 tests, ruff + mypy `--strict` clean**,
-run with `~/vla-injection/.venv/bin/python -m pytest`.
+GPU-free core harness: implemented + tested — **116 tests, ruff + mypy `--strict` clean**,
+run with `~/vla-injection/.venv/bin/python -m pytest` (`PYTHONPATH=~/LIBERO` for the
+LIBERO-backed task-resolution/adjudication tests).
 
 - [x] Env verified on the GPU host (reuse the proven `~/vla-injection/.venv`)
 - [x] GPU stack pinned (OpenVLA `c8f03f4`, LIBERO `8f1084e`); `libero_object` checkpoint cached
@@ -21,7 +22,7 @@ run with `~/vla-injection/.venv/bin/python -m pytest`.
 - [x] Task-pair suite **locked: `libero_object`** (shared scene, distinct predicates)
 - [x] Visibility gate (#2) + per-rollout logging (#3)
 - [x] Presentation pipeline figure (`docs/figures/pipeline.svg`)
-- [ ] `OpenVLARolloutBackend.run_rollouts` — the closed loop (inject → OpenVLA → predicates → visibility → log) — **NEXT**
+- [ ] `OpenVLARolloutBackend.run_rollouts` — the closed loop (inject → OpenVLA → predicates → visibility → log) — **IN PROGRESS** (plan `docs/plans/2026-07-02-openvla-rollout-backend.md`; CPU-pure seams **A** task-resolution + **B** predicate-adjudication done; GPU seams C–D + smoke E next)
 - [ ] Async `submit_evaluation` job path
 - [ ] Pilot study (plan Task 7)
 - [ ] Task 1 threat-model / literature polish confirmed "dissertation-ready"
@@ -50,6 +51,16 @@ run with `~/vla-injection/.venv/bin/python -m pytest`.
 - **Presentation.** Added `docs/figures/pipeline.svg` (+ README) for the MSc talk.
 - GPU discipline: all work above was CPU/disk only except two brief EGL smokes; GPU 0 was
   running a concurrent job and was left untouched (rollout work will pin to a free card).
+- **`run_rollouts` seams A+B (TDD, CPU-pure).** Started the closed-loop sub-plan. Added
+  `evaluator/libero_tasks.py` (`resolve_task`: candidate free-text task → `libero_object`
+  task_id/language/goal predicates via normalised match; raises on no-match/ambiguous/unknown
+  suite) and `evaluator/adjudicate.py` (`eval_goal_state`: conjunction of a target goal's
+  predicates over a live env's `object_states` via LIBERO `eval_predicate_fn`; raises
+  `UnevaluableGoalError` on empty/missing-object — validates *all* objects before evaluating,
+  so a missing object never hides behind a short-circuited `False`). Both compute verdicts
+  **purely** (no sim/LLM/heuristic) and are unit-tested off-GPU. `goal_state` is an immutable
+  tuple-of-tuples (post-review hardening). `python-reviewer` pass: 1 HIGH (mutable verdict
+  data) + 3 MED addressed. Suite: 116 tests green.
 
 ## 2026-07-01
 

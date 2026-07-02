@@ -27,7 +27,7 @@ def test_resolves_language_string_to_task_id_and_goal_state() -> None:
     assert resolved.task_id == 3
     assert resolved.name == "pick_up_the_bbq_sauce_and_place_it_in_the_basket"
     assert resolved.language == "pick up the bbq sauce and place it in the basket"
-    assert resolved.goal_state == [["in", "bbq_sauce_1", "basket_1_contain_region"]]
+    assert resolved.goal_state == (("in", "bbq_sauce_1", "basket_1_contain_region"),)
     assert resolved.bddl_path.endswith(
         "pick_up_the_bbq_sauce_and_place_it_in_the_basket.bddl"
     )
@@ -38,7 +38,7 @@ def test_parse_goal_state_returns_predicate_tuples() -> None:
 
     goal_state = parse_goal_state(resolved.bddl_path)
 
-    assert goal_state == [["in", "ketchup_1", "basket_1_contain_region"]]
+    assert goal_state == (("in", "ketchup_1", "basket_1_contain_region"),)
 
 
 def test_resolves_despite_whitespace_and_case() -> None:
@@ -48,8 +48,15 @@ def test_resolves_despite_whitespace_and_case() -> None:
 
 
 def test_unknown_task_string_raises() -> None:
-    with pytest.raises(TaskResolutionError):
+    with pytest.raises(TaskResolutionError, match="no task"):
         resolve_task("open the microwave and heat the burrito")
+
+
+def test_unknown_suite_raises_task_resolution_error() -> None:
+    with pytest.raises(TaskResolutionError, match="suite"):
+        resolve_task(
+            "pick up the ketchup and place it in the basket", suite="no_such_suite"
+        )
 
 
 class _FakeTask:
@@ -74,5 +81,5 @@ def test_ambiguous_task_string_raises(monkeypatch: pytest.MonkeyPatch) -> None:
         benchmark, "get_benchmark_dict", lambda: {"libero_object": _FakeSuite}
     )
 
-    with pytest.raises(TaskResolutionError):
+    with pytest.raises(TaskResolutionError, match="2 tasks"):
         resolve_task("pick up the widget and place it in the basket")

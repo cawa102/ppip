@@ -51,7 +51,7 @@
 
 ---
 
-- [ ] Task B: Target-predicate adjudication (CPU-pure)
+- [x] Task B: Target-predicate adjudication (CPU-pure)
 
 **Files:**
 - Create: `src/evaluator/adjudicate.py`

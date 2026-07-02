@@ -18,13 +18,18 @@ from typing import Any
 
 @dataclass(frozen=True)
 class ResolvedTask:
-    """A candidate task string resolved to its LIBERO benchmark task."""
+    """A candidate task string resolved to its LIBERO benchmark task.
+
+    `goal_state` is a tuple of tuples (not lists) so the resolved verdict data is
+    fully immutable: it is resolved once per candidate and adjudicated against every
+    step of every rollout, and an in-place mutation would silently corrupt verdicts.
+    """
 
     task_id: int
     name: str
     language: str
     bddl_path: str
-    goal_state: list[list[str]]
+    goal_state: tuple[tuple[str, ...], ...]
 
 
 class TaskResolutionError(ValueError):
@@ -36,16 +41,17 @@ def _normalize(task_str: str) -> str:
     return re.sub(r"\s+", " ", task_str.strip().lower())
 
 
-def parse_goal_state(bddl_path: str) -> list[list[str]]:
+def parse_goal_state(bddl_path: str) -> tuple[tuple[str, ...], ...]:
     """Return the goal-state predicate tuples for a BDDL file.
 
-    Each tuple is ``[predicate_name, *object_names]`` (lowercased by the parser),
-    e.g. ``["in", "ketchup_1", "basket_1_contain_region"]``.
+    Each tuple is ``(predicate_name, *object_names)`` (lowercased by the parser),
+    e.g. ``("in", "ketchup_1", "basket_1_contain_region")``. Returned as an immutable
+    tuple-of-tuples (see ``ResolvedTask``).
     """
     from libero.libero.envs import bddl_utils
 
     parsed = bddl_utils.robosuite_parse_problem(bddl_path)
-    return [list(predicate) for predicate in parsed["goal_state"]]
+    return tuple(tuple(predicate) for predicate in parsed["goal_state"])
 
 
 def resolve_task(task_str: str, *, suite: str = "libero_object") -> ResolvedTask:
@@ -55,7 +61,11 @@ def resolve_task(task_str: str, *, suite: str = "libero_object") -> ResolvedTask
     """
     from libero.libero import benchmark
 
-    suite_obj: Any = benchmark.get_benchmark_dict()[suite]()
+    try:
+        suite_cls = benchmark.get_benchmark_dict()[suite]
+    except KeyError as exc:
+        raise TaskResolutionError(f"unknown suite {suite!r}") from exc
+    suite_obj: Any = suite_cls()
     wanted = _normalize(task_str)
 
     matches = [
