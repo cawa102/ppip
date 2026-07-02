@@ -67,6 +67,7 @@ warn_unused_ignores = true
 
 # Optional GPU-only dependencies, absent on the CPU dev/test machine. The backend
 # imports them lazily behind a runtime guard, so mypy should not require stubs.
+# LIBERO is host-provided via PYTHONPATH (not pip-installed) and ships no stubs.
 [[tool.mypy.overrides]]
-module = ["torch", "transformers"]
+module = ["torch", "transformers", "libero.*"]
 ignore_missing_imports = true

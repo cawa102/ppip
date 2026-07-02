@@ -22,7 +22,7 @@
 
 ---
 
-- [ ] Task A: Task resolution (candidate task string → libero_object task)
+- [x] Task A: Task resolution (candidate task string → libero_object task)
 
 **Files:**
 - Create: `src/evaluator/libero_tasks.py`
