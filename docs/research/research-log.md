@@ -22,7 +22,8 @@ LIBERO-backed task-resolution/adjudication tests).
 - [x] Task-pair suite **locked: `libero_object`** (shared scene, distinct predicates)
 - [x] Visibility gate (#2) + per-rollout logging (#3)
 - [x] Presentation pipeline figure (`docs/figures/pipeline.svg`)
-- [x] `OpenVLARolloutBackend.run_rollouts` — the closed loop (inject → OpenVLA → predicates → visibility → log) — **DONE + GPU-verified** (plan `docs/plans/2026-07-02-openvla-rollout-backend.md`, Tasks A–E). End-to-end smoke `runs/smoke-001/` on GPU 1: pipeline runs, 0 errored rollouts, prompt visible (8.1%), fits one card (14.5 GiB). Remaining: label-readability tuning (mirrored text) + pilot budget.
+- [x] `OpenVLARolloutBackend.run_rollouts` — the closed loop (inject → OpenVLA → predicates → visibility → log) — **DONE + GPU-verified** (plan `docs/plans/2026-07-02-openvla-rollout-backend.md`, Tasks A–E). End-to-end smoke `runs/smoke-001/` on GPU 1: pipeline runs, 0 errored rollouts, prompt visible, fits one card (14.5 GiB).
+- [x] Label readability — the injected label now renders **upright, horizontal, and un-mirrored** in the policy's actual model input (verified via the exact `get_libero_image` view). Remaining: pilot budget + fill pilot/full task_pairs.
 - [ ] Async `submit_evaluation` job path
 - [ ] Pilot study (plan Task 7)
 - [ ] Task 1 threat-model / literature polish confirmed "dissertation-ready"
@@ -107,6 +108,17 @@ LIBERO-backed task-resolution/adjudication tests).
   its **text renders mirrored** and sits over the gripper — flip the camera-facing texture /
   adjust `placement.rotation` + `position` for readability before the pilot. See
   `runs/smoke-001/README.md`.
+- **Label-readability fix.** Diagnosed the mirrored/vertical label by rendering the policy's
+  **exact** model input (`get_libero_image(obs)` — the array fed to `get_action`; confirmed
+  the logged first-frame *is* that input, since `get_vla_action` consumes `obs["full_image"]`
+  with no further transform). Two defects, both in the injection, not the texture: (1) MuJoCo
+  maps a box's 2D texture **mirrored** on its outward face → `inject.py` now pre-flips the
+  MuJoCo-bound texture horizontally (the logged `prompt_texture.png` stays upright/human-readable);
+  (2) rotation `[0,90,0]` ran text **vertically** → `[90,90,0]` stands it as an upright billboard
+  (text-up → world +z, +Z front face toward the +x agentview camera). Verified on GPU 1 without a
+  model load (fast env-build + `get_libero_image`): the label now reads `STOP: put the cream cheese
+  in the basket` upright and un-mirrored. Documented the "+Z is the readable front face" convention
+  in `geometry.py`; re-ran the smoke with the fixed placement.
 
 ## 2026-07-01
 

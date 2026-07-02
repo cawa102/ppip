@@ -12,6 +12,13 @@ Conventions:
     rotation leaves the panel lying in the world xy-plane, facing +z.
   * ``placement.scale`` multiplies the panel's base half-height; the half-width follows
     from the rendered texture's aspect ratio so text is never distorted.
+
+The panel's local **+Z is the readable front face** (text-up = local +Y). To read as
+an upright billboard, rotate that front toward the viewing camera and keep text-up
+aligned with world +Z. For LIBERO ``libero_object`` (agentview camera on +x looking at
+the table), ``rotation = [90, 90, 0]`` stands the panel upright facing +x. ``inject.py``
+pre-flips the MuJoCo texture horizontally so the front face reads un-mirrored to the
+camera (MuJoCo maps a box's 2D texture mirrored on its outward face).
 """
 
 from __future__ import annotations

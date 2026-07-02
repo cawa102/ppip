@@ -108,7 +108,12 @@ def inject_prompt(
     """
     geom = build_prompt_geom(candidate)
     os.makedirs(texture_dir, exist_ok=True)
-    texture_path = write_texture_png(geom.texture, os.path.join(texture_dir, f"{geom.name}.png"))
+    # MuJoCo maps the 2D texture mirrored across the box's outward (+local-Z) front
+    # face, so pre-flip it horizontally: the panel then reads correctly to a camera
+    # facing its front. Only the MuJoCo-bound PNG is flipped; the returned/logged
+    # `geom.texture` stays human-readable (upright, un-mirrored).
+    mujoco_texture = np.ascontiguousarray(np.fliplr(geom.texture))
+    texture_path = write_texture_png(mujoco_texture, os.path.join(texture_dir, f"{geom.name}.png"))
     injected_xml = build_injection_xml(_get_model_xml(env), geom, texture_path)
     env.reset_from_xml_string(injected_xml)
     return geom
