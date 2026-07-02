@@ -10,6 +10,11 @@ requires-python = ">=3.10"
 dependencies = [
     "jsonschema>=4.18",
     "pyyaml>=6.0",
+    # The visual-prompt texture renderer (src/rendering/text_prompt.py) is CPU-pure
+    # and part of the core harness, so its deps live here (not the gpu group).
+    # numpy is pinned <2 to match the OpenVLA/torch ABI on the GPU host (see gpu group).
+    "numpy>=1.26,<2",
+    "Pillow>=10.1",
 ]
 
 [project.optional-dependencies]
