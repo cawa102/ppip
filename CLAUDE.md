@@ -53,7 +53,9 @@ Simulation-only. **No** physical-robot experiments, real-user/external-system ta
 
 ## Toolchain & commands
 
-Toolchain: Python with **ruff** (lint), **mypy --strict** (types), **pytest** (tests) — see `pyproject.toml`. On the GPU host, run the suite with the proven env: `~/vla-injection/.venv/bin/python -m pytest` (import root is `src/` + `experiments/results`); type-check isolated via `uvx --with types-PyYAML --with types-jsonschema --with "numpy<2" --with Pillow mypy`. The OpenVLA/LIBERO/robosuite/MuJoCo stack is reused, not rebuilt (see `third_party/README.md` + the `gpu-env-vla-injection` memory); exact third-party commit hashes are recorded under `third_party/`. `runs/*`, `data/{external,processed}/*`, and model weights (`*.ckpt/*.safetensors/*.pt`) are git-ignored — only READMEs and summaries are tracked.
+Toolchain: Python with **ruff** (lint), **mypy --strict** (types), **pytest** (tests) — see `pyproject.toml`. On the GPU host, run the suite with the proven env: `~/vla-injection/.venv/bin/python -m pytest` (import root is `src/` + `experiments/results`); type-check isolated via `uvx --with types-PyYAML --with types-jsonschema --with "numpy<2" --with Pillow mypy`.
+
+**GPU: this project must use GPU 1 only.** GPU 0 is reserved for other tasks — never run compute on it. Pin every GPU process (OpenVLA rollouts, EGL rendering, model loads) with `CUDA_VISIBLE_DEVICES=1` (plus `MUJOCO_GL=egl`). Still run `nvidia-smi` first to confirm GPU 1 is free before launching. CPU/disk work (tests, HF downloads) needs no pinning. The OpenVLA/LIBERO/robosuite/MuJoCo stack is reused, not rebuilt (see `third_party/README.md` + the `gpu-env-vla-injection` memory); exact third-party commit hashes are recorded under `third_party/`. `runs/*`, `data/{external,processed}/*`, and model weights (`*.ckpt/*.safetensors/*.pt`) are git-ignored — only READMEs and summaries are tracked.
 
 ## Living documentation (MANDATORY)
 
