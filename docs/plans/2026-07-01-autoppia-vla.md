@@ -151,7 +151,7 @@ allow_async_jobs: bool
 
 **Commit:** `docs: define autoppia-vla scope and threat model`
 
-- [x] Task 2: Fixed Evaluation Contract  <!-- GPU-free: validation, metrics, budgets, evaluate_candidate orchestration, and the RolloutBackend seam are implemented and tested; the real OpenVLA rollout *body* (OpenVLARolloutBackend.run_rollouts) is stubbed for the GPU host. -->
+- [x] Task 2: Fixed Evaluation Contract  <!-- GPU-free: validation, metrics, budgets, evaluate_candidate orchestration, and the RolloutBackend seam are implemented and tested. Rendering (Option A geom injection), visibility gate, and per-rollout logging are implemented and GPU-verified (2026-07-02). Remaining: OpenVLARolloutBackend.run_rollouts wires them into the closed loop. See docs/research/research-log.md. -->
 
 
 **Files:**
@@ -347,20 +347,26 @@ Use a sequential, subagent-driven implementation once coding begins. The tasks d
 
 Immediate next step after this setup: complete Task 1 by expanding the threat model and literature map into dissertation-ready notes.
 
-## Implementation Status (GPU-free phase, 2026-07-01)
+## Implementation Status
 
-The entire harness *except the live OpenVLA rollout body* is implemented and
-tested on a CPU-only machine, TDD, 65 tests, 100% line coverage of the tracked
-source (the only uncovered lines are the GPU-only `pragma: no cover` rollout
-body), `ruff` + `mypy --strict` clean. The OpenVLA rollout is isolated behind the
-injectable `RolloutBackend` seam, so orchestration is fully exercised with a fake
-backend.
+> **Living status is `docs/research/research-log.md`** ("Status at a glance" + dated
+> entries). This section is the point-in-time snapshot; keep both current.
 
-**Toolchain:** Python 3.11 venv (`.venv/`), `pyproject.toml` with core deps
-(jsonschema, pyyaml) and a `gpu` extra placeholder; dev deps ruff/mypy/pytest.
-Run tests: `.venv/bin/python -m pytest`. Import root is `src/` (+`experiments/results`).
+**On the GPU host (updated 2026-07-02).** The GPU-free core harness *and* the rendering
+layer (Option A injection) are implemented and tested — **103 tests, `ruff` + `mypy
+--strict` clean**, run with `~/vla-injection/.venv/bin/python -m pytest`. The live
+`OpenVLARolloutBackend.run_rollouts` closed loop is the remaining GPU piece. The task-pair
+suite is locked to **`libero_object`**; the matching checkpoint is cached. Rendering is
+verified on GPU (label injected into a live scene, renders in agentview). Decisions
+settled: `targeted_success` adjudication, visibility gate (#2), per-rollout logging (#3).
 
-**Implemented modules (GPU-free):**
+**Toolchain (GPU host):** reuse the proven uv venv `~/vla-injection/.venv` (Python 3.10,
+torch 2.2.0+cu121, OpenVLA editable, LIBERO via `PYTHONPATH=~/LIBERO`, `MUJOCO_GL=egl`).
+`pyproject.toml` core deps: jsonschema, pyyaml, numpy<2, Pillow; the `gpu` group documents
+the pinned stack. Import root is `src/` (+`experiments/results`). Rollout work pins to a
+free GPU (`CUDA_VISIBLE_DEVICES=<idx>`) — the box is shared.
+
+**Implemented modules (GPU-free core):**
 - `src/evaluator/validation.py` — `validate_candidate` (schema + placement bounds + readability + evaluator-override rejection).
 - `src/evaluator/metrics.py` — `RolloutOutcome`, `summarize_rollouts`, `compute_attack_score` (official formula).
 - `src/evaluator/budgets.py` — `load_evaluation_budget` (stage selection, required-field checks).
@@ -375,7 +381,18 @@ Run tests: `.venv/bin/python -m pytest`. Import root is `src/` (+`experiments/re
 - `experiments/results/aggregate_results.py` — `aggregate_condition`, `aggregate_run`.
 - `experiments/configs/{search_conditions,baselines}.yaml` — the six conditions + baseline subset.
 
-**Deferred to the GPU host:**
-1. `OpenVLARolloutBackend.run_rollouts` — the closed-loop rollout + visual-prompt rendering into the LIBERO scene (`src/rendering/`), following the reference `run_episode` procedure documented in that module.
+**Implemented rendering + logging (Phase C, done 2026-07-02):**
+- `src/rendering/text_prompt.py` — `render_prompt_texture` / `render_prompt_from_candidate` (text+style → RGB label).
+- `src/rendering/geometry.py` — `build_prompt_geom` (placement/style → MuJoCo pose, quat, half-extents, texture).
+- `src/rendering/inject.py` — `build_injection_xml` + `write_texture_png` (CPU-pure) and `inject_prompt` (the MuJoCo seam: `get_xml` → inject visual-only geom → `reset_from_xml_string`); verified on GPU.
+- `src/rendering/visibility.py` — `prompt_pixel_fraction` (segmentation gate #2), `visibility_overlay` (figures).
+- `src/evaluator/rollout_logging.py` — per-rollout artifacts under `runs/<id>/candidates/<cid>/` (#3).
+- `src/evaluator/metrics.py` — `RolloutOutcome.prompt_visibility` + summary aggregation.
+
+**Deferred to the GPU host (remaining):**
+1. `OpenVLARolloutBackend.run_rollouts` — the closed loop that ties the pieces together:
+   `inject_prompt` → OpenVLA `get_action` loop under `user_task` → adjudicate `commanded`/`targeted`
+   (benchmark predicates) → `prompt_visibility` → per-rollout logging, one `RolloutOutcome` per episode.
+   Rendering, geom injection, and logging are done and verified; this wires them.
 2. The async `submit_evaluation` job path (long OpenVLA jobs); the synchronous, resumable loop already models the control flow.
 3. Task 7 pilot with real rollouts. End-to-end plumbing (propose→validate→evaluate→ledger→aggregate) is already proven via `tests/test_pipeline_integration.py` with the fake backend.
