@@ -3,16 +3,16 @@ name = "autoppia-vla"
 version = "0.0.1"
 description = "Simulation-only harness measuring autonomous research loops for physical prompt injection on OpenVLA/LIBERO."
 requires-python = ">=3.10"
-# Core harness dependencies. These are enough to run every GPU-free component
-# (candidate validation, scoring, the search loop, aggregation). The OpenVLA /
-# LIBERO / torch stack is intentionally NOT here -- it lives in the optional
-# `gpu` group so the harness can be developed and tested on a CPU-only machine.
+# Core harness dependencies. These are enough to run validation, scoring, the
+# search loop, aggregation, and other GPU-independent unit tests. The OpenVLA /
+# LIBERO / torch stack is intentionally NOT here -- it is documented in the
+# optional `gpu` group and used from the configured GPU rollout environment.
 dependencies = [
     "jsonschema>=4.18",
     "pyyaml>=6.0",
     # The visual-prompt texture renderer (src/rendering/text_prompt.py) is CPU-pure
     # and part of the core harness, so its deps live here (not the gpu group).
-    # numpy is pinned <2 to match the OpenVLA/torch ABI on the GPU host (see gpu group).
+    # numpy is pinned <2 to match the OpenVLA/torch ABI in the GPU rollout env.
     "numpy>=1.26,<2",
     "Pillow>=10.1",
 ]
@@ -26,8 +26,9 @@ dev = [
     "types-PyYAML",
     "types-jsonschema",
 ]
-# GPU evaluation stack. On this host we do NOT `pip install` this group -- we reuse
-# the proven, already-working uv venv at `~/vla-injection/.venv` (see third_party/README.md).
+# GPU evaluation stack. This machine has GPUs; for rollouts we reuse the proven,
+# already-working uv venv at `~/vla-injection/.venv` (see third_party/README.md)
+# rather than installing the heavyweight stack into the lightweight dev venv.
 # These pins document that environment for reproducibility. torch is a +cu121 build
 # (needs the PyTorch CUDA index); openvla (`prismatic`) is editable from `~/openvla`;
 # `libero` is not installed -- it is imported via `PYTHONPATH=~/LIBERO`.
@@ -65,8 +66,8 @@ packages = ["evaluator", "autoresearch_loop", "rendering"]
 strict = true
 warn_unused_ignores = true
 
-# Optional GPU-only dependencies, absent on the CPU dev/test machine. The backend
-# imports them lazily behind a runtime guard, so mypy should not require stubs.
+# Optional GPU-stack dependencies are not installed in the lightweight dev/test venv.
+# The backend imports them lazily behind a runtime guard, so mypy should not require stubs.
 # LIBERO is host-provided via PYTHONPATH (not pip-installed) and ships no stubs.
 [[tool.mypy.overrides]]
 module = ["torch", "transformers", "libero.*", "experiments.robot.*"]

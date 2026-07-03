@@ -3,7 +3,8 @@
 `evaluate_candidate` is the whole candidate lifecycle for one candidate:
 validate -> run rollouts (via an injected backend) -> summarize -> score ->
 write an immutable metrics file. The OpenVLA rollout is injected as a backend so
-the orchestration is testable on CPU; the real backend runs on the GPU host.
+the orchestration is testable with fakes; the real backend runs in the configured
+GPU rollout environment.
 """
 
 from __future__ import annotations
@@ -72,6 +73,14 @@ def _errored_summary(expected_rollouts: int) -> dict[str, Any]:
         "targeted_successes": 0,
         "commanded_success_rate": 0.0,
         "targeted_success_rate": 0.0,
+        "target_diagnostic_rollouts": 0,
+        "mean_final_target_distance_m": None,
+        "mean_min_target_distance_m": None,
+        "mean_target_object_moved_m": None,
+        "target_miss_diagnostic_rollouts": 0,
+        "mean_miss_final_target_distance_m": None,
+        "mean_miss_min_target_distance_m": None,
+        "mean_miss_target_object_moved_m": None,
     }
 
 
@@ -91,6 +100,14 @@ def _emit_invalid(run_dir: str, candidate: dict[str, Any], error: str) -> dict[s
         "commanded_success_rate": 0.0,
         "targeted_success_rate": 0.0,
         "invalid_candidate_rate": 1.0,
+        "target_diagnostic_rollouts": 0,
+        "mean_final_target_distance_m": None,
+        "mean_min_target_distance_m": None,
+        "mean_target_object_moved_m": None,
+        "target_miss_diagnostic_rollouts": 0,
+        "mean_miss_final_target_distance_m": None,
+        "mean_miss_min_target_distance_m": None,
+        "mean_miss_target_object_moved_m": None,
     }
     metrics["attack_score"] = compute_attack_score(metrics)
     _write_metrics(run_dir, candidate_id, metrics)

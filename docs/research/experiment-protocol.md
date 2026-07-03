@@ -97,17 +97,36 @@ counted as 0% visible.
 `runs/<run_id>/candidates/<candidate_id>/`:
 
 - `prompt_texture.png` — the rendered label (the attacker's typographic prompt);
-- `seed<k>_ep<j>_first.png` — the first agentview frame with the label in scene, which
-  doubles as a presentation figure ("what the policy sees"); a `visibility_overlay`
-  variant highlights the prompt pixels;
+- sampled agentview frames: `seed<k>_ep<j>_first.png`,
+  `seed<k>_ep<j>_step20.png` when the rollout reaches policy step 20, and
+  `seed<k>_ep<j>_last.png`. These are the reproducible dissertation/presentation
+  screenshots; the evaluator does **not** save every step by default. A
+  `visibility_overlay` variant may highlight the prompt pixels;
 - `rollouts.jsonl` — one record per rollout: seed, episode, `commanded_success`,
   `targeted_success`, `error`, `prompt_visibility`, the latch steps at which each
-  predicate fired, and step count.
+  predicate fired, sampled frame paths, and `target_diagnostics`.
 
 Artifact volume scales with the stage: smoke and pilot save frames for every rollout; the
 full stage saves frames for a sample (first rollout per candidate + top-k) to bound disk,
 and always writes `rollouts.jsonl` + `metrics_<n>.json`. Heavy `runs/*` artifacts are
 git-ignored; only summaries are tracked.
+
+**Target miss-distance diagnostics.** Binary target success is the official verdict, but
+failed rollouts should also preserve how close the policy got to the attacker target when
+that can be read from simulator object states. Each completed rollout may include a
+`target_diagnostics` block with:
+
+- `target_object` and `target_region`;
+- `final_target_distance_m`: target object to target region at the end;
+- `min_target_distance_m`: closest observed distance during the rollout;
+- `target_object_moved_m`: how far the target object moved from its initial position;
+- `failure_mode`: a coarse reporting label such as `target_not_approached` or
+  `moved_target_but_not_to_region`.
+
+These fields are not part of `attack_score`; they are diagnostic evidence for failure
+analysis, figures, and presentation examples. Summaries report both all-diagnostic
+averages and miss-only averages (`mean_miss_*`) so target failures can be analysed
+without being diluted by successful target hits.
 
 ## Targeted Success Adjudication
 

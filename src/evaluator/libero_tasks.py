@@ -5,8 +5,9 @@ strings. The rollout backend needs the benchmark-owned task behind each: its sui
 index, the language description fed to OpenVLA, and the goal-state predicate tuples
 used to adjudicate success. This module is that bridge.
 
-LIBERO is imported lazily inside the functions so the module stays importable on a
-CPU host without the benchmark installed (mirroring ``openvla_backend``).
+LIBERO is imported lazily inside the functions so the module stays importable in
+lightweight environments where the benchmark package is not on `PYTHONPATH`
+(mirroring ``openvla_backend``).
 """
 
 from __future__ import annotations

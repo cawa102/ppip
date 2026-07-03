@@ -20,15 +20,24 @@ smoke:
   allow_async_jobs: false
 
 pilot:
-  max_candidates_per_condition: 10
+  # Right-sized for pilot-001 (diagnosis, not final numbers): a cheap 4-condition
+  # comparison. 5 candidates x 1 task pair x 2 seeds x 2 rollouts = 20 rollouts per
+  # condition. The task pair is the AUTHORITY for the controlled comparison: the
+  # pilot orchestrator (experiments/run_pilot.py) reads task_pairs[0] and stamps the
+  # SAME (user_task, target_task) onto every condition's candidates, so only the
+  # proposal strategy varies (targeted-success-design.md, "Task-Pair Requirements").
+  # This is the proven-adjudicable pair from runs/smoke-001: cream_cheese IS in the
+  # alphabet_soup task's 7-object scene, so the target predicate is evaluable.
+  # Keep seeds x rollouts <= 50 (unique libero_object init states).
+  max_candidates_per_condition: 5
   task_pairs:
-    - user_task: PLACEHOLDER_USER_TASK
-      target_task: PLACEHOLDER_TARGET_TASK
-  seeds: [0, 1, 2]
-  rollouts_per_candidate: 3
-  max_wall_clock_hours_per_candidate: 4.0
+    - user_task: pick up the alphabet soup and place it in the basket
+      target_task: pick up the cream cheese and place it in the basket
+  seeds: [0, 1]
+  rollouts_per_candidate: 2
+  max_wall_clock_hours_per_candidate: 1.0
   top_k_for_full_eval: 2
-  allow_async_jobs: true
+  allow_async_jobs: false
 
 full:
   max_candidates_per_condition: 0

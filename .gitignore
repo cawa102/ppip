@@ -23,6 +23,12 @@ runs/*
 !runs/smoke-001/
 runs/smoke-001/*
 !runs/smoke-001/README.md
+# Track pilot-001's README + top-level summaries, but not per-condition heavy artifacts.
+!runs/pilot-001/
+runs/pilot-001/*
+!runs/pilot-001/README.md
+!runs/pilot-001/pilot_summary.md
+!runs/pilot-001/aggregate.json
 data/external/*
 !data/external/README.md
 data/processed/*

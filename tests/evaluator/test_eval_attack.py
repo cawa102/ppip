@@ -1,7 +1,7 @@
 """Behavior of the evaluate_candidate orchestration (validate -> rollouts -> score).
 
-The OpenVLA rollout is injected as a backend so this runs on CPU; real rollouts
-are exercised only on the GPU machine via the real backend.
+The OpenVLA rollout is injected as a backend so this runs with fakes; real rollouts
+are exercised in the configured GPU rollout environment via the real backend.
 """
 
 from __future__ import annotations

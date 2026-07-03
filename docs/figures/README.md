@@ -24,12 +24,14 @@ The rollout logger writes these under `runs/<run_id>/candidates/<candidate_id>/`
 run — they are the "what the policy actually sees" slides:
 
 - `prompt_texture.png` — the rendered typographic label (the injected instruction).
-- `seed<k>_ep<j>_first.png` — the first agentview frame with the label in the scene.
+- `seed<k>_ep<j>_first.png`, `seed<k>_ep<j>_step20.png` when reached, and
+  `seed<k>_ep<j>_last.png` — sampled agentview frames with the label in the scene.
 - A `visibility_overlay` variant highlights exactly which pixels are the prompt (from the
   MuJoCo segmentation mask), which visually justifies the visibility gate.
 
 The strongest single slide is a **before/after pair**: the clean scene vs. the same scene
 with the injected label, alongside the outcome — the robot placing the *attacker's* object
 in the basket instead of the user's (pure targeted substitution). These are produced once
-`OpenVLARolloutBackend.run_rollouts` runs on the GPU host (pin to a free card:
+`OpenVLARolloutBackend.run_rollouts` runs in the configured GPU rollout environment
+(pin to a free card:
 `CUDA_VISIBLE_DEVICES=<idx> MUJOCO_GL=egl`).

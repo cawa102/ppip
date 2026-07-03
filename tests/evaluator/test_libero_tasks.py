@@ -1,7 +1,8 @@
 """Tests for candidate-task-string -> libero_object task resolution.
 
 These exercise the real LIBERO benchmark registry (a system boundary we wrap),
-so they are skipped on hosts where LIBERO is not importable. On the GPU host run
+so they are skipped in environments where LIBERO is not importable. In the configured
+GPU rollout environment run
 with `PYTHONPATH=$HOME/LIBERO`.
 """
 

@@ -4,7 +4,7 @@ The risky, deterministic part of Option A injection is editing the model XML: ad
 the label's texture/material assets and a visual-only textured box geom to the
 worldbody. That is pure ElementTree work and is unit-tested here. Actually handing the
 edited XML to a live MuJoCo sim (`reset_from_xml_string`) is a thin MuJoCo-dependent
-seam verified separately on the GPU host.
+seam verified separately in the configured GPU rollout environment.
 """
 
 from __future__ import annotations

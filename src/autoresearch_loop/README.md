@@ -12,7 +12,7 @@ The loop should:
 
 Keep provider-specific code isolated so Claude, Codex, manual one-shot, and random-search conditions can share the same evaluator.
 
-## Modules (implemented, GPU-free)
+## Modules (implemented, GPU-independent)
 
 - `ledger.py` — `append_ledger_row` (append-only; rejects duplicate `candidate_id`), `read_ledger`, `select_incumbent` (best under official score). Raises `LedgerError`.
 - `run_loop.py` — `record_result(candidate_path, metrics_path, ledger_path)` (immutable row) and `run_search_condition(*, budget, run_dir, backend, propose)`: budget-bounded and **resumable from the ledger** (already-recorded candidates are skipped). `propose(index)` keeps the loop provider-agnostic.

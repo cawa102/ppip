@@ -24,12 +24,13 @@ Working question:
 
 ## Current Status
 
-The **GPU-free harness is implemented and tested** (TDD; 65 tests, 100% line
-coverage of tracked source, `ruff` + `mypy --strict` clean). The only unimplemented
-piece is the live OpenVLA rollout body, which is isolated behind the injectable
-`RolloutBackend` seam and runs only on a GPU host. See the "Implementation Status"
-section of `docs/plans/2026-07-01-autoppia-vla.md` for the full module map and what
-remains for GPU.
+The harness is implemented and tested, including the OpenVLA rollout body behind
+the injectable `RolloutBackend` seam. The lightweight test environment runs without
+loading the OpenVLA/LIBERO stack; GPU tests and real rollouts are opt-in in the
+configured GPU rollout environment. Current local verification: 121 passed / 5
+skipped, `ruff` clean, and `mypy --strict` clean. See the "Implementation Status"
+section of `docs/plans/2026-07-01-autoppia-vla.md` for the full module map and
+remaining pilot work.
 
 ### Running the tests
 
@@ -41,8 +42,9 @@ python3.11 -m venv .venv
 .venv/bin/mypy src experiments/results/aggregate_results.py
 ```
 
-The OpenVLA/LIBERO/torch stack (the `gpu` extra) is intentionally NOT required for
-the harness or its tests; it is installed only on the GPU evaluation machine.
+The OpenVLA/LIBERO/torch stack is intentionally NOT required for lightweight harness
+tests. This repository is on a GPU-capable machine; real rollout work uses the
+configured GPU environment described in `third_party/README.md`.
 
 ## Important Autoresearch Assumption
 
@@ -63,8 +65,8 @@ This project does not keep the exact `prepare.py` / `train.py` / `program.md` co
 | `karpathy/autoresearch` role | AutoPPIA-VLA location | Status |
 |---|---|---|
 | `program.md` | `programs/autoppia-vla/program.md` | Exists. This is the instruction file for the candidate-proposal agent. |
-| `prepare.py` | `src/evaluator/eval_attack.py`, `src/evaluator/metrics.py`, `src/rendering/`, `experiments/configs/evaluation_budgets.yaml` | Implemented (GPU-free). Fixed benchmark/evaluation side; the OpenVLA rollout body (`src/evaluator/openvla_backend.py`) and `src/rendering/` are deferred to the GPU host. |
-| `train.py` | `src/autoresearch_loop/run_loop.py`, `src/autoresearch_loop/candidate_writer.py`, `src/autoresearch_loop/memory.py`, plus generated files in `experiments/candidates/` | Implemented (GPU-free). Editable/search side that proposes candidates and reads results. |
+| `prepare.py` | `src/evaluator/eval_attack.py`, `src/evaluator/metrics.py`, `src/rendering/`, `experiments/configs/evaluation_budgets.yaml` | Implemented. Fixed benchmark/evaluation side; real OpenVLA rollouts run in the configured GPU environment. |
+| `train.py` | `src/autoresearch_loop/run_loop.py`, `src/autoresearch_loop/candidate_writer.py`, `src/autoresearch_loop/memory.py`, plus generated files in `experiments/candidates/` | Implemented. Editable/search side that proposes candidates and reads results. |
 
 Interpretation:
 

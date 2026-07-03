@@ -7,7 +7,8 @@ states, and take the conjunction. Keeping it pure (no sim access) lets the
 scientific-integrity-critical decision be unit-tested off-GPU; the GPU rollout
 body hands it `env.<...>.object_states_dict`.
 
-LIBERO is imported lazily so the module stays importable on a CPU host.
+LIBERO is imported lazily so the module stays importable in lightweight environments
+where the benchmark package is not on `PYTHONPATH`.
 """
 
 from __future__ import annotations

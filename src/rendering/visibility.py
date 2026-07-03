@@ -7,7 +7,8 @@ passes it here with the injected prompt geom's id:
     per rollout as `RolloutOutcome.prompt_visibility` and aggregated by the metrics.
   * `visibility_overlay` -> a highlighted frame for presentation figures.
 
-Both are pure numpy; the segmentation render itself is a GPU-host concern.
+Both are pure numpy; the segmentation render itself is handled by the GPU rollout
+environment.
 """
 
 from __future__ import annotations

@@ -8,7 +8,7 @@
 
 **Tech Stack:** Python 3.10, OpenVLA-7B (`openvla-7b-finetuned-libero-object`, bf16, sdpa), LIBERO `libero_object` suite, robosuite/MuJoCo (EGL), transformers `AutoModelForVision2Seq`/`AutoProcessor`, numpy<2, Pillow.
 
-**Run env (GPU host):** `CUDA_VISIBLE_DEVICES=1 MUJOCO_GL=egl PYTHONPATH=~/LIBERO ~/vla-injection/.venv/bin/python -m pytest`. **GPU 1 only** (GPU 0 reserved). `nvidia-smi` first.
+**Run env (GPU rollout environment):** `CUDA_VISIBLE_DEVICES=1 MUJOCO_GL=egl PYTHONPATH=~/LIBERO ~/vla-injection/.venv/bin/python -m pytest`. **GPU 1 only** (GPU 0 reserved). `nvidia-smi` first.
 
 ---
 
@@ -82,18 +82,18 @@
 
 **Files:**
 - Modify: `src/evaluator/openvla_backend.py`
-- Test: `tests/evaluator/test_openvla_backend.py` (extend; CPU-observable assertions only)
+- Test: `tests/evaluator/test_openvla_backend.py` (extend; lightweight assertions only)
 
-**What:** Add the two GPU-guarded helpers the loop needs, ported from the reference smoke script: load the policy once, and build the `libero_object` env for a resolved user task. Both import torch/LIBERO/openvla helpers *inside* the function so the module stays importable on a CPU host.
+**What:** Add the two GPU-guarded helpers the loop needs, ported from the reference smoke script: load the policy once, and build the `libero_object` env for a resolved user task. Both import torch/LIBERO/openvla helpers *inside* the function so the module stays importable in the lightweight test environment.
 
 **Interface (private methods on `OpenVLARolloutBackend`):**
 - `_load_policy(self) -> tuple[model, processor, cfg, resize_size]` — `AutoProcessor` + `AutoModelForVision2Seq` (bf16, `attn_implementation="sdpa"`, `trust_remote_code=True`) on `self.device`; build the `SimpleNamespace` `cfg` OpenVLA's `get_action`/`get_image_resize_size` read (`model_family="openvla"`, `pretrained_checkpoint=self.model_id`, `center_crop=True`, `unnorm_key=self.unnorm_key`, `task_suite_name=self.task_suite`).
 - `_build_env(self, resolved: ResolvedTask) -> tuple[env, init_states, task_description, obj_of_interest]` — `benchmark_dict[self.task_suite]()` → `get_task(resolved.task_id)` → `get_task_init_states` → `get_libero_env(task, "openvla", resolution=256)`.
 
-**Test scenarios (CPU-observable, keep existing three passing):**
+**Test scenarios (lightweight-observable, keep existing three passing):**
 - Backend still conforms to `RolloutBackend` and keeps the reference defaults.
-- `_require_openvla_stack` still returns torch on the GPU host and raises the actionable error when stack missing.
-- (GPU-only, run on host) `_load_policy` returns a model whose peak VRAM fits one A5000 card; `_build_env` yields a live env whose `task_description` matches the resolved language. Mark with a GPU guard/skip so the CPU suite stays green.
+- `_require_openvla_stack` still returns torch in the configured GPU rollout environment and raises the actionable error when the stack is missing.
+- (GPU-only, run in the configured rollout env) `_load_policy` returns a model whose peak VRAM fits one A5000 card; `_build_env` yields a live env whose `task_description` matches the resolved language. Mark with a GPU guard/skip so the lightweight suite stays green.
 
 **Dependencies:** `experiments.robot.libero.libero_utils.get_libero_env`, `experiments.robot.robot_utils.get_image_resize_size`, `transformers`, Task A `ResolvedTask`.
 
@@ -117,8 +117,14 @@
 3. Action loop `t in range(num_steps_wait, max_steps + num_steps_wait)`: `get_libero_image` → build obs (`full_image` + proprio `state`) → `get_action(cfg, model, obs, resolved_user.language, processor=...)` → `normalize_gripper_action(binarize=True)` → `invert_gripper_action` → `env.step`. Each step, adjudicate targeted via `eval_goal_state(resolved_target.goal_state, object_states_dict)` and **latch**. Break when user-task `done`.
 4. `commanded_success = done`; `targeted_success = latched flag`.
 5. `prompt_visibility = prompt_pixel_fraction(segmentation_render, geom_id)` from a segmentation frame (first policy frame; render via env offscreen renderer with `segmentation=True`).
-6. Log via `rollout_logging`: `save_prompt_texture`, `save_rollout_frame` (first frame), `append_rollout_record` (verdicts, visibility, latch step). Pass `run_dir` through (see Notes).
-7. On any per-episode exception, return `RolloutOutcome(..., error=str(exc))` and continue.
+6. Record non-scoring target miss-distance diagnostics from simulator object-state
+   positions when available (`final_target_distance_m`, `min_target_distance_m`,
+   target-object movement, failure label).
+7. Log via `rollout_logging`: `save_prompt_texture`, sampled `save_rollout_frame`
+   outputs (`first`, `step20` when reached, `last`), `append_rollout_record`
+   (verdicts, visibility, latch step, frame paths, diagnostics). Pass `run_dir`
+   through (see Notes).
+8. On any per-episode exception, return `RolloutOutcome(..., error=str(exc))` and continue.
 
 **Interface:** `run_rollouts(self, *, candidate, seeds, rollouts_per_candidate) -> list[RolloutOutcome]` (unchanged signature).
 
@@ -129,7 +135,7 @@
 
 **Dependencies:** Tasks A–C; `rendering.inject.inject_prompt`, `rendering.visibility.prompt_pixel_fraction`, `evaluator.rollout_logging`, `evaluator.metrics.RolloutOutcome`.
 
-**Notes:** `run_rollouts`'s signature has no `run_dir`, but logging needs one. Resolve by having the backend accept a `run_dir` (and `texture_dir`) at `__init__` (evaluator passes it when constructing the real backend on the host); default to a temp/`None`-guarded path so logging is skippable in the CPU fake-env test. Keep the pure seams (A, B) as the only place scientific verdicts are computed.
+**Notes:** `run_rollouts`'s signature has no `run_dir`, but logging needs one. Resolve by having the backend accept a `run_dir` (and `texture_dir`) at `__init__` (evaluator passes it when constructing the real backend in the rollout environment); default to a temp/`None`-guarded path so logging is skippable in fake-env tests. Keep the pure seams (A, B) as the only place scientific verdicts are computed.
 
 **Commit:** `feat: implement openvla_object closed-loop run_rollouts`
 
@@ -147,7 +153,8 @@
 
 **Test scenarios:**
 - Smoke evaluation (1 pair, 1 seed, 1 rollout) produces a `metrics_*.json` with raw counts and a recomputable `attack_score`.
-- Artifacts exist under `runs/smoke-001/candidates/<cid>/` (texture PNG, first-frame PNG, `rollouts.jsonl`).
+- Artifacts exist under `runs/smoke-001/candidates/<cid>/` (texture PNG, sampled
+  first/step20/last PNGs when reached, `rollouts.jsonl`).
 - The run README records: commit, GPU used, peak VRAM, per-rollout verdicts, and the immediate bottleneck (rendering / OpenVLA load / predicate) if any.
 
 **Dependencies:** Tasks A–D; the cached `openvla-7b-finetuned-libero-object` checkpoint.

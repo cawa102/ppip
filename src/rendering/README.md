@@ -24,7 +24,7 @@ within `evaluator.validation.PLACEMENT_BOUNDS`). Two modules:
 - `inject.py` — `build_injection_xml` / `write_texture_png` are CPU-pure (add the
   texture/material asset + geom to the model XML) and unit-tested; `inject_prompt` is
   the thin MuJoCo seam (`get_xml` → inject → `reset_from_xml_string`). Verified on the
-  GPU host: injected into a live `libero_spatial` scene, the label renders in agentview
+  configured GPU rollout environment: injected into a live `libero_spatial` scene, the label renders in agentview
   with correct perspective and occlusion.
 
 The image-space 2D-overlay alternative was rejected (out-of-scene / hidden-channel).

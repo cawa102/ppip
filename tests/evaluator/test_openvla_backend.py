@@ -1,10 +1,11 @@
-"""Contract of the real OpenVLA rollout backend (the GPU boundary).
+"""Contract of the real OpenVLA rollout backend.
 
-On the GPU host the OpenVLA/torch stack is importable. We pin the CPU-observable
-contract: the backend conforms to RolloutBackend, carries the reference-grounded
-defaults, its dependency guard passes when the stack is present, and it still fails
-loudly with an actionable error if the stack is ever missing (simulated here so the
-check does not depend on the host) rather than failing obscurely deep in a rollout.
+In the configured GPU rollout environment the OpenVLA/torch stack is importable.
+We pin the lightweight-observable contract: the backend conforms to RolloutBackend,
+carries the reference-grounded defaults, its dependency guard passes when the stack
+is present, and it still fails loudly with an actionable error if the stack is missing
+(simulated here so the check does not depend on the active venv) rather than failing
+obscurely deep in a rollout.
 """
 
 from __future__ import annotations
@@ -23,11 +24,12 @@ from evaluator.openvla_backend import (
 from tests.support import make_candidate
 
 # The real-model tests load OpenVLA-7B and build a MuJoCo/EGL env, so they only run
-# on the GPU host. Set PPIP_GPU_TESTS=1 (with CUDA_VISIBLE_DEVICES=1, MUJOCO_GL=egl,
-# PYTHONPATH=$HOME/LIBERO) to enable them; the default CPU suite skips them.
+# in the configured GPU rollout environment. Set PPIP_GPU_TESTS=1 (with
+# CUDA_VISIBLE_DEVICES=1, MUJOCO_GL=egl, PYTHONPATH=$HOME/LIBERO) to enable them;
+# the default lightweight suite skips them.
 requires_gpu = pytest.mark.skipif(
     not os.environ.get("PPIP_GPU_TESTS"),
-    reason="set PPIP_GPU_TESTS=1 on the GPU host (GPU 1) to run real-model tests",
+    reason="set PPIP_GPU_TESTS=1 in the GPU rollout env (GPU 1) to run real-model tests",
 )
 
 
@@ -62,9 +64,10 @@ def test_build_cfg_has_openvla_helper_fields():
     assert cfg.load_in_4bit is False
 
 
+@requires_gpu
 def test_require_openvla_stack_passes_on_gpu_host():
-    # On the GPU host the OpenVLA/torch stack is importable, so the guard returns
-    # torch instead of raising OpenVLABackendUnavailable.
+    # In the configured GPU rollout environment the OpenVLA/torch stack is importable,
+    # so the guard returns torch instead of raising OpenVLABackendUnavailable.
     import torch
 
     assert _require_openvla_stack() is torch
