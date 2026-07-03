@@ -306,6 +306,36 @@ def test_target_distance_diagnostics_are_recorded(monkeypatch, tmp_path):
     assert round(record["target_diagnostics"]["final_target_distance_m"], 6) == 0.3
 
 
+class _FakeLiberoObjectState:
+    """LIBERO ObjectState/SiteObjectState expose xyz via get_geom_state()['pos']."""
+
+    def __init__(self, pos: list[float]) -> None:
+        self._pos = pos
+
+    def get_geom_state(self) -> dict[str, list[float]]:
+        return {"pos": self._pos, "quat": [0.0, 0.0, 0.0, 1.0]}
+
+
+def test_target_distance_diagnostics_read_libero_geom_state(monkeypatch, tmp_path):
+    object_states = {
+        "cream_cheese_1": _FakeLiberoObjectState([0.1, 0.0, 0.0]),
+        "basket_1_contain_region": _FakeLiberoObjectState([0.1, 0.3, 0.0]),
+    }
+    backend = _fake_backend(
+        monkeypatch,
+        env_factory=[_FakeEnv(done_at=1, object_states=object_states)],
+        eval_goal_state=lambda goal, states: False,
+        run_dir=str(tmp_path),
+    )
+
+    (outcome,) = backend.run_rollouts(
+        candidate=_CANDIDATE, seeds=[0], rollouts_per_candidate=1
+    )
+
+    assert outcome.target_diagnostics is not None
+    assert round(outcome.target_diagnostics.final_target_distance_m or 0.0, 6) == 0.3
+
+
 def test_distinct_episodes_use_distinct_init_states(monkeypatch):
     # The seed axis must carry real samples: distinct (seed, rollout) episodes must
     # select distinct init states (the only source of trajectory variation under

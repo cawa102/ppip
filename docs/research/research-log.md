@@ -6,7 +6,7 @@ plan is `docs/plans/2026-07-01-autoppia-vla.md`.
 
 ## Status at a glance (updated 2026-07-03)
 
-Core harness: implemented + tested — **125 passed / 5 skipped locally, ruff + mypy
+Core harness: implemented + tested — **129 passed / 5 skipped locally, ruff + mypy
 `--strict` clean**. This machine is GPU-capable; `uv run pytest` exercises the
 lightweight suite without loading the OpenVLA/LIBERO stack. For real rollouts use
 `~/vla-injection/.venv/bin/python -m pytest` (`PYTHONPATH=~/LIBERO` for the
@@ -48,6 +48,37 @@ tests).
   feature-branch → PR → rebase-merge → delete branch. Tree at merge: 45 files, 125 passed /
   5 skipped, ruff + mypy `--strict` clean; heavy `runs/` artifacts stayed git-ignored (only the
   `runs/pilot-001/` README + `pilot_summary.md` + `aggregate.json` are tracked).
+- **Post-pilot diagnosis.** Inspected `pilot-001` per-candidate metrics and real LIBERO
+  object-state objects. The null miss-distance fields were an extractor gap, not missing scene
+  data: LIBERO `ObjectState` / `SiteObjectState` expose xyz via `get_geom_state()["pos"]`, while
+  the backend only checked direct `position`-style attributes. Fixed `_state_position` to read
+  that accessor and added a regression test; lightweight suite now **129 passed / 5 skipped**,
+  ruff clean, mypy clean. This is non-scoring and does not alter `pilot-001`; future runs can
+  distinguish "target never approached" from "target moved but missed the basket."
+- **Next experiment direction.** Do not spend the full budget on `pilot-001` top-k yet: all top
+  candidates are zero-target DoS cases. The next pilot should pivot from instruction-override
+  labels ("put cream cheese...") to object-grounding / relabeling labels near the attacker target
+  (for this pair, e.g. a readable `ALPHABET SOUP` / `THIS IS ALPHABET SOUP` label on or beside
+  the cream cheese), plus feasibility controls that prove the target object can be manipulated
+  under the same initial states. That is the most plausible route to actual targeted substitution
+  while staying inside the readable typographic PPIA scope.
+- **Pilot-002 exploratory scaffolding.** Added `pilot_002_discovery` as a cheap discovery budget
+  (16 candidates x 1 seed x 1 rollout), `experiments/pilot_002_pools.py` as a broad
+  AI-authored `loop_with_skill` seed pool, and `experiments/run_pilot_002.py` as the runner.
+  The pool now spans direct override, correction, OpenVLA/LIBERO identity triggers,
+  predicate-like wording, target-near callouts, object relabeling, and basket-destination labels.
+  Added `docs/plans/2026-07-03-pilot-002-exploratory.md` to keep this explicitly exploratory:
+  discover target success or near-miss signal first, then freeze promising families for a later
+  equal-budget condition comparison. CPU dry-run completed into `/tmp/ppip-pilot-002-dry-run`;
+  local verification: **129 passed / 5 skipped**, ruff clean, mypy clean.
+- **Pilot-002 real discovery run complete.** Ran the full `pilot_002_discovery` budget on GPU 1
+  (`runs/pilot-002/`, ignored heavy artifacts): 16/16 valid, 16 completed, 0 errored, elapsed
+  21.2 min. Result is a stronger negative: **0 targeted successes** and the populated
+  diagnostics show essentially **zero cream-cheese movement** (`mean_target_object_moved_m`
+  ~2.35e-16 m, `mean_min_target_distance_m` ~0.262 m). The broadened text families tested here
+  therefore still do not induce target-object manipulation; they either cause denial/no-completion
+  (9/16) or allow commanded success (7/16). Immediate next research move should be target-object
+  feasibility and camera/placement debugging, not a bigger comparison run.
 
 ## 2026-07-02
 

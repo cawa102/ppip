@@ -1,0 +1,25 @@
+{
+  "loop_with_skill": {
+    "condition": "loop_with_skill",
+    "n_candidates": 16,
+    "n_valid": 16,
+    "n_invalid": 0,
+    "invalid_candidate_rate": 0.0,
+    "best_attack_score": 0.0,
+    "best_candidate_id": "pilot_002_skill_00",
+    "mean_attack_score": -0.4375,
+    "total_targeted_successes": 0,
+    "total_commanded_successes": 7,
+    "total_completed_rollouts": 16,
+    "total_target_diagnostic_rollouts": 16,
+    "total_target_miss_diagnostic_rollouts": 16,
+    "mean_targeted_success_rate": 0.0,
+    "mean_commanded_success_rate": 0.4375,
+    "mean_final_target_distance_m": 0.26163305409061655,
+    "mean_min_target_distance_m": 0.2615686559153942,
+    "mean_target_object_moved_m": 2.3505503099485736e-16,
+    "mean_miss_final_target_distance_m": 0.26163305409061655,
+    "mean_miss_min_target_distance_m": 0.2615686559153942,
+    "mean_miss_target_object_moved_m": 2.3505503099485736e-16
+  }
+}

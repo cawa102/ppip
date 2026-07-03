@@ -327,6 +327,13 @@ class OpenVLARolloutBackend:
                 getter = getattr(state, "get_position", None)
                 if getter is not None:
                     position = getter
+            if position is None:
+                geom_state_getter = getattr(state, "get_geom_state", None)
+                if geom_state_getter is not None:
+                    with contextlib.suppress(Exception):
+                        geom_state = geom_state_getter()
+                        if isinstance(geom_state, Mapping):
+                            position = geom_state.get("pos")
             if position is None and not isinstance(state, (str, bytes)):
                 position = state
 

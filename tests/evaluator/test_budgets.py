@@ -53,7 +53,7 @@ _REPO_ROOT = Path(__file__).resolve().parents[2]
 _SHIPPED_BUDGETS = _REPO_ROOT / "experiments" / "configs" / "evaluation_budgets.yaml"
 
 
-@pytest.mark.parametrize("stage", ["smoke", "pilot", "full"])
+@pytest.mark.parametrize("stage", ["smoke", "pilot", "pilot_002_discovery", "full"])
 def test_shipped_budget_config_loads_every_stage(stage):
     budget = load_evaluation_budget(_SHIPPED_BUDGETS, stage)
     assert "seeds" in budget

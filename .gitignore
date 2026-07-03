@@ -29,6 +29,11 @@ runs/pilot-001/*
 !runs/pilot-001/README.md
 !runs/pilot-001/pilot_summary.md
 !runs/pilot-001/aggregate.json
+# Track pilot-002's top-level discovery summaries, but not per-candidate artifacts.
+!runs/pilot-002/
+runs/pilot-002/*
+!runs/pilot-002/pilot_002_summary.md
+!runs/pilot-002/aggregate.json
 data/external/*
 !data/external/README.md
 data/processed/*
