@@ -82,7 +82,7 @@ def build_injection_xml(base_xml: str, geom: PromptGeom, texture_path: str) -> s
     return ET.tostring(root, encoding="unicode")
 
 
-def _get_model_xml(env: Any) -> str:  # pragma: no cover - exercised on the GPU host
+def _get_model_xml(env: Any) -> str:  # pragma: no cover - exercised in GPU rollout env
     """Best-effort extraction of the live env's model XML across robosuite/LIBERO wrappers."""
     try:
         return str(env.sim.model.get_xml())
@@ -101,7 +101,7 @@ def _get_model_xml(env: Any) -> str:  # pragma: no cover - exercised on the GPU 
 
 def inject_prompt(
     env: Any, candidate: dict[str, Any], *, texture_dir: str
-) -> PromptGeom:  # pragma: no cover - MuJoCo/GPU seam, verified by smoke on the GPU host
+) -> PromptGeom:  # pragma: no cover - MuJoCo/GPU seam, verified in GPU rollout env
     """Render the candidate's label and inject it into `env`, re-initialising the sim.
 
     Returns the `PromptGeom` that was injected (for logging / verification).

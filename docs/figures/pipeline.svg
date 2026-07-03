@@ -68,7 +68,7 @@
   <text x="326" y="294" class="small">score recomputable</text>
 
   <!-- artifacts note -->
-  <text x="316" y="340" class="tiny">Per-rollout artifacts -&gt; runs/&lt;id&gt;/candidates/&lt;cid&gt;/: prompt_texture.png, seed_ep_first.png (slide figures), rollouts.jsonl</text>
+  <text x="316" y="340" class="tiny">Per-rollout artifacts -&gt; runs/&lt;id&gt;/candidates/&lt;cid&gt;/: prompt_texture.png, seed_ep_{first,step20,last}.png, rollouts.jsonl</text>
   <text x="316" y="358" class="tiny">Stages: smoke (plumbing) -&gt; pilot (compare conditions) -&gt; full (re-eval top-k)</text>
 
   <!-- LEDGER -->

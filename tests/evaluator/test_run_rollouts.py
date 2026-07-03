@@ -1,15 +1,16 @@
-"""CPU tests for the OpenVLA closed-loop `run_rollouts` body.
+"""Lightweight tests for the OpenVLA closed-loop `run_rollouts` body.
 
 Real rollouts need a GPU; here the GPU-only seams (`_load_policy`, `_build_env`,
 `_seed_everything`, `_dummy_action`, `_policy_action`) and the rendering/adjudication
 free functions are faked, so the *loop logic* -- one RolloutOutcome per episode,
 commanded-vs-targeted verdicts, latch-not-terminate, per-episode error isolation,
-visibility -- is exercised deterministically off-GPU. The GPU behaviour itself is
+visibility -- is exercised deterministically without loading OpenVLA. The GPU behaviour itself is
 covered by the `@requires_gpu` tests in test_openvla_backend.py (Task E smoke).
 """
 
 from __future__ import annotations
 
+import json
 from typing import Any
 
 import numpy as np
@@ -62,11 +63,14 @@ class _FakeEnv:
         done_at: int | None = None,
         raise_at_step: int | None = None,
         segmentation: np.ndarray | None = None,
+        object_states: dict[str, Any] | None = None,
     ) -> None:
         self.done_at = done_at
         self.raise_at_step = raise_at_step
         self._step = 0
-        self.object_states_dict: dict[str, Any] = {}
+        self.object_states_dict: dict[str, Any] = (
+            {} if object_states is None else object_states
+        )
         self.sim = _FakeSim(np.full((4, 4), 7) if segmentation is None else segmentation)
         self.closed = False
         self.received_init_state: Any = None
@@ -91,7 +95,9 @@ def _fake_backend(
     monkeypatch, *, env_factory, eval_goal_state=None, init_states=None, **backend_kwargs
 ):
     """Wire a backend whose GPU seams are faked; return it."""
-    backend = OpenVLARolloutBackend(num_steps_wait=0, max_steps=5, **backend_kwargs)
+    max_steps = backend_kwargs.pop("max_steps", 5)
+    backend = OpenVLARolloutBackend(num_steps_wait=0, max_steps=max_steps, **backend_kwargs)
+    monkeypatch.setattr(openvla_backend, "_require_openvla_stack", lambda: object())
     monkeypatch.setattr(openvla_backend, "resolve_task", _resolved)
     monkeypatch.setattr(
         openvla_backend,
@@ -254,6 +260,50 @@ def test_artifacts_written_when_run_dir_set(monkeypatch, tmp_path):
     assert (cand_dir / "prompt_texture.png").exists()
     assert (cand_dir / "seed0_ep0_first.png").exists()
     assert (cand_dir / "rollouts.jsonl").exists()
+
+
+def test_sampled_frames_written_without_capturing_every_step(monkeypatch, tmp_path):
+    backend = _fake_backend(
+        monkeypatch,
+        env_factory=[_FakeEnv(done_at=21)],
+        eval_goal_state=lambda goal, states: False,
+        run_dir=str(tmp_path),
+        max_steps=25,
+    )
+
+    backend.run_rollouts(candidate=_CANDIDATE, seeds=[0], rollouts_per_candidate=1)
+
+    cand_dir = tmp_path / "candidates" / "c1"
+    assert (cand_dir / "seed0_ep0_first.png").exists()
+    assert (cand_dir / "seed0_ep0_step20.png").exists()
+    assert (cand_dir / "seed0_ep0_last.png").exists()
+    assert not (cand_dir / "seed0_ep0_step1.png").exists()
+
+
+def test_target_distance_diagnostics_are_recorded(monkeypatch, tmp_path):
+    object_states = {
+        "cream_cheese_1": {"position": [0.1, 0.0, 0.0]},
+        "basket_1_contain_region": {"position": [0.4, 0.0, 0.0]},
+    }
+    backend = _fake_backend(
+        monkeypatch,
+        env_factory=[_FakeEnv(done_at=1, object_states=object_states)],
+        eval_goal_state=lambda goal, states: False,
+        run_dir=str(tmp_path),
+    )
+
+    (outcome,) = backend.run_rollouts(
+        candidate=_CANDIDATE, seeds=[0], rollouts_per_candidate=1
+    )
+
+    assert outcome.target_diagnostics is not None
+    assert outcome.target_diagnostics.target_object == "cream_cheese_1"
+    assert outcome.target_diagnostics.target_region == "basket_1_contain_region"
+    assert round(outcome.target_diagnostics.final_target_distance_m or 0.0, 6) == 0.3
+
+    record_path = tmp_path / "candidates" / "c1" / "rollouts.jsonl"
+    record = json.loads(record_path.read_text(encoding="utf-8").splitlines()[0])
+    assert round(record["target_diagnostics"]["final_target_distance_m"], 6) == 0.3
 
 
 def test_distinct_episodes_use_distinct_init_states(monkeypatch):

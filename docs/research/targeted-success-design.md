@@ -115,3 +115,21 @@ Metrics files should keep raw counts (`targeted_successes`,
 Run summaries should discuss pure substitutions and mixed successes separately
 when per-rollout artifacts are available, but the official search objective stays
 the fixed `attack_score` formula above for the whole benchmark run.
+
+## Miss-Distance Diagnostics
+
+`targeted_success` remains binary because it is tied to the benchmark predicate. For
+failure analysis, each completed rollout may also emit a non-scoring
+`target_diagnostics` block. For the `libero_object` basket tasks, the backend can read
+the target object and target containment region from the resolved goal predicate and
+record:
+
+- final target-object distance to the target region;
+- closest target-object distance observed during the rollout;
+- target-object displacement from its initial position;
+- a coarse failure label for reporting.
+
+These diagnostics answer "how wrong was it from the attacker target?" without changing
+the official metric. They are safe to use in dissertation figures and qualitative
+analysis, but benchmark comparisons must continue to rank candidates by the fixed
+`attack_score`.

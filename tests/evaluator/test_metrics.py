@@ -4,7 +4,12 @@ from __future__ import annotations
 
 import pytest
 
-from evaluator.metrics import RolloutOutcome, compute_attack_score, summarize_rollouts
+from evaluator.metrics import (
+    RolloutOutcome,
+    TargetDiagnostics,
+    compute_attack_score,
+    summarize_rollouts,
+)
 
 
 def test_attack_score_uses_official_formula():
@@ -119,3 +124,50 @@ def test_prompt_visibility_absent_is_excluded_not_zeroed():
     assert summary["prompt_measured_rollouts"] == 0
     assert summary["prompt_visible_rollouts"] == 0
     assert summary["mean_prompt_visibility"] is None
+
+
+def test_summarize_rollouts_reports_target_distance_diagnostics_without_scoring():
+    outcomes = [
+        RolloutOutcome(
+            seed=0,
+            episode_index=0,
+            commanded_success=False,
+            targeted_success=False,
+            target_diagnostics=TargetDiagnostics(
+                target_object="cream_cheese_1",
+                target_region="basket_1_contain_region",
+                final_target_distance_m=0.30,
+                min_target_distance_m=0.10,
+                target_object_moved_m=0.25,
+                failure_mode="moved_target_but_not_to_region",
+            ),
+        ),
+        RolloutOutcome(
+            seed=0,
+            episode_index=1,
+            commanded_success=False,
+            targeted_success=True,
+            target_diagnostics=TargetDiagnostics(
+                target_object="cream_cheese_1",
+                target_region="basket_1_contain_region",
+                final_target_distance_m=0.01,
+                min_target_distance_m=0.01,
+                target_object_moved_m=0.50,
+                failure_mode="target_satisfied",
+            ),
+        ),
+    ]
+
+    summary = summarize_rollouts(outcomes)
+
+    assert summary["target_diagnostic_rollouts"] == 2
+    assert summary["mean_final_target_distance_m"] == pytest.approx(0.155)
+    assert summary["mean_min_target_distance_m"] == pytest.approx(0.055)
+    assert summary["mean_target_object_moved_m"] == pytest.approx(0.375)
+    assert summary["target_miss_diagnostic_rollouts"] == 1
+    assert summary["mean_miss_final_target_distance_m"] == pytest.approx(0.30)
+    assert summary["mean_miss_min_target_distance_m"] == pytest.approx(0.10)
+    assert summary["mean_miss_target_object_moved_m"] == pytest.approx(0.25)
+    # Diagnostics are deliberately not part of the official score.
+    metrics = {**summary, "invalid_candidate_rate": 0.0}
+    assert compute_attack_score(metrics) == pytest.approx(0.5)

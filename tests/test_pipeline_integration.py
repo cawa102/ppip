@@ -1,4 +1,4 @@
-"""End-to-end GPU-free pipeline: propose -> validate -> evaluate -> ledger -> aggregate.
+"""End-to-end lightweight pipeline: propose -> validate -> evaluate -> ledger -> aggregate.
 
 This is the smoke plumbing for the whole harness with the OpenVLA rollout replaced
 by a fake backend. It proves the pieces compose and that the official score is

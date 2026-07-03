@@ -23,6 +23,11 @@ def _mean(values: list[float]) -> float:
     return sum(values) / len(values) if values else 0.0
 
 
+def _mean_present(values: list[Any]) -> float | None:
+    present = [float(v) for v in values if v is not None]
+    return sum(present) / len(present) if present else None
+
+
 def _load_record(row: dict[str, Any]) -> dict[str, Any]:
     """Prefer the full metrics file; fall back to the ledger row if it's missing."""
     metrics_path = row.get("metrics_path")
@@ -64,10 +69,34 @@ def aggregate_condition(records: list[dict[str, Any]]) -> dict[str, Any]:
         "total_targeted_successes": sum(r.get("targeted_successes", 0) for r in records),
         "total_commanded_successes": sum(r.get("commanded_successes", 0) for r in records),
         "total_completed_rollouts": sum(r.get("completed_rollouts", 0) for r in records),
+        "total_target_diagnostic_rollouts": sum(
+            r.get("target_diagnostic_rollouts", 0) for r in records
+        ),
+        "total_target_miss_diagnostic_rollouts": sum(
+            r.get("target_miss_diagnostic_rollouts", 0) for r in records
+        ),
         "mean_targeted_success_rate": _mean(
             [r.get("targeted_success_rate", 0.0) for r in valid]
         ),
         "mean_commanded_success_rate": _mean(
             [r.get("commanded_success_rate", 0.0) for r in valid]
+        ),
+        "mean_final_target_distance_m": _mean_present(
+            [r.get("mean_final_target_distance_m") for r in valid]
+        ),
+        "mean_min_target_distance_m": _mean_present(
+            [r.get("mean_min_target_distance_m") for r in valid]
+        ),
+        "mean_target_object_moved_m": _mean_present(
+            [r.get("mean_target_object_moved_m") for r in valid]
+        ),
+        "mean_miss_final_target_distance_m": _mean_present(
+            [r.get("mean_miss_final_target_distance_m") for r in valid]
+        ),
+        "mean_miss_min_target_distance_m": _mean_present(
+            [r.get("mean_miss_min_target_distance_m") for r in valid]
+        ),
+        "mean_miss_target_object_moved_m": _mean_present(
+            [r.get("mean_miss_target_object_moved_m") for r in valid]
         ),
     }

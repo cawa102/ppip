@@ -62,9 +62,10 @@ def write_candidate(path: Path, candidate: dict[str, Any]) -> Path:
 class StubRolloutBackend:
     """A fake OpenVLA rollout boundary that replays scripted outcomes.
 
-    Real rollouts need a GPU; this stub lets the evaluator/loop orchestration be
-    tested on CPU. It records the arguments it was called with so tests can assert
-    the evaluator passed the right seeds / rollout counts through.
+    Real rollouts need the GPU rollout stack; this stub lets the evaluator/loop
+    orchestration be tested in the lightweight environment. It records the arguments
+    it was called with so tests can assert the evaluator passed the right seeds /
+    rollout counts through.
     """
 
     def __init__(self, outcomes: list[RolloutOutcome]) -> None:

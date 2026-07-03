@@ -4,7 +4,8 @@ Given a MuJoCo segmentation mask (per-pixel geom id) and the injected prompt geo
 id, `prompt_pixel_fraction` reports how much of the camera frame the label occupies —
 the objective "was the prompt actually in view?" gate. `visibility_overlay` tints
 those pixels for presentation figures. Both are pure numpy and unit-tested here; the
-segmentation render itself happens in the rollout backend on the GPU host.
+segmentation render itself happens in the rollout backend in the configured GPU
+rollout environment.
 """
 
 from __future__ import annotations

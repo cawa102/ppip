@@ -15,13 +15,13 @@ Search agents may call the evaluator and read its outputs, but benchmark compari
 ## Modules
 
 - `validation.py` — `validate_candidate(candidate)`: JSON-schema + placement-bounds (`PLACEMENT_BOUNDS`) + text-readability checks; rejects any injected evaluator-override key. Raises `CandidateValidationError`.
-- `metrics.py` — `RolloutOutcome` (frozen per-episode result), `summarize_rollouts(outcomes)` (rates + raw counts, error-tolerant), `compute_attack_score(metrics)` (official formula, fixed for a run).
+- `metrics.py` — `RolloutOutcome` (frozen per-episode result), optional `TargetDiagnostics` miss-distance evidence, `summarize_rollouts(outcomes)` (rates + raw counts, error-tolerant), `compute_attack_score(metrics)` (official formula, fixed for a run).
 - `budgets.py` — `load_evaluation_budget(config_path, stage)`: stage selection with required-field validation. Raises `BudgetError`.
-- `backends.py` — `RolloutBackend` Protocol: the single seam between the evaluator and the GPU-only OpenVLA/LIBERO machinery. Inject a fake for CPU tests.
+- `backends.py` — `RolloutBackend` Protocol: the single seam between the evaluator and the OpenVLA/LIBERO rollout machinery. Inject a fake for lightweight tests.
 - `eval_attack.py` — `evaluate_candidate(candidate_path, run_dir, *, backend, budget)`: full lifecycle (validate → rollouts → summarize → score → write `metrics_<id>.json`). Invalid candidates and rollout crashes are penalized/logged, never raised.
-- `openvla_backend.py` — `OpenVLARolloutBackend`: the real backend skeleton (reference-grounded defaults). Its `run_rollouts` body is implemented on the GPU host; on a CPU host it raises `OpenVLABackendUnavailable`.
+- `openvla_backend.py` — `OpenVLARolloutBackend`: the real backend with reference-grounded defaults. Its `run_rollouts` body is implemented for the configured GPU rollout environment; if the OpenVLA/LIBERO/torch stack is not importable, it raises `OpenVLABackendUnavailable`.
 
-The rollout body is the *only* GPU-dependent code; everything else is tested on CPU with a fake backend.
+The rollout body is the *only* heavyweight GPU-stack-dependent code; everything else is tested with a fake backend in the lightweight environment.
 
 ## Targeted Success Contract
 
@@ -36,6 +36,16 @@ tradeoff by rewarding `targeted_success_rate` and subtracting
 The real backend must use benchmark-owned simulator predicates for both tasks.
 It must not decide target completion with LLM judgement, string similarity, or
 manual inspection. See `docs/research/targeted-success-design.md`.
+
+## Diagnostic Artifacts
+
+The evaluator logs sampled frames and miss-distance evidence for auditability:
+
+- sampled frames: `first`, `step20` when reached, and `last`;
+- `target_diagnostics`: target object/region, final and minimum target distance, target-object movement, and a coarse failure label.
+
+These diagnostics are not used by `compute_attack_score`; they support failure analysis,
+reproducible screenshots, and dissertation/presentation examples.
 
 ## Runtime Budget
 

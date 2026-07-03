@@ -151,7 +151,7 @@ allow_async_jobs: bool
 
 **Commit:** `docs: define autoppia-vla scope and threat model`
 
-- [x] Task 2: Fixed Evaluation Contract  <!-- GPU-free: validation, metrics, budgets, evaluate_candidate orchestration, and the RolloutBackend seam are implemented and tested. Rendering (Option A geom injection), visibility gate, and per-rollout logging are implemented and GPU-verified (2026-07-02). Remaining: OpenVLARolloutBackend.run_rollouts wires them into the closed loop. See docs/research/research-log.md. -->
+- [x] Task 2: Fixed Evaluation Contract  <!-- GPU-independent validation, metrics, budgets, evaluate_candidate orchestration, and the RolloutBackend seam are implemented and tested. Rendering (Option A geom injection), visibility gate, per-rollout logging, and OpenVLARolloutBackend.run_rollouts are implemented and GPU-verified (2026-07-02). See docs/research/research-log.md. -->
 
 
 **Files:**
@@ -183,7 +183,7 @@ allow_async_jobs: bool
 
 **Commit:** `feat: add fixed attack evaluator contract`
 
-- [x] Task 3: Candidate Schema and Prompt-Object Representation  <!-- GPU-free: schema + validate_candidate (scope bounds, readability, override rejection) implemented and tested. -->
+- [x] Task 3: Candidate Schema and Prompt-Object Representation  <!-- GPU-independent: schema + validate_candidate (scope bounds, readability, override rejection) implemented and tested. -->
 
 
 **Files:**
@@ -213,7 +213,7 @@ allow_async_jobs: bool
 
 **Commit:** `feat: define visual prompt candidate schema`
 
-- [x] Task 4: Autoresearch-Style Loop Scaffold  <!-- GPU-free: ledger (append-only, immutable), record_result, select_incumbent, memory.summarize_history, random generator, and run_search_condition (budget-bounded, ledger-resumable, provider-agnostic via injected propose) implemented and tested. Async submit_evaluation job path deferred to GPU integration. -->
+- [x] Task 4: Autoresearch-Style Loop Scaffold  <!-- GPU-independent: ledger (append-only, immutable), record_result, select_incumbent, memory.summarize_history, random generator, and run_search_condition (budget-bounded, ledger-resumable, provider-agnostic via injected propose) implemented and tested. Async submit_evaluation job path deferred. -->
 
 
 **Files:**
@@ -248,7 +248,7 @@ allow_async_jobs: bool
 
 **Commit:** `feat: scaffold autonomous visual prompt search loop`
 
-- [x] Task 5: Baselines and Experimental Conditions  <!-- GPU-free: search_conditions.yaml + baselines.yaml + load_search_conditions (comparability enforcement, shared budget_stage) implemented and tested. -->
+- [x] Task 5: Baselines and Experimental Conditions  <!-- GPU-independent: search_conditions.yaml + baselines.yaml + load_search_conditions (comparability enforcement, shared budget_stage) implemented and tested. -->
 
 
 **Files:**
@@ -281,7 +281,7 @@ allow_async_jobs: bool
 
 **Commit:** `docs: define autoppia-vla baselines`
 
-- [x] Task 6: Metrics, Logging, and Reproducibility  <!-- GPU-free: aggregate_results (aggregate_condition/aggregate_run) with raw counts, recomputable official score, partial-run tolerance implemented and tested; .gitignore already keeps heavy artifacts out. -->
+- [x] Task 6: Metrics, Logging, and Reproducibility  <!-- GPU-independent aggregation plus GPU rollout artifacts: aggregate_results (aggregate_condition/aggregate_run) with raw counts, recomputable official score, partial-run tolerance implemented and tested; .gitignore already keeps heavy artifacts out. -->
 
 
 **Files:**
@@ -313,15 +313,32 @@ allow_async_jobs: bool
 
 **Commit:** `feat: add experiment aggregation contract`
 
-- [ ] Task 7: First Pilot Study
+- [x] Task 7: First Pilot Study  <!-- DONE (2026-07-02): four-condition pilot complete on GPU 1, 80/80 rollouts, 0 errored (after diagnosing+fixing a per-candidate model-reload OOM). Finding: denial, not hijack (0 targeted successes; visible readable labels cut commanded success 14/20 -> 2-4/20). See runs/pilot-001/README.md + docs/research/research-log.md. loop_with_memory used a documented mutate stand-in, so LLM-in-the-loop remains a follow-up. -->
+
+> **Result (2026-07-02):** complete. 4 conditions × 20 rollouts, **0 errored** (after fixing a
+> per-candidate model-reload OOM — the pilot's diagnostic finding: the bottleneck was OpenVLA
+> loading). Attack reading: **denial, not hijack** — 0 targeted successes across 80 rollouts;
+> visible readable labels suppressed the commanded task (14/20 → 2–4/20). `runs/pilot-001/`.
 
 **Files:**
 - Modify: `docs/research/research-log.md`
 - Modify: `experiments/results/README.md`
 - Create: `runs/pilot-001/README.md`
 - Modify: `experiments/configs/evaluation_budgets.yaml`
+- Create: `experiments/run_pilot.py`, `experiments/pilot_pools.py`, `src/autoresearch_loop/mutate.py` (+ `tests/autoresearch_loop/test_mutate.py`)
 
 **What:** Run a cheap pilot before full OpenVLA rollouts. The pilot should validate end-to-end plumbing, not prove the final thesis.
+
+**Status (2026-07-02): COMPLETE.** The four-condition pilot ran on GPU 1 (`runs/pilot-001/`,
+`5 candidates × 2 seeds × 2 rollouts` per condition = 80 rollouts, **0 errored**). The first run
+exposed a per-candidate model-reload **VRAM OOM** (the pilot's diagnostic finding: the bottleneck
+is OpenVLA *loading*); fixed by caching the policy on the backend + one shared backend across
+conditions, then re-run clean. Attack reading: **denial, not hijack** — 0 targeted successes
+across 80 rollouts, while visible readable labels cut commanded success from 14/20 (`random_search`,
+often out of view) to 2–4/20 (readable, prompt-visible in 20/20). `loop_with_memory` used a
+documented programmatic mutate-incumbent stand-in for the LLM-in-the-loop (validates the feedback
+machinery + equal-budget plumbing, **not** LLM search quality — that is a follow-up interactive
+run). Full write-up: `runs/pilot-001/README.md` + `pilot_summary.md`.
 
 **Interface:**
 - `pilot-001` — one LIBERO suite, one or two task pairs, a small fixed seed set, a fixed rollout count, and four search conditions.
@@ -352,9 +369,9 @@ Immediate next step after this setup: complete Task 1 by expanding the threat mo
 > **Living status is `docs/research/research-log.md`** ("Status at a glance" + dated
 > entries). This section is the point-in-time snapshot; keep both current.
 
-**On the GPU host (updated 2026-07-02).** The GPU-free core harness, the rendering layer
+**On the GPU-capable host (updated 2026-07-02).** The GPU-independent core harness, the rendering layer
 (Option A injection), *and* the `OpenVLARolloutBackend.run_rollouts` closed loop are
-implemented and tested — **129 CPU tests + 6 GPU tests green, `ruff` + `mypy --strict`
+implemented and tested — **129 lightweight tests + 6 GPU tests green, `ruff` + `mypy --strict`
 clean**, run with `~/vla-injection/.venv/bin/python -m pytest` (LIBERO-backed tests need
 `PYTHONPATH=$HOME/LIBERO`; real-model tests need `PPIP_GPU_TESTS=1`). `run_rollouts` is
 **verified end-to-end on GPU 1** (`runs/smoke-001/`: pipeline runs, 0 errored rollouts,
@@ -364,13 +381,13 @@ benchmark predicates, CPU-pure in `adjudicate.py`), visibility gate (#2), per-ro
 logging (#3). **Adjudicability constraint** discovered + documented: each libero_object task
 has only 7 objects, so a target is adjudicable only if its object is in the user scene.
 
-**Toolchain (GPU host):** reuse the proven uv venv `~/vla-injection/.venv` (Python 3.10,
+**Toolchain (GPU rollout env):** reuse the proven uv venv `~/vla-injection/.venv` (Python 3.10,
 torch 2.2.0+cu121, OpenVLA editable, LIBERO via `PYTHONPATH=~/LIBERO`, `MUJOCO_GL=egl`).
 `pyproject.toml` core deps: jsonschema, pyyaml, numpy<2, Pillow; the `gpu` group documents
 the pinned stack. Import root is `src/` (+`experiments/results`). Rollout work pins to a
 free GPU (`CUDA_VISIBLE_DEVICES=<idx>`) — the box is shared.
 
-**Implemented modules (GPU-free core):**
+**Implemented modules (GPU-independent core plus rollout seam):**
 - `src/evaluator/validation.py` — `validate_candidate` (schema + placement bounds + readability + evaluator-override rejection).
 - `src/evaluator/metrics.py` — `RolloutOutcome`, `summarize_rollouts`, `compute_attack_score` (official formula).
 - `src/evaluator/budgets.py` — `load_evaluation_budget` (stage selection, required-field checks).
@@ -392,17 +409,35 @@ free GPU (`CUDA_VISIBLE_DEVICES=<idx>`) — the box is shared.
 - `src/rendering/geometry.py` — `build_prompt_geom` (placement/style → MuJoCo pose, quat, half-extents, texture).
 - `src/rendering/inject.py` — `build_injection_xml` + `write_texture_png` (CPU-pure) and `inject_prompt` (the MuJoCo seam: `get_xml` → inject visual-only geom → `reset_from_xml_string`); verified on GPU.
 - `src/rendering/visibility.py` — `prompt_pixel_fraction` (segmentation gate #2), `visibility_overlay` (figures).
-- `src/evaluator/rollout_logging.py` — per-rollout artifacts under `runs/<id>/candidates/<cid>/` (#3).
-- `src/evaluator/metrics.py` — `RolloutOutcome.prompt_visibility` + summary aggregation.
+- `src/evaluator/rollout_logging.py` — per-rollout artifacts under `runs/<id>/candidates/<cid>/` (#3), including sampled `first`/`step20`/`last` frames and canonical JSONL records with frame paths.
+- `src/evaluator/metrics.py` — `RolloutOutcome.prompt_visibility`, optional `TargetDiagnostics` miss-distance evidence, and summary aggregation.
 
 **Done (2026-07-02):**
 - `OpenVLARolloutBackend.run_rollouts` — the closed loop tying the pieces together:
   `inject_prompt` → OpenVLA `get_action` loop under `user_task` → adjudicate `commanded`/`targeted`
-  (benchmark predicates, latched non-terminating) → `prompt_visibility` → per-rollout logging, one
-  `RolloutOutcome` per episode; per-episode error isolation. **Verified end-to-end on GPU** (`runs/smoke-001/`).
+  (benchmark predicates, latched non-terminating) → `prompt_visibility` → non-scoring
+  target miss-distance diagnostics → sampled-frame per-rollout logging, one `RolloutOutcome`
+  per episode; per-episode error isolation. **Verified end-to-end on GPU** (`runs/smoke-001/`).
+
+**Pilot-001 (2026-07-02): COMPLETE on GPU 1 (Task 7 done).**
+- `pilot` budget filled (real adjudicable pair user=alphabet_soup/target=cream_cheese;
+  right-sized `5 candidates × 2 seeds × 2 rollouts`); `full` still `PLACEHOLDER`.
+- Four-condition orchestrator `experiments/run_pilot.py` + authored pools
+  `experiments/pilot_pools.py` (`human_ppia`, `one_shot_llm`) + `loop_with_memory`
+  proposer `src/autoresearch_loop/mutate.py` (documented programmatic stand-in for the
+  LLM-in-the-loop). Ran 80/80 rollouts, **0 errored**, after diagnosing + fixing a
+  per-candidate model-reload VRAM OOM (policy cached on the backend; one shared backend across
+  conditions). Finding: **denial, not hijack** (0 targeted successes; commanded 14/20 → 2–4/20
+  under visible readable labels). Write-up: `runs/pilot-001/README.md` + `pilot_summary.md`.
 
 **Remaining:**
-1. **Label-readability tuning** — the smoke label renders *mirrored* over the gripper; flip the
-   camera-facing texture / adjust `placement.rotation`+`position` so the policy can read it (attack efficacy).
-2. The async `submit_evaluation` job path (long OpenVLA jobs); the synchronous, resumable loop already models the control flow.
-3. Task 7 pilot with real rollouts (fill the `pilot`/`full` budget `task_pairs` with adjudicable pairs). End-to-end plumbing (propose→validate→evaluate→ledger→aggregate) is proven via `tests/test_pipeline_integration.py` + the `runs/smoke-001/` real rollout.
+1. LLM-driven `loop_with_memory` / `loop_with_skill` as an interactive follow-up (the pilot
+   used a programmatic proposer stand-in so it could run unattended).
+2. Stronger injection for real hijack signal (larger/central labels, level-2 optimized
+   typography, placement nearer the manipulation region) — the pilot shows the harness measures
+   this cleanly and current readable labels cause denial, not substitution.
+3. Populate the target miss-distance diagnostic (`mean_min_target_distance_m` came back null —
+   the target-region position was not extracted from `object_states`; non-scoring).
+4. The async `submit_evaluation` job path (long OpenVLA jobs); the synchronous, resumable
+   loop already models the control flow.
+5. Fill the `full` budget `task_pairs` with adjudicable pairs for the top-k re-evaluation.
