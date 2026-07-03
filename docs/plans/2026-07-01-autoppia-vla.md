@@ -87,8 +87,10 @@ Future sessions should use this mapping when translating `karpathy/autoresearch`
 | `karpathy/autoresearch` file | AutoPPIA-VLA equivalent | Editable by search agent? | Current status |
 |---|---|---|---|
 | `program.md` | `programs/autoppia-vla/program.md` | Read-only during a benchmark run | Exists |
-| `prepare.py` | `src/evaluator/eval_attack.py`, `src/evaluator/metrics.py`, `src/rendering/`, `experiments/configs/evaluation_budgets.yaml` | No | Planned, except budget config exists |
-| `train.py` | `src/autoresearch_loop/run_loop.py`, `src/autoresearch_loop/candidate_writer.py`, `src/autoresearch_loop/memory.py`, generated candidates under `experiments/candidates/` | Yes, depending on search condition | Planned, candidate templates exist |
+| `prepare.py` | `src/evaluator/eval_attack.py`, `src/evaluator/metrics.py`, `src/rendering/`, `experiments/configs/evaluation_budgets.yaml` | No | Implemented + GPU-verified |
+| `train.py` | `src/autoresearch_loop/run_loop.py`, `src/autoresearch_loop/candidate_writer.py`, `src/autoresearch_loop/memory.py`, generated candidates under `experiments/candidates/` | Yes, depending on search condition | Implemented |
+
+> A current, fuller version of this table (with ledger/objective/iteration-cap rows) lives in `CLAUDE.md` §"Autoresearch adaptation — critical gotcha".
 
 Do not create a single monolithic `train.py` that can modify evaluation logic. The important separation is:
 
@@ -430,14 +432,29 @@ free GPU (`CUDA_VISIBLE_DEVICES=<idx>`) — the box is shared.
   conditions). Finding: **denial, not hijack** (0 targeted successes; commanded 14/20 → 2–4/20
   under visible readable labels). Write-up: `runs/pilot-001/README.md` + `pilot_summary.md`.
 
-**Remaining:**
-1. LLM-driven `loop_with_memory` / `loop_with_skill` as an interactive follow-up (the pilot
-   used a programmatic proposer stand-in so it could run unattended).
-2. Stronger injection for real hijack signal (larger/central labels, level-2 optimized
-   typography, placement nearer the manipulation region) — the pilot shows the harness measures
-   this cleanly and current readable labels cause denial, not substitution.
-3. Populate the target miss-distance diagnostic (`mean_min_target_distance_m` came back null —
-   the target-region position was not extracted from `object_states`; non-scoring).
-4. The async `submit_evaluation` job path (long OpenVLA jobs); the synchronous, resumable
-   loop already models the control flow.
-5. Fill the `full` budget `task_pairs` with adjudicable pairs for the top-k re-evaluation.
+**autoresearch-jul3 (2026-07-03): first REAL AI-in-the-loop run — COMPLETE (branch `autoresearch/jul3`, uncommitted).**
+- `karpathy/autoresearch` applied as a **literal loop with Claude as the in-loop `loop_with_skill`
+  proposer** — the first genuine loop data, replacing pilot-001's `mutate.py` stand-in. New search-side
+  harness: ported loop in `programs/autoppia-vla/program.md`, `experiments/run_candidate.py`,
+  `src/autoresearch_loop/results_tsv.py` (+`tests/test_results_tsv.py`; suite 138 passed / 5 skipped).
+- **Level-2** (10 candidates; 3 mechanism families — promote-target + attack-user-object; 2 targets;
+  visibility 0.029→0.223) **+ Level-3** `hybrid_prompt_object` (6 patch-like glyph textures, in-scope /
+  no-gradient, **zero trusted-side code change**) → **0 hijack across 16 candidates**, robust denial,
+  target never approached.
+- **Causally controlled** (`runs/autoresearch-jul3/multiseed/`): off-camera label → user task **4/4**;
+  in-view label → **0/4** across seeds 0–3. Miss-distance diagnostic now populated. **Boundary result:**
+  within the MSc-safe (no-gradient, readable/typographic) scope, hijack is not reachable — a robust
+  denial regime with visibility as the sole control. Write-up: `runs/autoresearch-jul3/README.md`.
+
+**Remaining / open decision** (single source of truth: research-log "➡️ Next session: START HERE"):
+1. **Equal-budget 6-condition comparison** (random / human / one-shot-LLM / loop variants) — the
+   headline "loop vs baselines" quantification, now framed around the *denial regime*. Extend
+   `experiments/run_pilot.py` to 6 conditions using the real `loop_with_skill` from this run.
+2. Thesis-ready write-up of the boundary result; Task 1 threat-model / literature polish.
+3. *(Out of scope by default)* gradient/pixel patch optimization for a positive hijack — TRAP
+   territory; **only** with an explicit scope decision (undercuts the "distinct from TRAP" claim).
+4. Async `submit_evaluation` job path; fill the `full` budget `task_pairs`.
+5. Decide whether to **commit** branch `autoresearch/jul3`.
+
+*Now DONE (previously "remaining"):* the LLM-in-the-loop `loop_with_skill`; the miss-distance
+diagnostic is populated; denial-not-hijack is confirmed **causally** across level-2 + level-3.

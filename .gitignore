@@ -16,6 +16,9 @@ coverage.xml
 venv/
 env/
 
+# Nested reference clone of karpathy/autoresearch (its own git repo; ported, not vendored)
+/autoresearch/
+
 # Heavy/local research artifacts
 runs/*
 !runs/README.md
@@ -29,6 +32,30 @@ runs/pilot-001/*
 !runs/pilot-001/README.md
 !runs/pilot-001/pilot_summary.md
 !runs/pilot-001/aggregate.json
+# autoresearch-jul3: track the write-up + immutable records + exact proposals (not PNGs/rollouts).
+!runs/autoresearch-jul3/
+runs/autoresearch-jul3/*
+!runs/autoresearch-jul3/README.md
+!runs/autoresearch-jul3/ledger.jsonl
+!runs/autoresearch-jul3/results.tsv
+!runs/autoresearch-jul3/candidate_*.json
+!runs/autoresearch-jul3/multiseed/
+runs/autoresearch-jul3/multiseed/*
+!runs/autoresearch-jul3/multiseed/ledger.jsonl
+!runs/autoresearch-jul3/multiseed/results.tsv
+!runs/autoresearch-jul3/level3/
+runs/autoresearch-jul3/level3/*
+!runs/autoresearch-jul3/level3/ledger.jsonl
+!runs/autoresearch-jul3/level3/results.tsv
+# autoresearch-goal: the weekend hijack-hunt sweep (same track-light policy).
+!runs/autoresearch-goal/
+runs/autoresearch-goal/*
+!runs/autoresearch-goal/README.md
+!runs/autoresearch-goal/PROGRESS.md
+!runs/autoresearch-goal/ledger.jsonl
+!runs/autoresearch-goal/results.tsv
+!runs/autoresearch-goal/candidate_*.json
+!runs/autoresearch-goal/aggregate.json
 data/external/*
 !data/external/README.md
 data/processed/*

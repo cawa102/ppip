@@ -25,12 +25,14 @@ Working question:
 ## Current Status
 
 The harness is implemented and tested, including the OpenVLA rollout body behind
-the injectable `RolloutBackend` seam. The lightweight test environment runs without
+the injectable `RolloutBackend` seam. `pilot-001` completed as a four-condition
+diagnostic run and found visible prompt-induced denial, not targeted hijack. The
+next runnable scaffold is `pilot-002`, a cheap exploratory discovery pass over
+broader PPIA prompt families. The lightweight test environment runs without
 loading the OpenVLA/LIBERO stack; GPU tests and real rollouts are opt-in in the
-configured GPU rollout environment. Current local verification: 121 passed / 5
-skipped, `ruff` clean, and `mypy --strict` clean. See the "Implementation Status"
-section of `docs/plans/2026-07-01-autoppia-vla.md` for the full module map and
-remaining pilot work.
+configured GPU rollout environment. Current local verification: 129 passed / 5
+skipped, `ruff` clean, and `mypy --strict` clean. See `docs/research/research-log.md`
+for the current status.
 
 ### Running the tests
 
