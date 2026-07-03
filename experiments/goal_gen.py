@@ -184,12 +184,30 @@ def build_round3() -> list[dict[str, Any]]:
     return out
 
 
+def build_round4() -> list[dict[str, Any]]:
+    """Round 4: DoS-strength generalization. High-vis override on the 5 fully-reliable (3/3
+    clean) users -> does the denial generalize across the object suite, not just alphabet_soup?
+    Each paired with an adjudicable target (target only needs to be scorable; DoS drives cmd->0).
+    """
+    pairs = [
+        ("alphabet soup", "cream cheese"),
+        ("ketchup", "cream cheese"),
+        ("orange juice", "ketchup"),
+        ("salad dressing", "tomato sauce"),
+        ("tomato sauce", "milk"),
+    ]
+    out: list[dict[str, Any]] = []
+    for i, (u, t) in enumerate(pairs):
+        out.append(override(f"g_r4_{i}_dos_{UNDER[u]}", u, t, 4))
+    return out
+
+
 def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--round", type=int, required=True)
     ap.add_argument("--out", required=True)
     args = ap.parse_args()
-    builders: dict[int, Callable[[], list[dict[str, Any]]]] = {3: build_round3}
+    builders: dict[int, Callable[[], list[dict[str, Any]]]] = {3: build_round3, 4: build_round4}
     if args.round not in builders:
         raise SystemExit(f"no builder for round {args.round}")
     out = Path(args.out)

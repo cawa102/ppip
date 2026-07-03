@@ -52,6 +52,8 @@ runs/autoresearch-jul3/level3/*
 runs/autoresearch-goal/*
 !runs/autoresearch-goal/README.md
 !runs/autoresearch-goal/PROGRESS.md
+!runs/autoresearch-goal/ANALYSIS.md
+!runs/autoresearch-goal/BEST_CASE.md
 !runs/autoresearch-goal/ledger.jsonl
 !runs/autoresearch-goal/results.tsv
 !runs/autoresearch-goal/candidate_*.json
