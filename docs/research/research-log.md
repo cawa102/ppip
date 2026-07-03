@@ -4,7 +4,7 @@ Living progress tracker. **Status at a glance** is kept current; dated entries a
 appended chronologically. Detailed run artifacts live under `runs/`. The task-by-task
 plan is `docs/plans/2026-07-01-autoppia-vla.md`.
 
-## Status at a glance (updated 2026-07-02)
+## Status at a glance (updated 2026-07-03)
 
 Core harness: implemented + tested — **125 passed / 5 skipped locally, ruff + mypy
 `--strict` clean**. This machine is GPU-capable; `uv run pytest` exercises the
@@ -38,6 +38,16 @@ tests).
   (readable, 20/20 visible). Diagnostic, not a thesis claim (loop used the mutate stand-in)
 - [ ] Async `submit_evaluation` job path
 - [ ] Task 1 threat-model / literature polish confirmed "dissertation-ready"
+
+## 2026-07-03
+
+- **Committed + merged to `main`.** The pilot-001 work + accumulated harness checkpoint
+  landed on `main` as commit **`e59ccda`** ("exp: first pilot study (Task 7) + checkpoint
+  harness work"), via **PR #1** (`cawa102/ppip#1`) from branch `exp/pilot-001`, rebased to
+  keep the linear history. Direct pushes to the protected `main` are blocked, so the flow was
+  feature-branch → PR → rebase-merge → delete branch. Tree at merge: 45 files, 125 passed /
+  5 skipped, ruff + mypy `--strict` clean; heavy `runs/` artifacts stayed git-ignored (only the
+  `runs/pilot-001/` README + `pilot_summary.md` + `aggregate.json` are tracked).
 
 ## 2026-07-02
 
