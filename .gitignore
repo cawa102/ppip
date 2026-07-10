@@ -58,34 +58,6 @@ runs/autoresearch-goal/*
 !runs/autoresearch-goal/results.tsv
 !runs/autoresearch-goal/candidate_*.json
 !runs/autoresearch-goal/aggregate.json
-
-!runs/autoresearch-hijack/
-runs/autoresearch-hijack/*
-!runs/autoresearch-hijack/HIJACK_SUCCESS.md
-!runs/autoresearch-hijack/RESULT.md
-!runs/autoresearch-hijack/PLAN.md
-!runs/autoresearch-hijack/RESEARCH.md
-!runs/autoresearch-hijack/logs/
-runs/autoresearch-hijack/logs/*
-!runs/autoresearch-hijack/logs/adaptive_cont.log
-# tomato_sauce->milk retargeted sweep: track lightweight records only.
-!runs/tomato-sauce-milk/
-runs/tomato-sauce-milk/*
-!runs/tomato-sauce-milk/README.md
-!runs/tomato-sauce-milk/ledger.jsonl
-!runs/tomato-sauce-milk/results.tsv
-!runs/tomato-sauce-milk/candidate_*.json
-# tomato_sauce->milk confirmation: track lightweight records only.
-!runs/tomato-sauce-milk-confirm/
-runs/tomato-sauce-milk-confirm/*
-!runs/tomato-sauce-milk-confirm/README.md
-!runs/tomato-sauce-milk-confirm/ledger.jsonl
-!runs/tomato-sauce-milk-confirm/results.tsv
-!runs/tomato-sauce-milk-confirm/candidate_*.json
-# Exact tomato_sauce->ketchup audit: track the lightweight report only.
-!runs/tomato-sauce-ketchup/
-runs/tomato-sauce-ketchup/*
-!runs/tomato-sauce-ketchup/README.md
 data/external/*
 !data/external/README.md
 data/processed/*
