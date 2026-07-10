@@ -65,6 +65,7 @@ runs/autoresearch-hijack/*
 !runs/autoresearch-hijack/RESULT.md
 !runs/autoresearch-hijack/PLAN.md
 !runs/autoresearch-hijack/RESEARCH.md
+!runs/autoresearch-hijack/REPRODUCE.md
 !runs/autoresearch-hijack/logs/
 runs/autoresearch-hijack/logs/*
 !runs/autoresearch-hijack/logs/adaptive_cont.log

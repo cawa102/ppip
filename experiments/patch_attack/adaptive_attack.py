@@ -38,6 +38,8 @@ SEED = int(os.environ.get("ADAPT_SEED", "0"))
 CHUNK = int(os.environ.get("ADAPT_CHUNK", "40"))   # steps to run THIS invocation (kill-avoid)
 MAXTRIES = int(os.environ.get("ADAPT_MAXTRIES", "5"))  # optimize+verify rounds vs real path/step
 EPS_CAP = float(os.environ.get("ADAPT_EPS_CAP", "0.6"))  # max L-inf when escalating for real 7/7
+RECORD_DIR = os.environ.get("ADAPT_RECORD_DIR", "")  # if set, dump per-step frames for a video
+DEMO_RES = int(os.environ.get("ADAPT_DEMO_RES", "384"))  # high-res agentview render for the demo
 STATE = os.path.join(C.RUN_DIR, f"adapt_state_seed{SEED}.pkl")
 
 
@@ -151,15 +153,22 @@ def main() -> None:
     tobj, treg = backend._target_entities(resolved_target)
     end = min(MAX_STEPS, step0 + CHUNK)
     n_miss = 0  # steps this chunk that could not be forced to real 7/7 (divergence sources)
+    if RECORD_DIR:
+        import imageio.v2 as imageio
+        os.makedirs(os.path.join(RECORD_DIR, "scene"), exist_ok=True)
+        os.makedirs(os.path.join(RECORD_DIR, "policy_input"), exist_ok=True)
     for step in range(step0, end):
         image = get_libero_image(obs, resize_size)
+        if RECORD_DIR:  # true scene the arm is in (high-res, correctly oriented)
+            imageio.imwrite(os.path.join(RECORD_DIR, "scene", f"f{step:04d}.png"),
+                            get_libero_image(obs, DEMO_RES))
         img224 = torch.from_numpy(image.astype(np.float32) / 255.0).permute(2, 0, 1)[None].to(DEVICE)
         teacher = _real_tokens(model, processor, image, C.TARGET_TASK).view(1, 7)  # REAL salad_dressing
         from experiments.robot.robot_utils import invert_gripper_action, normalize_gripper_action
         raw = torch.zeros(1, 3, 224, 224, device=DEVICE, requires_grad=True)
         opt = torch.optim.Adam([raw], lr=LR)
         eps_t = EPS
-        best = (-1, None)  # (real_match, exec_real_tokens)
+        best = (-1, None, None)  # (real_match, exec_real_tokens, perturbed_input_u8)
         for _attempt in range(MAXTRIES):  # optimize+verify vs REAL path until 7/7 (guarantee)
             for _ in range(K):
                 delta = eps_t * torch.tanh(raw)
@@ -174,11 +183,13 @@ def main() -> None:
             er = _real_tokens(model, processor, pu8, C.USER_TASK)
             m = int((er == teacher.view(7)).sum())
             if m > best[0]:
-                best = (m, er)
+                best = (m, er, pu8)
             if m == 7:
                 break
             eps_t = min(eps_t * 1.4, EPS_CAP)
-        match, exec_real = best
+        match, exec_real, exec_pu8 = best
+        if RECORD_DIR and exec_pu8 is not None:  # the attacker-perturbed frame the policy consumes
+            imageio.imwrite(os.path.join(RECORD_DIR, "policy_input", f"f{step:04d}.png"), exec_pu8)
         if match < 7:
             n_miss += 1
         action = _decode_action(model, exec_real.cpu().numpy())
