@@ -114,6 +114,125 @@ def test_dilate_mask_grows_region_by_iterations_without_mutating_input():
     assert mask.sum() == 1
 
 
+def test_homography_quad_to_texture_maps_image_corners_onto_texture_corners():
+    from rendering.monitor import UVMap, homography_quad_to_texture
+
+    # A 256x256 texture (TL, TR, BR, BL) seen as a perspective-warped quad in the image.
+    texture_corners = np.array([[0, 0], [256, 0], [256, 256], [0, 256]], dtype=np.float64)
+    image_corners = np.array(
+        [[100, 50], [151, 54], [147, 112], [97, 104]], dtype=np.float64
+    )
+    uv_map = UVMap(texture_corners=texture_corners, image_corners=image_corners)
+
+    homography = homography_quad_to_texture(uv_map)
+    mapped = homography.apply(image_corners)
+
+    # The fitted image->texture map sends each image corner onto its texture corner.
+    assert np.allclose(mapped, texture_corners, atol=1e-6)
+    # And the centroid maps to the texture centroid (interior consistency, not just corners).
+    img_centroid = image_corners.mean(axis=0, keepdims=True)
+    assert np.allclose(homography.apply(img_centroid), [[128, 128]], atol=8.0)
+
+
+def test_center_crop_mask_drops_the_edge_and_magnifies_the_centre():
+    from rendering.monitor import center_crop_mask
+
+    # A block hard against the frame edge is removed by the 0.9-area center crop.
+    edge = np.zeros((224, 224), dtype=bool)
+    edge[0:4, 0:4] = True
+    assert not center_crop_mask(edge).any()
+
+    # A centred block survives and is magnified by the crop-and-resize-to-224 (the 0.9-area
+    # crop zooms in, so central content covers more post-crop pixels). Use a large block so
+    # the ~1.05x/axis magnification is well above nearest-neighbour rounding.
+    centre = np.zeros((224, 224), dtype=bool)
+    centre[62:162, 62:162] = True
+    out = center_crop_mask(centre)
+    assert out.any()
+    assert out.sum() > centre.sum()
+
+    # A full mask stays full (cropping all-True yields all-True).
+    assert center_crop_mask(np.ones((224, 224), dtype=bool)).all()
+
+
+def test_center_crop_mask_matches_the_region_vla_diff_samples():
+    import pytest
+
+    torch = pytest.importorskip("torch")
+    import vla_diff
+
+    from rendering.monitor import center_crop_mask
+
+    rng = np.zeros((224, 224), dtype=bool)
+    rng[60:150, 40:180] = True  # an off-centre rectangle
+
+    ours = center_crop_mask(rng)
+
+    # Push the mask as a float image through the REAL preprocessing crop and threshold it.
+    img = torch.from_numpy(rng.astype("float32"))[None, None].repeat(1, 3, 1, 1)
+    cropped = vla_diff.center_crop_resize(img)[0, 0].numpy() > 0.5
+
+    # Nearest-neighbour vs bilinear can disagree by a thin boundary ring; require tight IoU.
+    inter = (ours & cropped).sum()
+    union = (ours | cropped).sum()
+    assert union > 0 and inter / union > 0.98
+
+
+def _polygon_area(corners):
+    x, y = corners[:, 0], corners[:, 1]
+    return 0.5 * abs(float(np.dot(x, np.roll(y, -1)) - np.dot(y, np.roll(x, -1))))
+
+
+@requires_gpu
+def test_calibrate_uv_round_trips_and_mask_is_in_frame():
+    """GATE-2: UV calibration is perspective-consistent and the mask lands in the frame."""
+    import numpy as np
+    from experiments.patch_attack.monitor_upload_probe import setup_monitor_env
+
+    from rendering.monitor import (
+        calibrate_uv,
+        homography_from_correspondences,
+        monitor_mask_224,
+    )
+
+    backend, env, geom, handle = setup_monitor_env()
+    try:
+        uv = calibrate_uv(env, handle)
+
+        # 4 corners inside the 224 policy frame, forming a non-degenerate visible quad.
+        assert uv.image_corners.min() >= 0.0 and uv.image_corners.max() <= 223.0
+        assert _polygon_area(uv.image_corners) > 100.0
+
+        # Perspective round-trip: the texture->image homography fit from the 4 corners must
+        # also predict an INTERIOR marker's rendered location (generalisation, not just fit).
+        h, w = handle.dims
+        forward = homography_from_correspondences(uv.texture_corners, uv.image_corners)
+        tex_pt = np.array([[w * 0.5, h * 0.5]])
+        predicted = forward.apply(tex_pt)[0]
+
+        marker = np.zeros((h, w, 3), dtype=np.uint8)
+        p = max(4, min(h, w) // 6)
+        marker[h // 2 - p // 2 : h // 2 + p // 2, w // 2 - p // 2 : w // 2 + p // 2] = 255
+        handle.upload(np.zeros((h, w, 3), dtype=np.uint8))
+        env.sim.forward()
+        from rendering.monitor import _policy_input_frame
+
+        base = _policy_input_frame(env).astype(np.int64)
+        handle.upload(marker)
+        env.sim.forward()
+        lit = _policy_input_frame(env).astype(np.int64)
+        ys, xs = np.where(np.abs(lit - base).max(axis=2) > 12)
+        observed = np.array([xs.mean(), ys.mean()])
+        assert np.linalg.norm(predicted - observed) < 12.0
+
+        # Mask: right shape, non-empty, entirely in-frame.
+        mask = monitor_mask_224(env, handle)
+        assert mask.shape == (224, 224)
+        assert mask.any()
+    finally:
+        env.close()
+
+
 @requires_gpu
 def test_in_place_upload_changes_monitor_without_reset_or_disturbing_sim():
     """GATE A: per-step texture upload with NO sim reset and no physics disturbance."""

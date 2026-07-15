@@ -15,6 +15,7 @@ upload seam (`MonitorTextureHandle`) is the GATE-A spike, verified in the GPU ro
 from __future__ import annotations
 
 import hashlib
+from dataclasses import dataclass
 from typing import Any
 
 import numpy as np
@@ -112,6 +113,76 @@ def dilate_mask(mask: NDArray[np.bool_], iterations: int = 1) -> NDArray[np.bool
     return out
 
 
+# OpenVLA's inference preprocessing center-crops area 0.9 (side sqrt(0.9)) then resizes to
+# 224. Mirrors vla_diff._CROP_SIDE (kept here so monitor.py stays torch-free).
+CROP_SIDE = 0.9**0.5
+
+
+def center_crop_mask(mask: NDArray[np.bool_], side: float = CROP_SIDE) -> NDArray[np.bool_]:
+    """Map a pre-crop 224 mask into post-crop policy-input coords (what the model samples).
+
+    Replicates `vla_diff.center_crop_resize` (align_corners crop of the central ``side^2``
+    area, resized to 224) with nearest-neighbour sampling, so a monitor mask lands in the
+    exact 224 space Task-6's masked-δ optimisation and the invariant hashing operate on.
+    """
+    m = np.asarray(mask, dtype=bool)
+    n = m.shape[0]
+    lin = np.linspace(0.0, 1.0, n)
+    coords = (1.0 - side) / 2.0 + lin * side  # normalized [0,1] input positions
+    idx = np.clip(np.round(coords * (n - 1)).astype(int), 0, n - 1)
+    return m[np.ix_(idx, idx)]
+
+
+@dataclass(frozen=True)
+class UVMap:
+    """Corner correspondences between the monitor texture and its projected image quad.
+
+    ``texture_corners`` and ``image_corners`` are each ``(4, 2)`` arrays in the SAME order
+    (top-left, top-right, bottom-right, bottom-left). The mapping is discovered empirically
+    by `calibrate_uv` (a rendered calibration grid), so it already absorbs MuJoCo's box-face
+    horizontal mirror -- no flip is hardcoded.
+    """
+
+    texture_corners: NDArray[np.float64]
+    image_corners: NDArray[np.float64]
+
+
+@dataclass(frozen=True)
+class Homography:
+    """A 2D projective transform; ``apply`` maps ``(N, 2)`` points to ``(N, 2)``."""
+
+    matrix: NDArray[np.float64]
+
+    def apply(self, points: NDArray[np.float64]) -> NDArray[np.float64]:
+        pts = np.asarray(points, dtype=np.float64).reshape(-1, 2)
+        homog = np.concatenate([pts, np.ones((pts.shape[0], 1))], axis=1)
+        projected = homog @ self.matrix.T
+        return np.asarray(projected[:, :2] / projected[:, 2:3], dtype=np.float64)
+
+
+def homography_from_correspondences(
+    src: NDArray[np.float64], dst: NDArray[np.float64]
+) -> Homography:
+    """Fit the projective transform mapping ``src`` points onto ``dst`` (DLT, >=4 pairs)."""
+    src_arr = np.asarray(src, dtype=np.float64).reshape(-1, 2)
+    dst_arr = np.asarray(dst, dtype=np.float64).reshape(-1, 2)
+    if src_arr.shape[0] < 4 or src_arr.shape != dst_arr.shape:
+        raise ValueError("need >=4 matched (src, dst) point pairs of equal shape")
+    rows = []
+    for (x, y), (u, v) in zip(src_arr, dst_arr, strict=True):
+        rows.append([-x, -y, -1, 0, 0, 0, u * x, u * y, u])
+        rows.append([0, 0, 0, -x, -y, -1, v * x, v * y, v])
+    _, _, vh = np.linalg.svd(np.asarray(rows, dtype=np.float64))
+    h = vh[-1].reshape(3, 3)
+    return Homography(matrix=h / h[2, 2])
+
+
+def homography_quad_to_texture(uv_map: UVMap) -> Homography:
+    """Image(policy-input) -> texture homography, for synthesizing a texture from an
+    image-space pattern (Task 6 inverts the projection to lay pixels on the monitor)."""
+    return homography_from_correspondences(uv_map.image_corners, uv_map.texture_corners)
+
+
 def _sim_of(env: Any) -> Any:  # pragma: no cover - MuJoCo/GPU seam
     """Best-effort access to the live robosuite ``MjSim`` across LIBERO wrappers."""
     candidate_env = env
@@ -129,6 +200,122 @@ def _raw_model(sim: Any) -> Any:  # pragma: no cover - MuJoCo/GPU seam
     """The underlying ``mujoco.MjModel`` behind robosuite's model wrapper."""
     model = sim.model
     return getattr(model, "_model", model)
+
+
+def _fresh_obs(env: Any) -> Any:  # pragma: no cover - GPU seam
+    """Force a fresh observation (re-rendering agentview) across LIBERO wrappers.
+
+    `_get_observations` lives on the nested robosuite env, not the OffScreenRenderEnv
+    wrapper, so walk the chain like the backend's `_object_states` does."""
+    candidate_env = env
+    for _ in range(5):
+        getter = getattr(candidate_env, "_get_observations", None)
+        if getter is not None:
+            return getter()
+        candidate_env = getattr(candidate_env, "env", None)
+        if candidate_env is None:
+            break
+    raise AttributeError("could not obtain a fresh observation from env")
+
+
+def _policy_input_frame(
+    env: Any, resize_size: int = 224, render_size: int = 256
+) -> NDArray[np.uint8]:  # pragma: no cover - GPU seam
+    """The 224 uint8 image the policy consumes, from a FRESH render that reflects the upload.
+
+    Critical: robosuite's ``obs['agentview_image']`` does NOT reflect an in-place
+    `mjr_uploadTexture` (it renders via a separate/cached path), while ``sim.render`` does
+    and is byte-identical to the obs image otherwise. So the monitor threat model requires
+    building the policy input from a fresh ``sim.render`` -- exactly the Task-4 invariant.
+    ``get_libero_image`` then applies the same rot180 + resize the real rollout uses.
+    """
+    from experiments.robot.libero.libero_utils import get_libero_image
+
+    fresh = env.sim.render(width=render_size, height=render_size, camera_name="agentview")
+    return np.asarray(
+        get_libero_image({"agentview_image": np.asarray(fresh)}, resize_size), dtype=np.uint8
+    )
+
+
+def monitor_mask_224(
+    env: Any,
+    handle: MonitorTextureHandle,
+    *,
+    resize_size: int = 224,
+    threshold: float = 12.0,
+    dilate: int = 2,
+) -> NDArray[np.bool_]:  # pragma: no cover - GPU seam, verified in GPU env
+    """Monitor region as a bool mask in **post-crop** policy-input coords (self-calibrating).
+
+    Instead of projecting the geom and tracking every flip/resize/crop, measure directly
+    which policy-input pixels the monitor controls by contrasting an all-black vs all-white
+    upload. Robust to render orientation by construction. Mutates the monitor texture (the
+    caller re-uploads afterwards)."""
+    h, w = handle.dims
+    handle.upload(np.zeros((h, w, 3), dtype=np.uint8))
+    env.sim.forward()
+    black = _policy_input_frame(env, resize_size)
+    handle.upload(np.full((h, w, 3), 255, dtype=np.uint8))
+    env.sim.forward()
+    white = _policy_input_frame(env, resize_size)
+
+    precrop = (
+        np.abs(white.astype(np.int64) - black.astype(np.int64)).max(axis=2) > threshold
+    )
+    precrop = dilate_mask(precrop, iterations=dilate)
+    return center_crop_mask(precrop)
+
+
+def calibrate_uv(
+    env: Any,
+    handle: MonitorTextureHandle,
+    *,
+    resize_size: int = 224,
+    threshold: float = 12.0,
+) -> UVMap:  # pragma: no cover - GPU seam, verified in GPU env
+    """Discover the texture(u,v) -> policy-image correspondence of the 4 monitor corners.
+
+    Lights one corner patch white-on-black at a time and locates its centroid in the
+    policy image (high-contrast diff, robust to surface shading and MuJoCo's mirror flip).
+    Returns the 4 (texture_corner, image_corner) pairs in TL, TR, BR, BL order. Mutates the
+    monitor texture (the caller re-uploads afterwards)."""
+    h, w = handle.dims
+    patch = max(8, min(h, w) // 4)
+    # Patch centres in texture pixel coords, order TL, TR, BR, BL.
+    texture_corners = np.array(
+        [
+            [patch / 2, patch / 2],
+            [w - patch / 2, patch / 2],
+            [w - patch / 2, h - patch / 2],
+            [patch / 2, h - patch / 2],
+        ],
+        dtype=np.float64,
+    )
+    slices = [
+        (slice(0, patch), slice(0, patch)),
+        (slice(0, patch), slice(w - patch, w)),
+        (slice(h - patch, h), slice(w - patch, w)),
+        (slice(h - patch, h), slice(0, patch)),
+    ]
+
+    handle.upload(np.zeros((h, w, 3), dtype=np.uint8))
+    env.sim.forward()
+    baseline = _policy_input_frame(env, resize_size).astype(np.int64)
+
+    image_corners = np.zeros((4, 2), dtype=np.float64)
+    for i, (rs, cs) in enumerate(slices):
+        tex = np.zeros((h, w, 3), dtype=np.uint8)
+        tex[rs, cs, :] = 255
+        handle.upload(tex)
+        env.sim.forward()
+        lit = _policy_input_frame(env, resize_size).astype(np.int64)
+        diff = np.abs(lit - baseline).max(axis=2) > threshold
+        ys, xs = np.where(diff)
+        if ys.size == 0:
+            raise RuntimeError(f"calibrate_uv: monitor corner {i} not visible in policy image")
+        image_corners[i] = [xs.mean(), ys.mean()]  # (x=col, y=row)
+
+    return UVMap(texture_corners=texture_corners, image_corners=image_corners)
 
 
 class MonitorTextureHandle:  # pragma: no cover - MuJoCo/GPU seam, verified in GPU env

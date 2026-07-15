@@ -50,7 +50,7 @@
 
 **Commit:** `feat(monitor): in-place per-step texture upload spike + change-detection`
 
-- [ ] **Task 2: Monitor placement + UV/mirror calibration + projected-quad mask**
+- [x] **Task 2: Monitor placement + UV/mirror calibration + projected-quad mask** — DONE 2026-07-15. Added to `src/rendering/monitor.py`: `center_crop_mask` (pre-crop→post-crop 224, cross-checked vs `vla_diff.center_crop_resize`, IoU>0.98), `UVMap`/`Homography`/`homography_from_correspondences` (DLT)/`homography_quad_to_texture`, `calibrate_uv` (self-calibrating white-on-black corner detection → mirror handled empirically), `monitor_mask_224` (self-calibrating black↔white contrast diff → dilate → post-crop). Tests: 3 CPU-pure + 1 GPU (`test_calibrate_uv_round_trips_and_mask_is_in_frame`: corners in-frame + convex, interior marker round-trip <12px, mask non-empty). **Critical discovery (feeds Task 4):** `obs['agentview_image']` does NOT reflect an mjr upload (separate/cached render path), but `sim.render` does and is byte-identical otherwise — so `_policy_input_frame` builds the policy input from a FRESH `sim.render` fed through `get_libero_image` (the Task-4 "fresh render after upload" invariant, now the single source of truth). Deviation: `monitor_mask_224(env, handle)` (needs the handle to contrast-probe) not `(env, geom)`. ruff + mypy --strict clean.
 
 **Files:**
 - Modify: `src/rendering/monitor.py`

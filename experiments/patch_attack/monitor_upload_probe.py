@@ -96,6 +96,34 @@ def _eef_pos(env: Any) -> np.ndarray:
     return np.asarray(obs.get("robot0_eef_pos", np.zeros(3)), dtype=np.float64)
 
 
+def setup_monitor_env(
+    candidate: dict[str, Any] | None = None, tex_hw: tuple[int, int] = TEX_HW
+) -> tuple[Any, Any, Any, Any]:
+    """Build a LIBERO env with the monitor injected, settled, and a resolved texture handle.
+
+    Returns ``(backend, env, geom, handle)``. The offscreen render context exists and the
+    handle is bound, so callers can `upload`/render immediately. The caller owns `env.close`.
+    """
+    cand = candidate or _MONITOR_CANDIDATE
+    backend = OpenVLARolloutBackend()
+    resolved_user = resolve_task(cand["user_task"], suite="libero_object")
+    env, init_states, _desc, _obj = backend._build_env(resolved_user)
+    geom = build_monitor_asset(cand, tex_hw=tex_hw)
+    texture_dir = os.path.join(os.environ.get("PROBE_DIR", "/tmp/monitor_probe"), "tex")
+    _inject_monitor(env, geom, texture_dir)
+
+    obs = env.set_init_state(init_states[0])
+    cfg = backend._build_cfg()
+    dummy = backend._dummy_action(cfg)
+    for _ in range(backend.num_steps_wait):
+        obs, _r, _d, _i = env.step(dummy)
+
+    _ = env.sim.render(width=_ENV_RESOLUTION, height=_ENV_RESOLUTION, camera_name="agentview")
+    handle = MonitorTextureHandle(geom.name)
+    handle.resolve(env)
+    return backend, env, geom, handle
+
+
 def run_upload_probe(n_steps: int = 20) -> dict[str, Any]:
     """Run the GATE-A in-place-upload spike; return a report dict (see module docstring)."""
     backend = OpenVLARolloutBackend()
