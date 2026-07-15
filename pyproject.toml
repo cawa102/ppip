@@ -47,7 +47,7 @@ gpu = [
 ]
 
 [tool.pytest.ini_options]
-pythonpath = ["src", "experiments/results"]
+pythonpath = ["src", "experiments/results", "experiments/patch_attack"]
 testpaths = ["tests"]
 addopts = "-ra"
 

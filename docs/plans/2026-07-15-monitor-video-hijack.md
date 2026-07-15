@@ -74,7 +74,7 @@
 
 **Commit:** `feat(monitor): UV/mirror calibration + post-crop projected mask`
 
-- [ ] **Task 3: Phase-aware target-progress metric (CPU-pure)**
+- [x] **Task 3: Phase-aware target-progress metric (CPU-pure)** — DONE 2026-07-15. `experiments/patch_attack/progress_metrics.py` (`Phase` IntEnum APPROACH<GRASP<CARRY<CONTAINMENT, `ProgressState`, `phase_progress(object_states, eef_pose, target_obj, basket_region, initial_target_pos)`) + `tests/patch_attack/test_progress_metrics.py` (6 CPU-pure). Phase gate: displacement≥3cm ⇒ CARRY/CONTAINMENT (scalar=target→basket), else eef<5cm ⇒ GRASP, else APPROACH (scalar=eef→target). Containment requires displacement AND region membership (guards false hijack). Signature adds `initial_target_pos` (plan omitted it; displacement needs a rest reference). ruff + mypy --strict clean.
 
 **Files:**
 - Create: `experiments/patch_attack/progress_metrics.py`
