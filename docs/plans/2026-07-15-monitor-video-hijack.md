@@ -97,7 +97,7 @@
 
 **Commit:** `feat(patch_attack): phase-aware target-progress metric`
 
-- [ ] **Task 4: `MonitorHijackBackend` with canonical-stage invariant**
+- [~] **Task 4: `MonitorHijackBackend` with canonical-stage invariant** — IMPLEMENTED + CPU-verified 2026-07-15; **GPU verification of `step_with_texture` PENDING GPU-1 availability** (blocked by an external `adaptive_attack.py` job holding 16.9GB on GPU 1 → OpenVLA-7B load OOM'd; must not kill it). `experiments/patch_attack/monitor_hijack_backend.py`: `canonical_stage_hashes` (S1 raw render / S2 224 policy input / S3 pixel_values), `assert_policy_input_fresh` (S2 must equal transform(S1) — rejects stale obs), `StalePolicyInputError`, `StepResult`, `MonitorHijackBackend(OpenVLARolloutBackend).step_with_texture` (upload→fresh render→feed exact post-upload frame→step; camera buffer never written). Tests `tests/patch_attack/test_monitor_backend.py`: 3 CPU-pure (hashes, freshness accept/reject, structural "not the camera-write path") + 1 GPU-guarded (`test_step_with_texture_feeds_the_fresh_post_upload_monitor`, needs GPU 1 free). ruff + project mypy clean; 155 passed / 8 skipped.
 
 **Files:**
 - Create: `experiments/patch_attack/monitor_hijack_backend.py`
