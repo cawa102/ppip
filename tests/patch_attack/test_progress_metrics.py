@@ -19,6 +19,36 @@ def _states(target_pos, basket_pos):
     return {_TGT: {"pos": tuple(target_pos)}, _BKT: {"pos": tuple(basket_pos)}}
 
 
+class _FakeObjectState:
+    """Mimics LIBERO's ObjectState: xyz is read via get_geom_state()['pos'], not indexing."""
+
+    def __init__(self, pos):
+        self._pos = tuple(pos)
+
+    def get_geom_state(self):
+        return {"pos": self._pos, "quat": (1.0, 0.0, 0.0, 0.0)}
+
+
+def test_phase_progress_reads_a_libero_objectstate_via_get_geom_state():
+    from progress_metrics import Phase, phase_progress
+
+    # The live env's object_states_dict holds ObjectState objects (not dicts/arrays); the
+    # metric must read their position without crashing (regression: run_oracle GPU smoke).
+    states = {
+        _TGT: _FakeObjectState((0.0, 0.0, 0.90)),
+        _BKT: _FakeObjectState((0.30, 0.30, 0.90)),
+    }
+
+    result = phase_progress(
+        states, eef_pose=(0.0, 0.0, 1.20), target_obj=_TGT,
+        basket_region=_BKT, initial_target_pos=(0.0, 0.0, 0.90),
+    )
+
+    # Target stationary, eef far above -> APPROACH, scalar = eef->target distance (0.30).
+    assert result.phase is Phase.APPROACH
+    assert abs(result.scalar - 0.30) < 1e-9
+
+
 def test_approach_phase_scalar_is_eef_to_target_and_improves_as_eef_nears():
     from progress_metrics import Phase, phase_progress
 

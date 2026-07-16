@@ -41,19 +41,35 @@ class ProgressState:
     scalar: float
 
 
+def _as_vec3(value: Any) -> Vec3:
+    """Coerce an array-like xyz to a float triple."""
+    x, y, z = (float(v) for v in tuple(value)[:3])
+    return (x, y, z)
+
+
 def _pos(state: Any) -> Vec3:
-    """Extract an xyz position from a LIBERO object-state variant (dict or array-like)."""
+    """Extract an xyz position from a LIBERO object-state variant.
+
+    Handles a plain mapping/array (the hand-built test states) AND a live LIBERO
+    ``ObjectState`` object, whose position is read via ``get_geom_state()['pos']`` (it is
+    not indexable) -- mirroring the evaluator backend's ``_state_position`` extractor.
+    """
     if isinstance(state, Mapping):
         for key in ("position", "pos", "xpos", "center", "site_pos"):
             if key in state:
-                value = state[key]
-                break
-        else:
-            raise KeyError(f"no position key in object state {state!r}")
-    else:
-        value = state
-    x, y, z = (float(v) for v in tuple(value)[:3])
-    return (x, y, z)
+                return _as_vec3(state[key])
+        raise KeyError(f"no position key in object state {state!r}")
+    # LIBERO ObjectState / object with a position attribute or accessor.
+    for attr in ("position", "pos", "xpos", "center", "site_pos"):
+        value = getattr(state, attr, None)
+        if value is not None:
+            return _as_vec3(value)
+    geom_getter = getattr(state, "get_geom_state", None)
+    if callable(geom_getter):
+        geom = geom_getter()
+        if isinstance(geom, Mapping) and "pos" in geom:
+            return _as_vec3(geom["pos"])
+    return _as_vec3(state)  # array-like fallback (raises a clear TypeError if not iterable)
 
 
 def _dist(a: Sequence[float], b: Sequence[float]) -> float:
