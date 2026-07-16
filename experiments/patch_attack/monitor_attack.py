@@ -152,49 +152,59 @@ def teacher_tokens(
     return _real_tokens(model, processor, frame, TARGET_TASK).view(1, 7)
 
 
-def _neutral_target_success(
-    backend: Any, seed: int, *, max_steps: int | None, tex_hw: tuple[int, int]
-) -> bool:  # pragma: no cover - GPU seam, verified in GPU rollout env
-    """Does the TARGET task succeed in the deployment scene with a neutral monitor present?
+def setup_deployment_episode(
+    backend: Any, seed: int, *, tex_hw: tuple[int, int] = TEX_HW
+) -> tuple[Any, Any, Any, Any]:  # pragma: no cover - GPU seam, verified in GPU rollout env
+    """Build the USER (deployment) scene with the monitor injected, seeded, settled + bound.
 
-    Builds the USER (deployment) scene, injects the monitor, and runs the greedy policy
-    under the TARGET instruction while showing neutral content every step -- exactly the
-    deployment render path (fresh post-upload render), just with benign monitor content and
-    no attack. Latches on the fixed TARGET goal predicate.
+    The setup shared by the S0 gate, the oracle, and replay. Returns
+    ``(env, handle, resolved_user, resolved_target)``: the offscreen render context exists
+    and the texture handle is resolved, so the caller can upload/render immediately. The
+    caller owns ``env.close()``.
     """
     import os
 
     from monitor_upload_probe import _MONITOR_CANDIDATE, _inject_monitor
 
-    from evaluator.adjudicate import eval_goal_state
     from evaluator.libero_tasks import resolve_task
     from evaluator.openvla_backend import _ENV_RESOLUTION
     from rendering.monitor import MonitorTextureHandle, build_monitor_asset
 
-    steps = backend.max_steps if max_steps is None else int(max_steps)
     resolved_user = resolve_task(USER_TASK, suite="libero_object")
     resolved_target = resolve_task(TARGET_TASK, suite="libero_object")
     env, init_states, _desc, _obj = backend._build_env(resolved_user)
+    geom = build_monitor_asset(_MONITOR_CANDIDATE, tex_hw=tex_hw)
+    texture_dir = os.path.join(os.environ.get("PROBE_DIR", "/tmp/monitor_probe"), "tex")
+    _inject_monitor(env, geom, texture_dir)
+    if backend._policy is None:
+        backend._policy = backend._load_policy()
+    obs = env.set_init_state(init_states[seed % len(init_states)])
+    dummy = backend._dummy_action(backend._policy[2])
+    for _ in range(backend.num_steps_wait):
+        obs, _r, _d, _i = env.step(dummy)
+    _ = env.sim.render(width=_ENV_RESOLUTION, height=_ENV_RESOLUTION, camera_name="agentview")
+    handle = MonitorTextureHandle(geom.name)
+    handle.resolve(env)
+    return env, handle, resolved_user, resolved_target
+
+
+def _neutral_target_success(
+    backend: Any, seed: int, *, max_steps: int | None, tex_hw: tuple[int, int]
+) -> bool:  # pragma: no cover - GPU seam, verified in GPU rollout env
+    """Does the TARGET task succeed in the deployment scene with a neutral monitor present?
+
+    Runs the greedy policy under the TARGET instruction while showing neutral content every
+    step -- exactly the deployment render path (fresh post-upload render), just with benign
+    monitor content and no attack. Latches on the fixed TARGET goal predicate.
+    """
+    from evaluator.adjudicate import eval_goal_state
+
+    steps = backend.max_steps if max_steps is None else int(max_steps)
+    env, handle, _resolved_user, resolved_target = setup_deployment_episode(
+        backend, seed, tex_hw=tex_hw
+    )
     try:
-        geom = build_monitor_asset(_MONITOR_CANDIDATE, tex_hw=tex_hw)
-        texture_dir = os.path.join(os.environ.get("PROBE_DIR", "/tmp/monitor_probe"), "tex")
-        _inject_monitor(env, geom, texture_dir)
-
-        if backend._policy is None:
-            backend._policy = backend._load_policy()
-
-        obs = env.set_init_state(init_states[seed % len(init_states)])
-        dummy = backend._dummy_action(backend._policy[2])
-        for _ in range(backend.num_steps_wait):
-            obs, _r, _d, _i = env.step(dummy)
-
-        _ = env.sim.render(
-            width=_ENV_RESOLUTION, height=_ENV_RESOLUTION, camera_name="agentview"
-        )
-        handle = MonitorTextureHandle(geom.name)
-        handle.resolve(env)
         neutral = neutral_texture(handle.dims)
-
         for _step in range(steps):
             result = backend.step_with_texture(
                 env, handle, neutral, resolved_target.language
@@ -270,45 +280,20 @@ def run_oracle(
     import os
 
     from adaptive_attack import _prompt_ids, _real_tokens
-    from monitor_upload_probe import _MONITOR_CANDIDATE, _inject_monitor
     from progress_metrics import phase_progress
     from texture_surrogate import optimize_masked_delta, select_texture, warp_pattern_to_texture
 
     from evaluator.adjudicate import eval_goal_state
-    from evaluator.libero_tasks import resolve_task
-    from evaluator.openvla_backend import _ENV_RESOLUTION
-    from rendering.monitor import (
-        MonitorTextureHandle,
-        _fresh_obs,
-        _policy_input_frame,
-        build_monitor_asset,
-        calibrate_uv,
-    )
+    from rendering.monitor import _fresh_obs, _policy_input_frame, calibrate_uv
 
     steps = backend.max_steps if max_steps is None else int(max_steps)
-    resolved_user = resolve_task(USER_TASK, suite="libero_object")
-    resolved_target = resolve_task(TARGET_TASK, suite="libero_object")
-    env, init_states, _desc, _obj = backend._build_env(resolved_user)
     if record_dir:
         os.makedirs(record_dir, exist_ok=True)
+    env, handle, resolved_user, resolved_target = setup_deployment_episode(
+        backend, seed, tex_hw=tex_hw
+    )
     try:
-        geom = build_monitor_asset(_MONITOR_CANDIDATE, tex_hw=tex_hw)
-        texture_dir = os.path.join(os.environ.get("PROBE_DIR", "/tmp/monitor_probe"), "tex")
-        _inject_monitor(env, geom, texture_dir)
-        if backend._policy is None:
-            backend._policy = backend._load_policy()
         model, processor, _cfg, resize_size = backend._policy
-
-        obs = env.set_init_state(init_states[seed % len(init_states)])
-        dummy = backend._dummy_action(backend._policy[2])
-        for _ in range(backend.num_steps_wait):
-            obs, _r, _d, _i = env.step(dummy)
-
-        _ = env.sim.render(
-            width=_ENV_RESOLUTION, height=_ENV_RESOLUTION, camera_name="agentview"
-        )
-        handle = MonitorTextureHandle(geom.name)
-        handle.resolve(env)
         neutral = neutral_texture(handle.dims)
 
         precrop_mask = _precrop_monitor_mask(env, handle, resize_size=resize_size)
