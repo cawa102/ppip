@@ -75,6 +75,7 @@ warn_unused_ignores = true
 [[tool.mypy.overrides]]
 module = [
     "torch",
+    "torch.*",
     "transformers",
     "libero.*",
     "experiments.robot.*",
