@@ -131,6 +131,13 @@ def optimize_masked_delta(
     import vla_diff
 
     device = next(model.parameters()).device
+    # Freeze the policy so autograd flows ONLY to the perturbation, not the 7B params -- as
+    # adaptive_attack does. Without this, backprop allocates a gradient buffer per parameter
+    # and the single-model process OOMs (~22GB) on a 24GB card.
+    for param in model.parameters():
+        param.requires_grad_(False)
+    model.language_model.config.use_cache = False
+
     base = torch.from_numpy(np.asarray(img224, dtype=np.float32) / 255.0)
     base = base.permute(2, 0, 1)[None].to(device)
     mask_t = torch.from_numpy(np.asarray(mask224, dtype=np.float32))[None, None].to(device)

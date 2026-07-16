@@ -98,11 +98,22 @@ def _precrop_monitor_mask(env, handle):
     return dilate_mask(np.abs(white.astype(int) - black.astype(int)).max(axis=2) > 12, 2)
 
 
+@pytest.fixture(scope="module")
+def loaded_backend():
+    """One OpenVLA-7B load shared across this file's GPU tests (two loads would OOM 24GB)."""
+    if not os.environ.get("PPIP_GPU_TESTS"):
+        pytest.skip("set PPIP_GPU_TESTS=1 in the GPU rollout env (GPU 1)")
+    from monitor_hijack_backend import MonitorHijackBackend
+
+    backend = MonitorHijackBackend()
+    backend._policy = backend._load_policy()
+    return backend
+
+
 @requires_gpu
-def test_optimize_masked_delta_reduces_teacher_ce_and_stays_inside_mask():
+def test_optimize_masked_delta_reduces_teacher_ce_and_stays_inside_mask(loaded_backend):
     from adaptive_attack import _prompt_ids
     from monitor_attack import USER_TASK, neutral_texture, teacher_tokens
-    from monitor_hijack_backend import MonitorHijackBackend
     from monitor_upload_probe import setup_monitor_env
     from texture_surrogate import _target_token_ce, optimize_masked_delta
 
@@ -110,8 +121,7 @@ def test_optimize_masked_delta_reduces_teacher_ce_and_stays_inside_mask():
 
     _base, env, _geom, handle = setup_monitor_env()
     try:
-        backend = MonitorHijackBackend()
-        backend._policy = backend._load_policy()
+        backend = loaded_backend
         model, processor, _cfg, _rs = backend._policy
         neutral = neutral_texture(handle.dims)
 
@@ -139,17 +149,15 @@ def test_optimize_masked_delta_reduces_teacher_ce_and_stays_inside_mask():
 
 
 @requires_gpu
-def test_select_texture_is_stateless_and_scores_every_candidate():
+def test_select_texture_is_stateless_and_scores_every_candidate(loaded_backend):
     from adaptive_attack import _prompt_ids
     from monitor_attack import USER_TASK, neutral_texture, teacher_tokens
-    from monitor_hijack_backend import MonitorHijackBackend
     from monitor_upload_probe import _eef_pos, setup_monitor_env
     from texture_surrogate import select_texture
 
     _base, env, _geom, handle = setup_monitor_env()
     try:
-        backend = MonitorHijackBackend()
-        backend._policy = backend._load_policy()
+        backend = loaded_backend
         _model, processor, _cfg, _rs = backend._policy
         h, w = handle.dims
         neutral = neutral_texture(handle.dims)
