@@ -23,7 +23,9 @@ from experiments.patch_attack.hijack_backend import HijackBackend  # noqa: E402
 USER_TASK = "pick up the alphabet soup and place it in the basket"
 TARGET_TASK = "pick up the salad dressing and place it in the basket"
 RUN_DIR = os.path.join(HOME, "autoresearch/runs/autoresearch-hijack")
-SEEDS = [0, 1, 2]
+# run_rollouts maps a seed's LIST POSITION -> init_selector -> init_states[pos]; passing 0..N-1
+# makes outcome.seed == init index, matching adaptive_attack.py's init_states[ADAPT_SEED].
+SEEDS = [int(s) for s in os.environ.get("S0_SEEDS", "0,1,2").split(",")]
 
 
 def _carrier_candidate() -> dict:

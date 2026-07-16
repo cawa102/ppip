@@ -10,6 +10,25 @@ This is, to our knowledge and the literature surveyed in `RESEARCH.md`, the firs
 vision-only, targeted** hijack of *stock* OpenVLA on LIBERO (prior targeted successes are
 training-time backdoors or CoT-reasoning victims).
 
+> ✅ **Reproducibility — now MEASURED (2026-07-15; supersedes the 2026-07-10 "coin-flip" caveat).**
+> The attack was seeded (new `ADAPT_TRIAL` → `torch.manual_seed`, isolating the sole run-to-run
+> randomness, the EoT crop jitter) and run as a hit-rate + generalization study. Full write-up:
+> **`RELIABILITY.md`** (data in `hitrate/` + `generalize/`).
+> - **At this archived init state (seed 0): 12/12 = 100% `targeted_success`** (0 denials, 0 resumes).
+>   The single 2026-07-10 seed-0 denial did **not** reproduce under current code — a prior code
+>   state or a very-low-probability draw. (12/12 rules out a ~50% coin-flip at ~1-in-4096.)
+> - **Across 10 other init states: 7/10 hijackable (70%); 8/11 (73%) incl. seed 0.** Reliability is
+>   **init-dependent**, in three regimes: **robust** (deterministic — seed 0, inits 1/3/5/7/8),
+>   **stochastic** (jitter flips it — init 6 = 1/3, init 10 = 2/3; *this* is what the old caveat saw,
+>   now shown init-localized), and **denial/DoS** (inits 2/4/9 = 0/3; the arm usually carries the
+>   object partway, min_dist 0.19–0.35, then drops it — a *partial* hijack, not a never-move DoS).
+> So the hijack is **reproducible and generalizes to a majority of scenes**, not a one-off — but not
+> universal. It remains **out of the default readable/typographic scope** (white-box, L∞ ≤ 1.0,
+> teacher-forces the target policy's own action); the in-scope readable/typographic result stays DoS.
+> Leading hypothesis for init-dependence (untested): forcing real 7/7 makes the executed action = the
+> target policy's own action, so per-init hijack success likely tracks the base policy's own per-init
+> success (denials may be inits where OpenVLA-commanded-salad_dressing itself fails). See `RELIABILITY.md`.
+
 ## The evidence (seed 0)
 
 ```

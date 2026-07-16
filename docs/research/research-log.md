@@ -4,6 +4,117 @@ Living progress tracker. **Status at a glance** is kept current; dated entries a
 appended chronologically. Detailed run artifacts live under `runs/`. The task-by-task
 plan is `docs/plans/2026-07-01-autoppia-vla.md`.
 
+## 2026-07-15 - ✅ GATE A PASS: in-place per-step monitor texture upload works (no reset)
+
+- **Starting the physically-realizable monitor-video hijack plan** (`docs/plans/2026-07-15-monitor-video-hijack.md`,
+  locked via `PLAN.md`/`PLAN-REVIEW-LOG.md`). This replaces the camera-buffer perturbation
+  (`adaptive_attack.py`, which under our threat model *is* "hacking the camera") with a real
+  in-scene **monitor** geom whose texture is re-uploaded through the renderer every control step.
+- **Task 1 done, GATE A resolved: PASS.** The riskiest plumbing — mutating a compiled MuJoCo
+  texture in place and re-uploading to the *active* offscreen render context **without any
+  `reset_from_xml_string`** — is feasible in the robosuite 1.4.1 / mujoco 3.9.0 / LIBERO stack.
+  Seam: `sim.model._model` (`MjModel`), `sim._render_context_offscreen.con` (`MjrContext`),
+  `mujoco.mjr_uploadTexture(m, con, texid)`; texture bytes live in `model.tex_data` (mujoco 3.9
+  naming; the plan's `tex_rgb` is the older mujoco-py name).
+- **Probe result** (`experiments/patch_attack/monitor_upload_probe.py`, GPU 1, alphabet_soup scene,
+  BEST_CASE central placement, 20 steps): **0 resets after the one-time setup inject**,
+  **20/20 distinct monitor-region hashes** (each upload changes the monitor), **max outside-mask
+  delta = 0.0** (bit-identical everywhere outside a 2px-dilated monitor mask), **max eef jump =
+  0.0 m** (visual-only geom never perturbs physics). One subtlety found + fixed: comparing the
+  *compile-time* texture against the first *mjr-upload* frame leaks ~26/255 over a 1px AA edge, so
+  the claim is stated over mjr→mjr uploads (the actual mechanism) with a dilated mask; that
+  comparison is exactly 0.0.
+- **Code (search/rendering side only; evaluator/metrics/budgets/tasks untouched):**
+  `src/rendering/monitor.py` (+`build_monitor_asset`, `MonitorTextureHandle`, `mask_local_hash`,
+  `outside_mask_delta`, `dilate_mask`), the probe, `tests/rendering/test_monitor.py` (4 CPU-pure +
+  1 GPU-guarded spike). Suite 143 passed / 6 skipped; ruff + mypy `--strict` clean. TDD throughout.
+- **Tasks 2, 3, 4 also landed this session** (all TDD, committed on branch `monitor-hijack/phase0`):
+  - **Task 3** (`progress_metrics.py`): phase-aware target progress (APPROACH→GRASP→CARRY→CONTAINMENT),
+    6 CPU tests. **Task 2** (`monitor.py`): `center_crop_mask` (vs `vla_diff`, IoU>0.98), homography
+    (DLT), `calibrate_uv` + `monitor_mask_224` (self-calibrating), 3 CPU + 1 GPU test.
+  - **Critical discovery (Task 2 GPU run):** `obs['agentview_image']` does NOT reflect an in-place
+    mjr upload (separate/cached render path) but `sim.render` does and is otherwise byte-identical —
+    so the policy input MUST be a fresh `sim.render` (exactly the Task-4 invariant). Fixed in
+    `_policy_input_frame`, now the single source of truth.
+  - **Task 4** (`monitor_hijack_backend.py`): `canonical_stage_hashes` (S1/S2/S3), `assert_policy_input_fresh`,
+    `MonitorHijackBackend.step_with_texture`. 3 CPU tests + **GPU test PASS** (verified once GPU 1 freed of
+    the external `adaptive_attack.py` job): policy image reflects the uploaded monitor via a fresh render.
+- **➡️ Next session — START HERE (monitor-hijack Phase 0):** branch **`monitor-hijack/phase0`**, 6 commits,
+  **Tasks 1–4 DONE + committed + fully verified**. Plan `docs/plans/2026-07-15-monitor-video-hijack.md` has
+  per-task detail; checkboxes 1–4 ticked. **Next = Task 5** (neutral-teacher render + S0 sanity gate over
+  seeds 0–4) → Task 6 (masked-δ texture design + real-render surrogate) → Task 7 (closed-loop oracle, the
+  actual hijack attempt) → Task 8 (open-loop replay + controls = **GATE B**). Tasks 5–8 all need OpenVLA-7B
+  on GPU 1. **GPU-1 caveat:** the concurrent `adaptive_attack.py` driver re-claims ~16.9GB every ~30s;
+  OpenVLA-7B can't coexist, so wait for a *sustained* free window (competitor stopped) before rollouts.
+  Reusable: `monitor_upload_probe.setup_monitor_env()` (env + injected monitor + resolved handle),
+  `monitor_hijack_backend.MonitorHijackBackend.step_with_texture`, `progress_metrics.phase_progress`,
+  `monitor.{calibrate_uv,monitor_mask_224,homography_quad_to_texture}`. Run tests with
+  `~/vla-injection/.venv/bin/python -m pytest`; GPU tests need `PPIP_GPU_TESTS=1 CUDA_VISIBLE_DEVICES=1 MUJOCO_GL=egl`.
+
+## 2026-07-15 - ✅ hijack reliability MEASURED (seed sweep): 12/12 at seed-0, 7/10 across inits
+
+- **Resolves the open "decide reliability/scope framing" question and supersedes the 2026-07-10
+  coin-flip entry below.** Made the adaptive vision-layer hijack (`adaptive_attack.py`) reproducible
+  by seeding its sole run-to-run randomness (EoT crop jitter) via a new backward-compatible
+  `ADAPT_TRIAL` → `torch.manual_seed` path, then ran two controlled studies. Search-side only;
+  the fixed evaluator decided every success. Full write-up: **`runs/autoresearch-hijack/RELIABILITY.md`**.
+- **Hit-rate (fixed init, varied jitter)** — `hijack_hitrate.py`, `N=12` at seed-0 init:
+  **12/12 = 100% `targeted_success`**, 0 denials, 0 resumes (`hitrate/summary.json`). Rules out the
+  ~50% coin-flip reading (~1-in-4096); the single 2026-07-10 seed-0 denial did **not** reproduce.
+- **Generalization (varied init)** — `hijack_generalize.py`, inits 1–10, denials auto-confirmed with
+  2 extra jitter seeds: **7/10 init states hijackable (70%); 8/11 (73%) incl. seed 0**
+  (`generalize/summary.json`).
+- **The real finding — reliability is init-dependent, in 3 regimes:** **robust** (deterministic
+  success — seed 0 + inits 1/3/5/7/8), **stochastic** (jitter flips it — init 6 = 1/3, init 10 = 2/3;
+  *this is the phenomenon the 2026-07-10 entry saw, now shown init-localized*), **denial/DoS**
+  (inits 2/4/9 = 0/3, though the arm usually carries the object partway 0.19–0.35 m then drops it — a
+  *partial* hijack, not the never-move DoS of the readable/typographic attack).
+- **Hypothesis TESTED 2026-07-16 (mostly refuted → 2 failure modes).** Commanded the TARGET directly,
+  no perturbation, at inits 0–9 (`s0_reachability.py`, `S0_SEEDS=0..9`; `base_policy/s0_inits0-9.log`):
+  **base policy = 9/10 targeted** (only init 4 fails). Cross-tab vs the hijack: **init 4** = base-policy
+  ceiling (target unreachable from that scene → both fail ~0.348 m); **inits 2, 9** = **attack
+  replication fragility** (base places cleanly at 0.026–0.028 m but the hijack carries the object
+  partway 0.19–0.27 then drops it). So attack ceiling (7/10) = base ceiling (9/10) − 2 inits of
+  long-horizon diff↔real replication fragility — **most** hijack failures are the attack's own fidelity,
+  not the policy's inability. New: `S0_SEEDS` env override in `s0_reachability.py`. See `RELIABILITY.md`.
+- **Scope caveats still travel:** white-box, L∞ ≤ 1.0, teacher-forces the target policy's own action —
+  a bounded, out-of-default-scope contrast; the in-scope readable/typographic result stays DoS. New
+  search-side files: `experiments/patch_attack/{hijack_hitrate.py,hijack_generalize.py}` + the
+  `ADAPT_TRIAL` seeding in `adaptive_attack.py`. Evaluator/rendering/configs untouched.
+
+## 2026-07-10 - ⚠️ hijack does NOT reliably reproduce (coin-flip) + 3-panel δ demo built
+
+**[SUPERSEDED 2026-07-15 — see the reliability study above: seeded, the hijack is 12/12 at seed-0 and
+7/10 across inits; the "coin-flip" is real but init-localized (inits 6, 10), not the whole attack.]**
+
+- **Reproducibility check refutes "reliable hijack".** A clean, continuous re-run of the exact
+  `HIJACK_SUCCESS.md` recipe (GPU 1, one process, `ADAPT_CHUNK=200 ≥ MAX_STEPS`, exit 0, no host
+  kill) produced **denial, not hijack**: `targeted=False`, `min_target_dist` **frozen at 0.35425 m
+  for all 150 steps** (the salad_dressing never moved) — *despite* `tok_match=7/7` at every step.
+  Evidence: `runs/autoresearch-hijack/logs/delta_run.log` vs the archived success
+  `logs/adaptive_cont.log` (which drove 0.354→0.073 and fired at step 121).
+- **Implication (important for the thesis):** forcing the target action tokens (7/7) is **necessary
+  but not sufficient** — this run forced 7/7 the whole way and still got pure DoS, which *contradicts*
+  the `HIJACK_SUCCESS.md` causal story ("force tokens ⇒ run target policy ⇒ place"). The only
+  run-to-run randomness is the **unseeded EoT crop jitter** (`adaptive_attack.py` `torch.rand`), so
+  the archived `targeted=True` is best read as a **rare/stochastic draw (existence proof), not a
+  reliable capability.** It should be reported as: *hijack is reachable in the reopened white-box
+  (gradient) scope but not reliably reproducible*; the in-scope readable/typographic result stays DoS.
+- **3-panel δ demo built** (`runs/autoresearch-hijack/demo/hijack_demo_delta.mp4` + `.gif`):
+  **left = user's expected action** (baseline, no attack → places the alphabet soup, commanded
+  success at step 191), **middle = robot's AI input under attack** (→ places salad_dressing, step
+  116, held after), **right = attacker's added noise δ** (`policy_input − clean_input`, ×3; near-flat
+  on approach frames, a full-frame storm on the grasp-decision frames where L∞ climbs toward 1.0).
+  Full 192-frame length so both placements are visible.
+- **Code (search-side only; evaluator/rendering/configs untouched):** added clean-input recording to
+  `adaptive_attack.py` (so future runs capture δ exactly) and a `--delta` 3-panel mode + overridable
+  panel labels to `make_video.py`. The δ panel for the *archived* success is **reconstructed** from
+  its high-res scene render (that run predated clean-input recording); the resample floor is
+  ~1.6/255, well below the real perturbation.
+- **Open:** decide whether to (a) seed the attack and quantify the hijack rate, (b) report it as a
+  bounded out-of-scope contrast, or (c) leave as-is; reconcile `RESULT.md`/`HIJACK_SUCCESS.md` with
+  this reproducibility caveat.
+
 ## 2026-07-06 - ✅ VISION-LAYER TARGETED HIJACK ACHIEVED (targeted_success=True)
 
 - **First test-time, vision-only, targeted hijack of stock OpenVLA-7B on LIBERO.** An **adaptive
@@ -103,8 +214,10 @@ ranking `ANALYSIS.md`, durable loop state `PROGRESS.md`. Branch not merged to `m
 1. **Equal-budget 6-condition comparison** (random / human / one-shot-LLM / loop variants) — now
    framed around the *DoS regime + hijack boundary* (the headline experiment). Reuse `run_sweep.py`.
 2. **Thesis write-up** of the boundary + DoS best case (`BEST_CASE.md` is paper-ready).
-3. *(out of default scope)* gradient/pixel-patch (TRAP) — the one untested hijack route; needs an
-   explicit scope decision from the researcher.
+3. *(out of default scope)* gradient/pixel-patch (TRAP) — ~~the one untested hijack route~~ **now
+   run (researcher-reopened): a targeted hijack WAS achieved (`runs/autoresearch-hijack/`), but it is
+   stochastic — a clean re-run gave denial (2026-07-10). See the top entries. Decide reliability/scope
+   framing.**
 4. Decide whether to **merge `autoresearch/jul3` → main**.
 
 ---

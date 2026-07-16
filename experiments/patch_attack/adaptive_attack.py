@@ -34,13 +34,18 @@ K = int(os.environ.get("ADAPT_K", "6"))            # per-step opt iterations
 EPS = float(os.environ.get("ADAPT_EPS", "0.15"))   # per-step L-inf bound
 LR = float(os.environ.get("ADAPT_LR", "2e-2"))
 MAX_STEPS = int(os.environ.get("ADAPT_MAX_STEPS", "130"))
-SEED = int(os.environ.get("ADAPT_SEED", "0"))
+SEED = int(os.environ.get("ADAPT_SEED", "0"))      # LIBERO init-state index (fixed physical start)
+# Jitter/RNG seed for reproducible hit-rate trials. The EoT crop jitter (torch.rand below) is the
+# ONLY run-to-run randomness; when ADAPT_TRIAL is set we torch.manual_seed it so each trial is an
+# independent-but-reproducible draw at the SAME init state (SEED). Unset => legacy unseeded run.
+TRIAL = os.environ.get("ADAPT_TRIAL")
 CHUNK = int(os.environ.get("ADAPT_CHUNK", "40"))   # steps to run THIS invocation (kill-avoid)
 MAXTRIES = int(os.environ.get("ADAPT_MAXTRIES", "5"))  # optimize+verify rounds vs real path/step
 EPS_CAP = float(os.environ.get("ADAPT_EPS_CAP", "0.6"))  # max L-inf when escalating for real 7/7
 RECORD_DIR = os.environ.get("ADAPT_RECORD_DIR", "")  # if set, dump per-step frames for a video
 DEMO_RES = int(os.environ.get("ADAPT_DEMO_RES", "384"))  # high-res agentview render for the demo
-STATE = os.path.join(C.RUN_DIR, f"adapt_state_seed{SEED}.pkl")
+_trial_suffix = f"_trial{TRIAL}" if TRIAL is not None else ""
+STATE = os.path.join(C.RUN_DIR, f"adapt_state_seed{SEED}{_trial_suffix}.pkl")
 
 
 def _prompt_ids(processor, task: str) -> torch.Tensor:
@@ -104,6 +109,12 @@ def _teacher_tokens(model, img224, tgt_ids) -> torch.Tensor:
 
 
 def main() -> None:
+    if TRIAL is not None:  # determinize the EoT jitter so this hit-rate trial is reproducible
+        _t = int(TRIAL)
+        torch.manual_seed(_t)
+        np.random.seed(_t)
+        if torch.cuda.is_available():
+            torch.cuda.manual_seed_all(_t)
     resolved_user = resolve_task(C.USER_TASK, suite="libero_object")
     resolved_target = resolve_task(C.TARGET_TASK, suite="libero_object")
     backend = HijackBackend(run_dir=C.RUN_DIR, max_steps=MAX_STEPS)
@@ -157,11 +168,15 @@ def main() -> None:
         import imageio.v2 as imageio
         os.makedirs(os.path.join(RECORD_DIR, "scene"), exist_ok=True)
         os.makedirs(os.path.join(RECORD_DIR, "policy_input"), exist_ok=True)
+        os.makedirs(os.path.join(RECORD_DIR, "clean_input"), exist_ok=True)
     for step in range(step0, end):
         image = get_libero_image(obs, resize_size)
         if RECORD_DIR:  # true scene the arm is in (high-res, correctly oriented)
             imageio.imwrite(os.path.join(RECORD_DIR, "scene", f"f{step:04d}.png"),
                             get_libero_image(obs, DEMO_RES))
+            # clean 224px model input (pre-perturbation), same space as policy_input -> delta =
+            # policy_input - clean_input, per-pixel aligned, for the noise panel.
+            imageio.imwrite(os.path.join(RECORD_DIR, "clean_input", f"f{step:04d}.png"), image)
         img224 = torch.from_numpy(image.astype(np.float32) / 255.0).permute(2, 0, 1)[None].to(DEVICE)
         teacher = _real_tokens(model, processor, image, C.TARGET_TASK).view(1, 7)  # REAL salad_dressing
         from experiments.robot.robot_utils import invert_gripper_action, normalize_gripper_action
