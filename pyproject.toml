@@ -86,6 +86,8 @@ module = [
     "hijack_backend",
     "adaptive_attack",
     "monitor_upload_probe",
+    "monitor_attack",
+    "monitor_replay",
     "progress_metrics",
     "texture_surrogate",
     "imageio",
