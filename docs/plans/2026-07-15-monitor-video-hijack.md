@@ -143,7 +143,7 @@
 
 **Commit:** `feat(patch_attack): neutral-teacher render + S0 sanity gate`
 
-- [ ] **Task 6: Texture design — masked-δ + homography + surrogate calibration**
+- [x] **Task 6: Texture design — masked-δ + homography + surrogate calibration** — DONE 2026-07-16 (CPU + **GPU verified**). `experiments/patch_attack/texture_surrogate.py`: `apply_masked_delta` (confine δ to the monitor mask; outside untouched), `warp_pattern_to_texture` (inverse-warp an image-space pattern onto the fixed texture via the calibrated texture→image homography), `Surrogate`/`calibrate_surrogate` (measure + correct the render reality-gap: additive-δ proposal vs what the renderer actually shows). GPU seams: `optimize_masked_delta` (adaptive_attack's white-box CE loop, but δ=eps·tanh(raw)·mask, added pre-crop; **freezes the policy** — the OOM fix, else backprop allocates a grad buffer per 7B param → ~22GB), `select_texture` (stateless proxy scoring by real-render target-token CE, no env step). Tests `tests/patch_attack/test_texture_surrogate.py`: 3 CPU-pure + **2 GPU-verified** — the monitor-confined masked-δ genuinely **reduces teacher CE (ce_after < ce_before)** while staying in the mask; `select_texture` is stateless (eef frozen). A module-scoped fixture shares one 7B load (two loads OOM 24GB). ruff + mypy `--strict` clean.
 
 **Files:**
 - Create: `experiments/patch_attack/texture_surrogate.py`
@@ -167,7 +167,7 @@
 
 **Commit:** `feat(patch_attack): masked-δ texture design + real-render surrogate`
 
-- [ ] **Task 7: Closed-loop oracle run (Stage 1) + record video + full logging**
+- [x] **Task 7: Closed-loop oracle run (Stage 1) + record video + full logging** — DONE 2026-07-16 (CPU + **GPU smoke verified**). `experiments/patch_attack/monitor_attack.py`: `OracleStepLog`/`OracleResult`/`summarize_oracle_trajectory` (per-step audit row: S1/S2/S3 hashes, token match, phased progress, upload; reduce → furthest phase + successes), `run_oracle` (GPU seam: per step teacher → `optimize_masked_delta` → `warp_pattern_to_texture` → `select_texture` by real-render CE → `step_with_texture` → `phase_progress`; records `texture_0..T` + policy frames + full log). Realised **entirely through the monitor texture + real render** (never a camera-buffer write). Also extracted `setup_deployment_episode` (shared by S0/oracle/replay — DRY). Tests `tests/patch_attack/test_monitor_attack.py`: 2 CPU-pure + **1 GPU smoke** (4 steps end-to-end, 3 distinct stage hashes/step, valid token match). **Integration bug caught by the GPU smoke + fixed:** `progress_metrics._pos` couldn't read LIBERO `ObjectState` (position via `get_geom_state()['pos']`, not indexable) — ported the backend's robust extraction + added a CPU regression test. ruff + mypy `--strict` clean.
 
 **Files:**
 - Modify: `experiments/patch_attack/monitor_attack.py`
@@ -187,7 +187,7 @@
 
 **Commit:** `exp(monitor): closed-loop oracle Stage 1 + recorded video`
 
-- [ ] **Task 8: Open-loop replay (Stage 2) + controls + margin report (GATE B)**
+- [ ] **Task 8: Open-loop replay (Stage 2) + controls + margin report (GATE B)** — MACHINERY DONE + GPU-smoke verified 2026-07-16; **GATE-B experiment running.** `experiments/patch_attack/monitor_replay.py`: `time_indexed_texture` (`video[t]`, a function of the step index ALONE — no state-conditioned selection is expressible), `scramble_video` (deterministic time-scramble control), `ReplayResult`/`margin_report` (the GATE-B panel; the hijack claim is a MARGIN — `hijack_beats_controls` requires the attack to targeted-succeed while neither blank nor scrambled does). GPU seams `run_replay`/`run_control` (blank/scrambled) reuse `setup_deployment_episode`. Tests `tests/patch_attack/test_monitor_replay.py`: 4 CPU-pure + **1 GPU smoke** (2-frame replay + both controls → full margin panel). ruff + mypy `--strict` clean. **The real GATE-B decision** is produced by `experiments/patch_attack/run_gate_b.py` (S0 → Stage-1 oracle recording `texture_0..T` → Stage-2 replay + blank/scrambled controls → margin), launched on seed 0 (130 steps) now that GPU 1 freed. Result → `runs/monitor-hijack/seed0/gate_b_result.json`.
 
 **Files:**
 - Create: `experiments/patch_attack/monitor_replay.py`
