@@ -59,7 +59,7 @@ def test_summarize_s0_all_pass_only_when_every_seed_succeeds():
 def test_neutral_and_attack_frames_differ_only_inside_the_monitor():
     """Neutral render matches deployment geometry: occlusion identical to the attack frame."""
     from monitor_attack import neutral_texture
-    from monitor_upload_probe import setup_monitor_env
+    from monitor_upload_probe import OUTSIDE_TOLERANCE, setup_monitor_env
 
     from rendering.monitor import _policy_input_frame, dilate_mask, outside_mask_delta
 
@@ -82,9 +82,12 @@ def test_neutral_and_attack_frames_differ_only_inside_the_monitor():
         env.sim.forward()
         attack = _policy_input_frame(env)
 
-        # Same sim state -> the scene/robot occlusion is identical: the two frames differ
-        # ONLY inside the monitor region (neutral gray vs the attack's white content).
-        assert outside_mask_delta(neutral, attack, mask) == 0.0
+        # Same sim state -> the scene/robot occlusion is identical: outside the monitor the
+        # two frames agree up to the monitor's ~1px antialiased edge (the same render slack
+        # GATE A validated as OUTSIDE_TOLERANCE) -- NOT an occlusion difference, which would
+        # be far larger and located away from the monitor border.
+        assert outside_mask_delta(neutral, attack, mask) <= OUTSIDE_TOLERANCE
+        # ...and they differ strongly INSIDE it (neutral gray vs the attack's white content).
         assert np.abs(neutral[mask].astype(int) - attack[mask].astype(int)).max() > 50
     finally:
         env.close()
