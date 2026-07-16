@@ -4,6 +4,45 @@ Living progress tracker. **Status at a glance** is kept current; dated entries a
 appended chronologically. Detailed run artifacts live under `runs/`. The task-by-task
 plan is `docs/plans/2026-07-01-autoppia-vla.md`.
 
+## 2026-07-16 - Monitor-hijack Phase 0 COMPLETE: Tasks 5–8 done; GATE B = FAIL (boundary result)
+
+- **Tasks 5–8 all landed** (TDD, GPU-verified seam-by-seam, committed on `monitor-hijack/phase0`):
+  - **Task 5** (`monitor_attack.py`): `neutral_texture`, `summarize_s0`/`S0Report`, `teacher_tokens`
+    (real-path TARGET tokens on the fresh post-upload neutral render), `s0_sanity`. 3 CPU + 3 GPU.
+  - **Task 6** (`texture_surrogate.py`): `apply_masked_delta`, `warp_pattern_to_texture`,
+    `Surrogate`/`calibrate_surrogate`, `optimize_masked_delta` (masked white-box CE loop),
+    `select_texture` (stateless real-render CE). 3 CPU + 2 GPU. **OOM fix:** freeze policy params in
+    the optimiser (else backprop allocates a grad buffer per 7B param → ~22GB on a 24GB card).
+  - **Task 7** (`monitor_attack.run_oracle`): the per-step oracle composing Tasks 3→6 through the
+    monitor; `OracleStepLog`/`summarize_oracle_trajectory`; GPU smoke. **Bug caught by the GPU smoke +
+    fixed:** `progress_metrics._pos` couldn't read a live LIBERO `ObjectState` (position via
+    `get_geom_state()['pos']`, not indexable) — ported the backend's robust extractor + regression test.
+  - **Task 8** (`monitor_replay.py`): `time_indexed_texture`, `scramble_video`, `margin_report`,
+    `run_replay`/`run_control`. 4 CPU + 1 GPU. Extracted `setup_deployment_episode` (DRY across S0/oracle/replay).
+- **GATE B = FAIL at seed 0 → boundary result; Phase 1 NOT built** (per plan). `run_gate_b.py` ran
+  S0 → Stage-1 oracle (130 steps, records `texture_0..T`) → Stage-2 replay + blank/scrambled controls.
+  Oracle `targeted=False, max_phase=0`; replay attack **== blank == scrambled** (byte-identical
+  `min_target_dist=0.35425`); `phase_margin=0`, `hijack_beats_controls=False`.
+- **Mechanism (instrumented):** the per-step token-match trace is mean **6.88 / mostly 7/7** — the USER-
+  and TARGET-instructed policies emit the *same* action tokens on the rollout frames (OpenVLA is scene-
+  not language-driven), so neutral is already ~minimal-CE and `select_texture` **correctly commits
+  neutral every step** (all committed textures are gray, std 0); the monitor-confined attack (eps 0.15,
+  ~16% of frame, attenuated by the render reality-gap) is too weak to flip the greedy action on the few
+  divergence frames. The honest target is not instruction-reachable here (S0 False at 130 **and** 280
+  steps — not a horizon artifact). Contrast: `adaptive_attack` hijacked seed 0 only via a full-frame
+  camera-buffer write (L∞→0.6). Headline: `runs/monitor-hijack/README.md`; data
+  `runs/monitor-hijack/seed0/gate_b_result.json`; driver `experiments/patch_attack/run_gate_b.py`.
+- **Integrity intact:** search/rendering side only — zero evaluator/rendering/config/budget/task changes.
+- **➡️ START HERE (next session):** monitor-hijack Phase 0 machinery **COMPLETE + committed** (branch
+  `monitor-hijack/phase0`). GATE B **failed at seed 0** → the deliverable is the **boundary result**;
+  do **NOT** build Phase 1. Open decisions: (a) confirm with a **seeds-0–4 sweep**
+  (`GATEB_SEED=n GATEB_ORACLE_STEPS=280 run_gate_b.py`) before finalising the thesis boundary claim;
+  (b) optionally a stronger monitor-*strength* test on a pair/seed where the honest target IS reachable
+  and USER≠TARGET actions diverge more; (c) write up the boundary result + decide whether to merge to
+  `main`. GPU-1 note: the competitor `adaptive_attack.py` reliability study has finished — GPU 1 was free.
+  Reusables: `run_gate_b.py`, `monitor_attack.{run_oracle,s0_sanity,teacher_tokens,setup_deployment_episode}`,
+  `monitor_replay.{run_replay,run_control,margin_report}`, `texture_surrogate.*`.
+
 ## 2026-07-15 - ✅ GATE A PASS: in-place per-step monitor texture upload works (no reset)
 
 - **Starting the physically-realizable monitor-video hijack plan** (`docs/plans/2026-07-15-monitor-video-hijack.md`,
@@ -39,7 +78,7 @@ plan is `docs/plans/2026-07-01-autoppia-vla.md`.
   - **Task 4** (`monitor_hijack_backend.py`): `canonical_stage_hashes` (S1/S2/S3), `assert_policy_input_fresh`,
     `MonitorHijackBackend.step_with_texture`. 3 CPU tests + **GPU test PASS** (verified once GPU 1 freed of
     the external `adaptive_attack.py` job): policy image reflects the uploaded monitor via a fresh render.
-- **➡️ Next session — START HERE (monitor-hijack Phase 0):** branch **`monitor-hijack/phase0`**, 6 commits,
+- **➡️ START HERE — SUPERSEDED by the 2026-07-16 entry above (Tasks 5–8 done, GATE B decided).** branch **`monitor-hijack/phase0`**, 6 commits,
   **Tasks 1–4 DONE + committed + fully verified**. Plan `docs/plans/2026-07-15-monitor-video-hijack.md` has
   per-task detail; checkboxes 1–4 ticked. **Next = Task 5** (neutral-teacher render + S0 sanity gate over
   seeds 0–4) → Task 6 (masked-δ texture design + real-render surrogate) → Task 7 (closed-loop oracle, the
