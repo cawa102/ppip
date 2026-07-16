@@ -69,6 +69,21 @@ warn_unused_ignores = true
 # Optional GPU-stack dependencies are not installed in the lightweight dev/test venv.
 # The backend imports them lazily behind a runtime guard, so mypy should not require stubs.
 # LIBERO is host-provided via PYTHONPATH (not pip-installed) and ships no stubs.
+# vla_diff / patch_config / hijack_backend / adaptive_attack / monitor_upload_probe are
+# GPU-env-only search-side scripts (on the rollout host's PYTHONPATH, e.g. ~/openvla) that
+# the patch_attack seams import lazily -- also absent from the lightweight venv's mypy path.
 [[tool.mypy.overrides]]
-module = ["torch", "transformers", "libero.*", "experiments.robot.*", "mujoco", "mujoco.*"]
+module = [
+    "torch",
+    "transformers",
+    "libero.*",
+    "experiments.robot.*",
+    "mujoco",
+    "mujoco.*",
+    "vla_diff",
+    "patch_config",
+    "hijack_backend",
+    "adaptive_attack",
+    "monitor_upload_probe",
+]
 ignore_missing_imports = true
