@@ -55,6 +55,48 @@ def test_summarize_s0_all_pass_only_when_every_seed_succeeds():
     assert report.usable == (0, 1, 2)
 
 
+def test_summarize_oracle_trajectory_reports_max_phase_and_carries_success():
+    from monitor_attack import OracleStepLog, summarize_oracle_trajectory
+
+    logs = [
+        OracleStepLog(0, "a", "b", "c", token_match=2, progress_phase=0,
+                      progress_scalar=0.2, upload_ok=True),
+        OracleStepLog(1, "d", "e", "f", token_match=5, progress_phase=1,
+                      progress_scalar=0.04, upload_ok=True),
+        OracleStepLog(2, "g", "h", "i", token_match=7, progress_phase=2,
+                      progress_scalar=0.5, upload_ok=True),
+    ]
+
+    result = summarize_oracle_trajectory(
+        seed=0, step_logs=logs, targeted_success=True, commanded_success=False,
+        latch_step=2, texture_count=3,
+    )
+
+    assert result.seed == 0
+    assert result.steps == 3
+    # The phased-progress headline for the oracle: the furthest phase reached.
+    assert result.max_phase == 2
+    assert result.targeted_success is True
+    assert result.commanded_success is False
+    assert result.latch_step == 2
+    assert result.texture_count == 3
+    assert result.step_logs == tuple(logs)
+
+
+def test_summarize_oracle_trajectory_max_phase_is_zero_for_empty_or_flat_runs():
+    from monitor_attack import summarize_oracle_trajectory
+
+    result = summarize_oracle_trajectory(
+        seed=3, step_logs=[], targeted_success=False, commanded_success=False,
+        latch_step=None, texture_count=0,
+    )
+
+    assert result.steps == 0
+    assert result.max_phase == 0
+    assert result.latch_step is None
+    assert result.step_logs == ()
+
+
 @requires_gpu
 def test_neutral_and_attack_frames_differ_only_inside_the_monitor():
     """Neutral render matches deployment geometry: occlusion identical to the attack frame."""
@@ -133,3 +175,26 @@ def test_s0_sanity_reports_per_seed_target_success_structure():
     assert set(report.results) == {0}
     assert isinstance(report.results[0], bool)
     assert isinstance(report.all_pass, bool)
+
+
+@requires_gpu
+def test_run_oracle_smoke_runs_end_to_end_with_full_audit_logs():
+    from monitor_attack import OracleResult, run_oracle
+    from monitor_hijack_backend import MonitorHijackBackend
+
+    backend = MonitorHijackBackend()
+    # Short-horizon smoke: the oracle loop wires teacher -> texture design/select ->
+    # step_with_texture -> phased progress end-to-end. Not a hijack claim (4 steps).
+    result = run_oracle(backend, seed=0, max_steps=4, k=4)
+
+    assert isinstance(result, OracleResult)
+    assert result.seed == 0
+    assert 1 <= result.steps <= 4
+    assert result.texture_count == result.steps
+    # Every step recorded a full audit row: 3 distinct canonical-stage hashes, a valid
+    # token match, and an upload -- realised through the monitor, not a camera write.
+    for log in result.step_logs:
+        assert len({log.s1_hash, log.s2_hash, log.s3_hash}) == 3
+        assert 0 <= log.token_match <= 7
+        assert log.upload_ok is True
+    assert result.max_phase >= 0

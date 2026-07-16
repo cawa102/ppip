@@ -86,5 +86,9 @@ module = [
     "hijack_backend",
     "adaptive_attack",
     "monitor_upload_probe",
+    "progress_metrics",
+    "texture_surrogate",
+    "imageio",
+    "imageio.*",
 ]
 ignore_missing_imports = true
