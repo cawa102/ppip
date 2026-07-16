@@ -87,13 +87,18 @@ runs/tomato-sauce-milk-confirm/*
 !runs/tomato-sauce-ketchup/
 runs/tomato-sauce-ketchup/*
 !runs/tomato-sauce-ketchup/README.md
-# monitor-hijack GATE-B: track the headline + the small result JSON, not the oracle texture PNGs.
+# monitor-hijack GATE-B: track the headline + the small result JSON + the demo, not the
+# oracle texture PNGs.
 !runs/monitor-hijack/
 runs/monitor-hijack/*
 !runs/monitor-hijack/README.md
 !runs/monitor-hijack/seed0/
 runs/monitor-hijack/seed0/*
 !runs/monitor-hijack/seed0/gate_b_result.json
+!runs/monitor-hijack/demo/
+runs/monitor-hijack/demo/*
+!runs/monitor-hijack/demo/monitor_hijack_fails.mp4
+!runs/monitor-hijack/demo/monitor_hijack_fails.gif
 data/external/*
 !data/external/README.md
 data/processed/*
