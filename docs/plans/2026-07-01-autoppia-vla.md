@@ -451,8 +451,13 @@ free GPU (`CUDA_VISIBLE_DEVICES=<idx>`) — the box is shared.
    headline "loop vs baselines" quantification, now framed around the *denial regime*. Extend
    `experiments/run_pilot.py` to 6 conditions using the real `loop_with_skill` from this run.
 2. Thesis-ready write-up of the boundary result; Task 1 threat-model / literature polish.
-3. *(Out of scope by default)* gradient/pixel patch optimization for a positive hijack — TRAP
-   territory; **only** with an explicit scope decision (undercuts the "distinct from TRAP" claim).
+3. *(Out of scope by default — but a researcher-authorized escalation was RUN)* gradient/pixel patch
+   optimization for a positive hijack — TRAP territory. A targeted hijack **was achieved** via an
+   adaptive per-frame white-box perturbation (`runs/autoresearch-hijack/`, 2026-07-06; test-time,
+   weights frozen), but it is **stochastic — a clean re-run gave denial** (2026-07-10,
+   `logs/delta_run.log`). Open: make it reliable (seed + hit-rate) and/or frame it as a bounded
+   out-of-scope contrast; note it undercuts the "distinct from TRAP" positioning. The in-scope
+   readable result (line above) stays DoS.
 4. Async `submit_evaluation` job path; fill the `full` budget `task_pairs`.
 5. Decide whether to **commit** branch `autoresearch/jul3`.
 

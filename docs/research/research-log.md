@@ -4,6 +4,126 @@ Living progress tracker. **Status at a glance** is kept current; dated entries a
 appended chronologically. Detailed run artifacts live under `runs/`. The task-by-task
 plan is `docs/plans/2026-07-01-autoppia-vla.md`.
 
+## 2026-07-16/17 - Exp2 deepen (through-render hijack): TEX=128 breakthrough; grasp-transition boundary
+
+- **`/goal`:** close the Exp-2 gap and land a targeted hijack (`alphabet_soup → salad_dressing`,
+  seed 0) *through a rendered in-scene monitor* (camera buffer never written), with monitor
+  size/position/rotation/steps all free. Driver: `experiments/patch_attack/monitor_render_attack.py`
+  (search-side only; evaluator/rendering-config/budget/task **untouched** — integrity intact).
+- **★ BREAKTHROUGH — TEX=128 (texture-resolution matching) removes the render low-pass.** The
+  render's blur was dominated by MuJoCo **minifying** the 256² monitor texture onto its ~130 px
+  projection (~2× downsample → the adversarial high-freq is averaged away). Setting the texture ≈
+  the projection size (`MR_TEX=128`) makes the map ~1:1 → the optimiser's structure **survives the
+  render**. This lifted the confined monitor from the report's collapse-at-~step-25 (TEX=256) to
+  **sustaining `decisive-5` (xy+z+yaw+gripper) forcing 5/5 through the APPROACH phase to ~step 45**
+  (`runs/monitor-render/render_h11_s65_tex128.log`: brk 5/5 to step 65 on the 5-step snapshots).
+  This directly answers the researcher's "7/7 on approach, 3-5/7 on grasp" gap **for the approach**.
+- **Barrier that remains — the GRASP-TRANSITION frame (~step 45-55).** When the descending gripper
+  reaches the *visible* object, OpenVLA's natural (soup) grasp intent is strong, and the confined
+  monitor (≤ ~50 % of frame) cannot override it: forcing **collapses to 2/4-2/5** on those frames,
+  and executing that one failed action diverges the arm. Across **~24 configurations** (sizes
+  37→50 %, square/wide, rotations, decisive-4/5, any-6-of-7 via `MR_FULL_THRESH`, break/loss splits,
+  adaptive `RESTARTS_HARD` recovery, TEX 256/128) the `salad_dressing`→basket distance stays
+  **bit-identical (never contacted) through the grasp window (step 55-60)**, whereas the *idealised
+  camera-space* attack at the monitor's rect contacts at step 55 and hijacks (latch 130,
+  `runs/monitor-patch/result_diag_highrect_trial0.json`). Mechanistically: the confined render's
+  effective forcing power is enough for the *coarse* approach but not to override the *precise*
+  grasp against the visible object — the exact APPROACH-vs-GRASP contrast the researcher predicted.
+- **It is divergence, NOT lag (recorded frames settle the researcher's H3).** `tgt_dist` alone
+  can't tell "arm approaching slowly" from "arm gone" (the dressing only moves once grasped), so I
+  checked the recorded scene frames at the grasp window for BOTH the best-forcing config (h11,
+  decisive-5, sustained 5/5) and h24 (decisive-4): through **step ~74** the `salad_dressing` is
+  **undisturbed** and **no gripper ever emerges at the object below the monitor** — the arm never
+  completes the descent-to-grasp (camera-space grasps at step 55). So "more steps" (H3) does not
+  help — the arm is not slowly approaching the dressing; the grasp-transition forcing collapse
+  stops the descent. (`runs/monitor-render/h11_s65_tex128_rec/scene/f0060,f0074.png`,
+  `h24_dec4tex128_rec/scene/f0060,f0072.png`.)
+- **Why no fully-completed rollout:** (1) usable monitor is capped at **~55 %** — even a search-side
+  *interior-point* UV calibration (`MR_INTERIOR_CAL`, beats `calibrate_uv`'s 4-corners cap) only
+  reaches 55 % because an upright panel is frame-limited; (2) **GPU-1 thermal throttling** —
+  sustained forcing pins the card at ~86 °C / ~1450 MHz, so every adequate-forcing run runs at
+  **2.5-15 min/step** and no 130-step grasp+carry completed. The divergence is confirmed from the
+  grasp-window frames + frozen distance across all 25 runs, not a step-280 rollout.
+- **Honest status:** the boundary is **DEEPENED (approach forcing solved via TEX=128)** but **NOT
+  crossed** — a through-render targeted hijack was **not** achieved this session. The camera-space
+  confined patch (Exp1) remains the only *confined* hijack; the through-render monitor stays a
+  boundary. New search-side knobs added to the driver: `MR_TEX_H/W`, `MR_DECISIVE`, `MR_BREAK`,
+  `MR_FULL_THRESH` (any-K break), `MR_RESTARTS_HARD` (adaptive recovery), `MR_INTERIOR_CAL`, plus
+  `monitor_placement_probe.py`. **What crossing it would require** (none available as a search-side
+  change here): (a) **> ~55 % usable render DOF** — but an upright in-scene panel is frame-capped at
+  ~55 %, and lifting `calibrate_uv`'s corner requirement further is a *trusted-side* rendering
+  change, out of the search boundary; (b) enough forcing power to **override OpenVLA's natural grasp
+  intent at the visible object** on the grasp-transition frames — which the confined render lacks
+  (camera-space full-res does it easily); (c) a cool GPU to iterate (thermal throttling alone made
+  completing runs infeasible). Net: the confined render drives the coarse *approach* but not the
+  precise *grasp against a visible object* — the APPROACH-vs-GRASP boundary, pushed from ~step 25
+  (report, TEX=256) to ~step 45 (this session, TEX=128).
+- **RESEARCHER DECISION (2026-07-17): accept this exact-hijack boundary as the result; pivot the
+  next experiments to EASIER-BUT-STILL-HARMFUL targets** the confined monitor's *proven* coarse
+  approach-forcing can reach: (a) **directed DoS** (monitor makes OpenVLA abandon the user's
+  commanded object -> drops `commanded_success`); (b) **coarse redirection / partial hijack** (arm
+  pulled toward the attacker's region / off the correct trajectory, no exact 7-DOF grasp needed);
+  (c) **"target has options"** (attacker wins if the robot does *anything except* the user's
+  instruction, or grasps *any* of several objects -> force whichever is easiest). These need only
+  ~50-80-step approach-phase forcing (works + far cheaper thermally than the 130-step precise
+  grasp). To be co-designed (metrics + neutral-monitor controls). Keeps the DoS-vs-hijack thesis:
+  confined/rendered PPIA => DoS + coarse redirection achievable; precise object hijack needs
+  unconfined full-res (out of scope).
+
+## 2026-07-16 - ✅ CONFINED "monitor-video" hijack achieved (small region, not the whole frame)
+
+- **`/goal`:** realise the white-box hijack (`alphabet_soup → salad_dressing`) with the
+  perturbation confined to a **small region** (a monitor "playing a video" per-step), instead
+  of the full-frame camera-buffer write (which under our threat model = "hacking the camera").
+- **Diagnosis of the two anchors:** the full-frame `adaptive_attack` WORKS (escalate L∞→0.6,
+  verify real 7/7) but is unconfined; the Phase-0 through-render monitor FAILED GATE B because
+  its optimiser was far too weak (fixed eps=0.15 additive-around-mid-gray, k=6, no escalation,
+  no real-render verify; `select_texture` committed neutral). **Fix = free-range [0,1]
+  replacement patch** (a real screen shows bright arbitrary content) + the proven
+  escalate/verify objective, confined to a rectangle.
+- **Experiment 1 — camera-space confined replacement patch** (`monitor_patch_attack.py`,
+  idealised upper bound; `runs/monitor-patch/`). Seed 0:
+  - **100×100 (19.9% of frame): `targeted=True`**, latch step 130, min_target_dist 0.354→
+    **0.069 m**, **7/7 tokens every step** (n_miss 0). Reproduced the proven grasp→carry→place
+    trajectory. Demo `runs/monitor-patch/hijack_100x100_demo.mp4` (3-panel) +
+    `monitor_screen_video.gif` (the flipbook the monitor plays).
+  - **Shrink sweep** (`monitor_patch_sweep.py`, squares centred on the decision region):
+    **60×60 (7.2%) hijacks robustly** (targeted True, latch 117–143, match 6.98) and **40×40
+    (3.2%) hijacks stochastically** — one recorded run placed it (latch 119, min 0.068 m),
+    another partial-carried (0.354→0.310 then dropped). Confined hijack reaches **≈3% of the
+    frame** (robust by ~7%). Recorded 3-panel demos: `hijack_{100x100,60x60,40x40}_demo.gif`.
+- **Experiment 2 — physically-realizable in-scene monitor** (`monitor_render_attack.py`,
+  through the render; `MonitorHijackBackend`, camera buffer never written; `runs/monitor-render/`):
+  **BOUNDARY — the physical monitor does NOT hijack at seed 0.** Engineered through 6–7 configs
+  (free-range texture → BPDA straight-through on the real render → monitor-hidden **clean teacher**
+  (fixes the GATE-B S0-fail: the monitor geom distracts even the TARGET policy, so a
+  monitor-present teacher is a confused action) → **emissive** monitor (`mat_emission=1`, runtime
+  material mutation only — evaluator/shared render untouched — so scene lighting can't crush the
+  displayed contrast) → sizes 3.9→24.5% → warm-start). Best config (emissive+clean+BPDA, 12%)
+  forces the target tokens **7/7 on many frames** but only **3–5/7 on the precise grasp-approach
+  frames**, so the arm never completes the grasp. The render pipeline (texture → ~75–125 px
+  projection → AA/downsample → shading) is a **low-pass filter** that destroys the high-frequency
+  adversarial structure — the DOF the camera-space patch has at full pixel resolution is not
+  available through the render. This **deepens the prior GATE-B boundary** (weaker eps-0.15
+  optimiser + contaminated teacher) and **isolates the render reality-gap** as the one factor
+  separating the successful idealised patch (Exp 1) from the blocked physical monitor.
+- **➡️ NEXT SESSION — START HERE (researcher handoff):** deepen Experiment 2 to a *through-render*
+  targeted hijack. The researcher freed monitor **size / position / rotation / steps** — just get
+  one hijack via the rendered monitor (camera buffer never written). Self-contained plan +
+  ranked hypotheses (big non-occluding emissive monitor → warp-aligned/strong optimisation →
+  long horizon 280 → decisive-token objective) + gotchas + run commands:
+  **`docs/plans/2026-07-16-exp2-deepen-through-render-hijack.md`**. `MR_ROT` knob added to
+  `monitor_render_attack.py` for placement exploration. GIF evidence of the current boundary:
+  `runs/monitor-render/exp2_monitor_demo.gif`.
+- **Mechanism:** because every step is 7/7, the executed action == the target policy's own
+  action on the clean frame → the arm runs the salad_dressing policy closed-loop; the patch
+  only needs to FORCE tokens (occluding the object in the attacked input is harmless — the
+  teacher already computed the action from the clean frame).
+- **Scope/honesty:** white-box, test-time (weights frozen), teacher-forces the target policy's
+  action — same reopened-scope caveats as `runs/autoresearch-hijack/`; the NEW contribution is
+  **spatial confinement** (a monitor, not the whole camera). In-scope readable/typographic
+  injection stays DoS-only. Fixed evaluator decided every verdict; search/rendering side only.
+
 ## 2026-07-16 - Monitor-hijack Phase 0 COMPLETE: Tasks 5–8 done; GATE B = FAIL (boundary result)
 
 - **Tasks 5–8 all landed** (TDD, GPU-verified seam-by-seam, committed on `monitor-hijack/phase0`):
