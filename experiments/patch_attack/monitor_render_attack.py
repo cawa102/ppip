@@ -98,6 +98,10 @@ FULL_THRESH = int(os.environ.get("MR_FULL_THRESH", "0"))
 # render DOF AND the monitor occludes the object through the grasp (removing OpenVLA's competing
 # natural grasp intent that collapses the forcing at the grasp transition).
 INTERIOR_CAL = os.environ.get("MR_INTERIOR_CAL", "0") == "1"
+# Attacker target task override ("target has options"): the exact salad_dressing grasp is blocked
+# at the grasp transition; a target object CLOSER to the alphabet_soup needs a smaller grasp
+# override and may be completable. Default keeps the original salad_dressing target.
+TARGET_TASK = os.environ.get("MR_TARGET", TARGET_TASK)
 
 
 def _to_t(img_u8: np.ndarray) -> torch.Tensor:
@@ -112,7 +116,7 @@ def _setup_monitor(backend: Any, seed: int, *, scale: float, pos: list[float],
     scale/position/rotation so its projected footprint can be tuned into the working regime
     (size/position/rotation are all free to explore). Caller owns env.close().
     """
-    from monitor_attack import TARGET_TASK, USER_TASK
+    from monitor_attack import USER_TASK  # TARGET_TASK comes from the module global (MR_TARGET)
     from monitor_upload_probe import _MONITOR_CANDIDATE, _inject_monitor
 
     from evaluator.libero_tasks import resolve_task

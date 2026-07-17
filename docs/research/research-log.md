@@ -69,6 +69,19 @@ plan is `docs/plans/2026-07-01-autoppia-vla.md`.
   grasp). To be co-designed (metrics + neutral-monitor controls). Keeps the DoS-vs-hijack thesis:
   confined/rendered PPIA => DoS + coarse redirection achievable; precise object hijack needs
   unconfined full-res (out of scope).
+- **"Target has options" tested -> barrier is fundamental, not object-specific.** Probed the seed-0
+  scene (`object_distance_probe.py`): non-soup objects by distance to `alphabet_soup` = butter
+  0.188 < salad_dressing 0.222 < milk 0.230 < cream_cheese 0.301 < tomato_sauce 0.381. Targeted the
+  CLOSEST object (**butter**, smallest grasp-override) with the best config (decisive-5+TEX=128, via
+  new `MR_TARGET` override) — forcing was **no better** than the dressing (key 4/5 early, same
+  collapse regime). Since the render forces the *large* coarse approach fine (5/5 even for the
+  0.222-away dressing) but collapses at the *precise grasp* regardless of the target's proximity,
+  the barrier is **render precision at the grasp, not override magnitude** — so **no object's grasp
+  ("object in basket") is completable through the confined render.** A `targeted=true` of the
+  standard "object-in-basket" form is therefore not reachable via the monitor for ANY target;
+  achievable harm (DoS / eef-redirection) needs a redefined success metric + a completable rollout
+  (thermal-blocked here: GPU-0's reserved task keeps GPU-1 at throttle). New search-side probe
+  `object_distance_probe.py`; driver knob `MR_TARGET`. Integrity intact (no trusted-side edits).
 
 ## 2026-07-16 - ✅ CONFINED "monitor-video" hijack achieved (small region, not the whole frame)
 
