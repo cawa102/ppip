@@ -73,6 +73,9 @@ def _compose(panels: list[tuple[Image.Image, str, tuple[int, int, int]]]) -> Ima
     for im, label, color in panels:
         canvas.paste(im, (x, 0))
         if label:
+            # dark backing strip so the label stays legible over busy noise panels
+            tb = d.textbbox((x + 8, 6), label, font=f)
+            d.rectangle((tb[0] - 4, tb[1] - 2, tb[2] + 4, tb[3] + 2), fill=(0, 0, 0))
             d.text((x + 8, 6), label, fill=color, font=f)
         x += im.width + gap
     return canvas
