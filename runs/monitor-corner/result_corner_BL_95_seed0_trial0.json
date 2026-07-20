@@ -1,0 +1,20 @@
+{
+  "tag": "corner_BL_95_seed0",
+  "seed": 0,
+  "rect": [
+    129,
+    0,
+    95,
+    95
+  ],
+  "area_px": 9025,
+  "area_frac": 0.17986686862244897,
+  "status": "HIJACK",
+  "targeted": true,
+  "latch_step": 118,
+  "step": 119,
+  "max_steps": 240,
+  "min_target_dist_m": 0.067852611486351,
+  "mean_token_match": 6.957983193277311,
+  "n_miss_this_chunk": 3
+}

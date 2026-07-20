@@ -111,6 +111,21 @@ data/processed/*
 *.mov
 *.avi
 
+# monitor-corner (corner-confined hijack, object NOT covered): track the write-up + the small
+# result JSONs + the two boundary-defining demo videos (smallest success 12.8% and first
+# failure 8.2%), not the frame recordings or the ~100 MB of GIFs. This block must stay BELOW
+# the "*.mp4" rule above — later patterns win, so placing it earlier would re-ignore the demos.
+!runs/monitor-corner/
+runs/monitor-corner/*
+!runs/monitor-corner/RESULT.md
+!runs/monitor-corner/corner_summary_seed0.json
+!runs/monitor-corner/probe_results.json
+!runs/monitor-corner/result_corner_*.json
+!runs/monitor-corner/demos/
+runs/monitor-corner/demos/*
+!runs/monitor-corner/demos/corner_BL_80_HIJACK.mp4
+!runs/monitor-corner/demos/corner_BL_64_FAIL.mp4
+
 # Local secrets/config
 .env
 .env.*

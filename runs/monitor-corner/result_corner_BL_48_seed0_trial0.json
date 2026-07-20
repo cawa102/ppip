@@ -1,0 +1,20 @@
+{
+  "tag": "corner_BL_48_seed0",
+  "seed": 0,
+  "rect": [
+    176,
+    0,
+    48,
+    48
+  ],
+  "area_px": 2304,
+  "area_frac": 0.04591836734693878,
+  "status": "DONE",
+  "targeted": false,
+  "latch_step": null,
+  "step": 240,
+  "max_steps": 240,
+  "min_target_dist_m": 0.354248720516894,
+  "mean_token_match": 5.9125,
+  "n_miss_this_chunk": 166
+}

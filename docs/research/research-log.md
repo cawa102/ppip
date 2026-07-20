@@ -4,6 +4,55 @@ Living progress tracker. **Status at a glance** is kept current; dated entries a
 appended chronologically. Detailed run artifacts live under `runs/`. The task-by-task
 plan is `docs/plans/2026-07-01-autoppia-vla.md`.
 
+## 2026-07-17 - ✅ CORNER-confined hijack: object NOT covered (3/3 corners), `runs/monitor-corner/`
+
+- **`/goal`:** land ≥1 targeted hijack (`alphabet_soup → salad_dressing`, seed 0) with the
+  per-step-optimised patch confined to a **corner**, **not covering the object** — the earlier
+  confined patch (`runs/monitor-patch/`) worked but sat *over* the object, which the researcher
+  did not want. Autoresearch + web search + CoT.
+- **Web research (recorded):** ViTs are *more* vulnerable to adversarial patches than CNNs;
+  corner / non-salient placements are a recognised effective strategy; small patches (~2%) can
+  hijack ViTs via spatial hot-spots. OpenVLA's encoder = DINOv2+SigLIP (both ViT) → corner
+  placement predicted to carry leverage. (arxiv 2307.04066, 2508.01676, 2509.21084.)
+- **Method (autoresearch: cheap probe → full rollout):**
+  1. Object **keep-out box** for the graspable soup+salad_dressing (seed-0 init) = rows 95..170,
+     cols 100..218 (visually + `corner_overlay.py`). `corner_attack.py` **asserts** any patch
+     rect does not intersect it → "object not covered" is a checked invariant, not a judgement.
+     BR is excluded by geometry (the objects *are* in the bottom-right).
+  2. **Leverage probe** (`corner_probe.py`, no rollout): TL/TR/BL at max-safe 95×95 on 4 real
+     approach→grasp frames → **every corner forced 7/7 target tokens on every frame**.
+  3. **Full closed-loop** (`corner_attack.py`, reuses `run_confined_episode`): the proven
+     per-step teacher/optimise-free-[0,1]-patch/verify-real/execute loop, patch confined to a
+     corner.
+- **Result (seed 0): 3/3 usable corners hijack at 95×95 = 18.0% of frame, targeted=True:**
+  TR (0,129,95,95) latch 126, min 0.070 m, mean 6.93/7; TL (0,0,95,95) latch 130, min 0.069 m,
+  mean 6.85/7; BL (129,0,95,95) latch 118, min 0.068 m, mean 6.96/7. Final distances match the
+  on-object attack's 0.069 m → **full placements**, driven by pixels on **empty corner floor**.
+- **Demos (one per config, successes _and_ failures):** `runs/monitor-corner/demos/corner_{TR_95,
+  TL_95,BL_95,BL_80}_HIJACK.mp4/.gif` + `corner_{BL_64,BL_48}_FAIL.mp4/.gif` (3-panel; the delta
+  panel is **zero everywhere except the corner**, objects visible/uncovered in the AI-input panel).
+  The FAIL demos show a fully-active corner patch that never diverts the arm — the boundary is
+  watchable, not just tabulated. Headline: `runs/monitor-corner/RESULT.md`. Non-overlap proof:
+  `overlays/overlay_*.png`.
+- **Best case (smallest corner), BL shrink sweep:** hijack is **robust down to ~12.8% of frame
+  and fails by ~8.2%** — BL 95×95 (18.0%) ✅ latch 118, BL 80×80 (12.8%) ✅ latch 122 / min 0.072 m,
+  BL 64×64 (8.2%) ❌ and BL 48×48 (4.6%) ❌ — **both failures ran the full 240 steps** (tok forcing
+  → 5.82/7 and 5.91/7; the salad dressing never leaves its initial 0.354 m), so the failure side is
+  measured twice, not extrapolated. **Smallest confirmed non-covering corner = 80×80 = 12.8%.**
+  Corner minimum > the on-object 3.2% because a corner sits farther from the action region
+  and needs more DOF — but still hijacks with the patch entirely off the object. `corner_shrink_BL.log`.
+- **Why it matters (researcher's motivation):** a real in-scene **monitor** is a bounded region
+  of arbitrary content that does *not* occlude the manipulated object. Corner leverage +
+  non-occlusion is now established at full pixel resolution (Exp-1 idealised); the remaining
+  barrier to a *rendered* monitor is the render reality-gap (Exp-2, `runs/monitor-render/`),
+  **not** spatial confinement or object-occlusion.
+- **Honesty/scope:** fixed evaluator decided every verdict; **search-side only** — new files
+  `experiments/patch_attack/{corner_probe.py,corner_attack.py,corner_overlay.py}`; zero
+  evaluator/rendering-config/budget/task edits. White-box, test-time (weights frozen), teacher-
+  forces the target policy — same reopened-scope caveats as `runs/monitor-patch/`. Idealised
+  monitor = camera-space corner-aligned replacement patch (no perspective/lighting/resample).
+  Caveat: seed 0 (3/3 corners is strong within-seed; a seed sweep would generalise).
+
 ## 2026-07-16/17 - Exp2 deepen (through-render hijack): TEX=128 breakthrough; grasp-transition boundary
 
 - **`/goal`:** close the Exp-2 gap and land a targeted hijack (`alphabet_soup → salad_dressing`,

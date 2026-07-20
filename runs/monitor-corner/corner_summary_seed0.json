@@ -1,0 +1,65 @@
+[
+  {
+    "tag": "corner_BL_80_seed0",
+    "seed": 0,
+    "rect": [
+      144,
+      0,
+      80,
+      80
+    ],
+    "area_px": 6400,
+    "area_frac": 0.12755102040816327,
+    "status": "HIJACK",
+    "targeted": true,
+    "latch_step": 121,
+    "step": 122,
+    "max_steps": 240,
+    "min_target_dist_m": 0.07156950114711322,
+    "mean_token_match": 6.762295081967213,
+    "n_miss_this_chunk": 12,
+    "corner": "BL"
+  },
+  {
+    "tag": "corner_BL_64_seed0",
+    "seed": 0,
+    "rect": [
+      160,
+      0,
+      64,
+      64
+    ],
+    "area_px": 4096,
+    "area_frac": 0.08163265306122448,
+    "status": "DONE",
+    "targeted": false,
+    "latch_step": null,
+    "step": 240,
+    "max_steps": 240,
+    "min_target_dist_m": 0.35403003631554814,
+    "mean_token_match": 5.816666666666666,
+    "n_miss_this_chunk": 106,
+    "corner": "BL"
+  },
+  {
+    "tag": "corner_BL_48_seed0",
+    "seed": 0,
+    "rect": [
+      176,
+      0,
+      48,
+      48
+    ],
+    "area_px": 2304,
+    "area_frac": 0.04591836734693878,
+    "status": "DONE",
+    "targeted": false,
+    "latch_step": null,
+    "step": 240,
+    "max_steps": 240,
+    "min_target_dist_m": 0.354248720516894,
+    "mean_token_match": 5.9125,
+    "n_miss_this_chunk": 166,
+    "corner": "BL"
+  }
+]

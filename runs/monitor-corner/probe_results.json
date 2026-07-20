@@ -1,0 +1,74 @@
+[
+  {
+    "corner": "TL",
+    "size": 95,
+    "rect": [
+      0,
+      0,
+      95,
+      95
+    ],
+    "frames": [
+      0,
+      30,
+      60,
+      90
+    ],
+    "matches": [
+      7,
+      7,
+      7,
+      7
+    ],
+    "mean_match": 7.0,
+    "min_match": 7
+  },
+  {
+    "corner": "TR",
+    "size": 95,
+    "rect": [
+      0,
+      129,
+      95,
+      95
+    ],
+    "frames": [
+      0,
+      30,
+      60,
+      90
+    ],
+    "matches": [
+      7,
+      7,
+      7,
+      7
+    ],
+    "mean_match": 7.0,
+    "min_match": 7
+  },
+  {
+    "corner": "BL",
+    "size": 95,
+    "rect": [
+      129,
+      0,
+      95,
+      95
+    ],
+    "frames": [
+      0,
+      30,
+      60,
+      90
+    ],
+    "matches": [
+      7,
+      7,
+      7,
+      7
+    ],
+    "mean_match": 7.0,
+    "min_match": 7
+  }
+]
