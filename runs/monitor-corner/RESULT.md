@@ -278,8 +278,9 @@ counts, and it was started and then stopped: at 48×48 the escalated loop ran at
 this job's budget. The gate has exactly **one** confirmed correspondence so far (64×64: gate 0.125 →
 rollout failed; gate 1.000 → rollout hijacked), so treat it as *suggestive*, not as evidence. The
 honest statement is: **confirmed non-occluding corner hijack = 8.2%; 4.6% is open-loop-plausible and
-untested.** The stopped run's checkpoint (`state_corner_BL_48_seed0_esc_trial0.pkl`, 12-step
-resume) is left in place for a future session.
+untested.** The run was stopped before step 12, so **no checkpoint was written** — a future session
+starts it from scratch with
+`MC_SPECS="BL:48" MC_K=30 MC_MAXTRIES=10 MC_RESTARTS=3 MC_TAG_SUFFIX=_esc`.
 
 ## What this changes
 
