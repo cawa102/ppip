@@ -4,6 +4,38 @@ Living progress tracker. **Status at a glance** is kept current; dated entries a
 appended chronologically. Detailed run artifacts live under `runs/`. The task-by-task
 plan is `docs/plans/2026-07-01-autoppia-vla.md`.
 
+## 2026-07-20 - 🔧 Corner failures re-read: the 64×64 "failure" is an in-between state (correction + handoff)
+
+- **Correction to the 2026-07-17 entry.** The corner shrink-sweep failures were written up as clean
+  denials ("arm never diverts", "keeps the soup"). **That was an inference, not a measurement, and
+  it is wrong.** Frame evidence (`rec_BL_64/scene/`): from ~step 60 the arm is diverted to the
+  **salad dressing**; from step 110→239 the **open gripper straddles the dressing without closing**;
+  the soup is never touched and the basket is empty. The robot completes **neither** task. 48×48 is
+  the weaker same shape. `min_target_dist` stays 0.354 m because the *object* is never lifted.
+- **Root cause of the mistake:** `commanded_success` is **not recorded** by the confined-patch
+  harness — `run_confined_episode` binds the env `done` flag (`monitor_patch_attack.py:200`), which
+  *is* the user-task predicate since the env is built from `resolved_user`, and drops it. Fixing
+  that is Task A of the handoff below.
+- **Consequence:** the size boundary separates **grasp from approach**, not attack from no-attack —
+  the same wall as the Exp-2 grasp transition, but here with **no render in the path**, so the cause
+  is degrees-of-freedom / optimisation effort rather than the render low-pass.
+- **Also corrected:** the 4.6% (48×48) point had been recorded as "SIGKILLed / incomplete"; it in
+  fact ran the full 240 steps (`targeted=False`, mean tok 5.91/7).
+- **Demos:** now one 3-panel video+GIF per config in `runs/monitor-corner/demos/`, **failures
+  included** with honest captions ("NEITHER task: approach hijacked, stalls ON the dressing, never
+  grasps"). Standing researcher instruction: never ship only the success pattern.
+- **Measurement trap recorded:** `mean_token_match` is inflated by *instruction agreement*
+  (GATE-B: user- vs target-instructed OpenVLA agree ~6.88/7 on rollout frames). Our own data shows
+  it running backwards — 48×48 scores 5.91 vs 64×64's 5.82 while being further from a hijack. Use
+  **decisive-frame** forcing (frames where user and target actions differ) instead.
+- **➡️ NEXT SESSION — START HERE (researcher handoff, `/goal`):**
+  `docs/plans/2026-07-20-corner64-effort-push.md` — can the 64×64 corner grasp be reached with more
+  optimisation effort? (A: instrument `commanded_success` + eef-redirection diagnostic; B: gated
+  decisive-frame probe, open-loop; C: escalated rollout `MC_K`/`MC_MAXTRIES`/warm-start/trials;
+  D: clean/blank/random controls). Note the 64×64 run reused the 95×95 effort defaults (`MC_K=10`,
+  `MC_MAXTRIES=6`) — the headroom is real and untried. Either outcome is a result: hijack at 8.2%,
+  or directed DoS + partial redirection at 8.2% with zero object occlusion (the Exp-3 metric).
+
 ## 2026-07-17 - ✅ CORNER-confined hijack: object NOT covered (3/3 corners), `runs/monitor-corner/`
 
 - **`/goal`:** land ≥1 targeted hijack (`alphabet_soup → salad_dressing`, seed 0) with the
@@ -37,8 +69,14 @@ plan is `docs/plans/2026-07-01-autoppia-vla.md`.
 - **Best case (smallest corner), BL shrink sweep:** hijack is **robust down to ~12.8% of frame
   and fails by ~8.2%** — BL 95×95 (18.0%) ✅ latch 118, BL 80×80 (12.8%) ✅ latch 122 / min 0.072 m,
   BL 64×64 (8.2%) ❌ and BL 48×48 (4.6%) ❌ — **both failures ran the full 240 steps** (tok forcing
-  → 5.82/7 and 5.91/7; the salad dressing never leaves its initial 0.354 m), so the failure side is
-  measured twice, not extrapolated. **Smallest confirmed non-covering corner = 80×80 = 12.8%.**
+  → 5.82/7 and 5.91/7), so the failure side is measured twice, not extrapolated. **But neither is a
+  clean denial:** at 64×64 the frames show the arm **diverted to the salad dressing from ~step 60**,
+  the open gripper **straddling it from step 110 to 239 without ever closing**, the soup untouched
+  and the basket empty — the robot completes *neither* task. `min_target_dist` stays 0.354 m because
+  the *object* is never lifted, not because the arm ignored the attack. **The size boundary separates
+  grasp from approach**, matching the Exp-2 grasp-transition wall. Caveat: `commanded_success` is
+  **not recorded** by this harness (`monitor_patch_attack.py:200` binds the env `done` — the user-task
+  predicate — and drops it), so "user task failed" here is read off frames, not the predicate. **Smallest confirmed non-covering corner = 80×80 = 12.8%.**
   Corner minimum > the on-object 3.2% because a corner sits farther from the action region
   and needs more DOF — but still hijacks with the patch entirely off the object. `corner_shrink_BL.log`.
 - **Why it matters (researcher's motivation):** a real in-scene **monitor** is a bounded region
