@@ -7,6 +7,14 @@ Usage:
     --pair  renders the true scene (left) beside the attacker-perturbed policy input (right).
     --delta adds a third panel: the per-frame perturbation delta = policy_input - clean_input,
             gray-centered and amplified (env DELTA_AMP, default 3x) so the noise is legible.
+
+Env knobs:
+  LABEL_L/LABEL_M/LABEL_R  per-panel captions.
+  LEFT_SCENE_DIR           frames dir (containing f####.png) to use for the LEFT panel instead
+                           of <frames_dir>/scene — e.g. a CLEAN baseline rollout, so the left
+                           panel shows the *user's expected action* rather than the attacked
+                           room camera. The two sequences are aligned by step index and the
+                           shorter one holds its last frame, so both narratives finish.
 """
 
 from __future__ import annotations
@@ -26,6 +34,7 @@ DELTA_AMP = float(os.environ.get("DELTA_AMP", "3.0"))  # noise-panel amplificati
 LABEL_L = os.environ.get("LABEL_L", "room camera (reality)")
 LABEL_M = os.environ.get("LABEL_M", "robot's AI input (attacked)")
 LABEL_R = os.environ.get("LABEL_R", f"attacker's added noise (delta x{DELTA_AMP:g})")
+LEFT_SCENE_DIR = os.environ.get("LEFT_SCENE_DIR", "")  # optional independent left-panel rollout
 
 
 def _load(p: str, h: int) -> Image.Image:
@@ -91,11 +100,20 @@ def main() -> None:
     scene = sorted(glob.glob(os.path.join(frames_dir, "scene", "f*.png")))
     if not scene:
         raise SystemExit(f"no frames in {frames_dir}/scene")
+    # The left panel may come from a different rollout (e.g. the clean/expected one). Both
+    # sequences start from the same init state, so align by index and hold the shorter one's
+    # last frame — neither story gets cut off.
+    left = sorted(glob.glob(os.path.join(LEFT_SCENE_DIR, "f*.png"))) if LEFT_SCENE_DIR else scene
+    if not left:
+        raise SystemExit(f"no frames in LEFT_SCENE_DIR={LEFT_SCENE_DIR}")
+    n_out = max(len(scene), len(left))
     frames = []
-    for sp in scene:
+    for i in range(n_out):
+        sp = scene[min(i, len(scene) - 1)]
+        lp = left[min(i, len(left) - 1)]
         bn = os.path.basename(sp)
         panels: list[tuple[Image.Image, str, tuple[int, int, int]]] = [
-            (_load(sp, OUT_H), LABEL_L, (120, 255, 120)),
+            (_load(lp, OUT_H), LABEL_L, (120, 255, 120)),
         ]
         if pair:
             pp = os.path.join(frames_dir, "policy_input", bn)
@@ -118,7 +136,7 @@ def main() -> None:
     imageio.mimsave(out_mp4, frames, fps=FPS, quality=8, macro_block_size=1)
     gif = out_mp4.rsplit(".", 1)[0] + ".gif"
     imageio.mimsave(gif, frames[:: max(1, FPS // 10)], duration=1.0 / 10, loop=0)
-    print(f"[video] wrote {out_mp4} ({len(scene)} frames) and {gif}", flush=True)
+    print(f"[video] wrote {out_mp4} ({n_out} frames) and {gif}", flush=True)
 
 
 if __name__ == "__main__":

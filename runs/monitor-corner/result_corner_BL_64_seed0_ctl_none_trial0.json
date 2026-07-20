@@ -1,0 +1,41 @@
+{
+  "tag": "corner_BL_64_seed0_ctl_none",
+  "seed": 0,
+  "rect": [
+    160,
+    0,
+    64,
+    64
+  ],
+  "area_px": 4096,
+  "area_frac": 0.08163265306122448,
+  "patch_mode": "none",
+  "effort": {
+    "k": 10,
+    "maxtries": 6,
+    "lr": 0.03,
+    "restarts": 1,
+    "warm_start": false,
+    "decisive_boost": 1
+  },
+  "status": "DONE",
+  "targeted": false,
+  "latch_step": null,
+  "commanded_success": true,
+  "commanded_step": 191,
+  "commanded_success_final_state": true,
+  "step": 240,
+  "max_steps": 240,
+  "min_target_dist_m": 0.3542481956909386,
+  "mean_token_match": 3.379166666666667,
+  "n_miss_this_chunk": 239,
+  "n_decisive_frames": 229,
+  "mean_decisive_forcing": 0.0,
+  "redirection": {
+    "min_eef_to_target_obj_m": 0.20130129100653704,
+    "min_eef_to_target_obj_step": 42,
+    "min_eef_to_user_obj_m": 0.03297980218178363,
+    "min_eef_to_user_obj_step": 90,
+    "final_gripper_open": 0.07965312783385292
+  }
+}

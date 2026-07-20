@@ -73,6 +73,12 @@ def main() -> None:
     k = int(os.environ.get("MC_K", "10"))
     maxtries = int(os.environ.get("MC_MAXTRIES", "6"))
     trial = os.environ.get("MC_TRIAL", "0")
+    # Effort headroom + controls (all default to the originally-run configuration).
+    mode = os.environ.get("MC_MODE", "optimize")  # optimize | blank | random | none
+    restarts = int(os.environ.get("MC_RESTARTS", "1"))
+    warm_start = os.environ.get("MC_WARM", "0") == "1"
+    decisive_boost = int(os.environ.get("MC_DEC_BOOST", "1"))
+    suffix = os.environ.get("MC_TAG_SUFFIX", "")
 
     for corner, s in specs:
         assert_no_object_overlap(corner_rect(corner, s))
@@ -83,13 +89,17 @@ def main() -> None:
     summary = []
     for corner, s in specs:
         rect = corner_rect(corner, s)
-        tag = f"corner_{corner}_{s}_seed{SEED}"
-        rec = os.path.join(RUN_DIR, f"rec_{corner}_{s}") if record else ""
+        tag = f"corner_{corner}_{s}_seed{SEED}{suffix}"
+        rec = os.path.join(RUN_DIR, f"rec_{corner}_{s}{suffix}") if record else ""
         print(f"\n===== CORNER {corner} size {s} rect={rect} "
-              f"({s * s / (224 * 224):.1%} of frame) =====", flush=True)
+              f"({s * s / (224 * 224):.1%} of frame) mode={mode} "
+              f"k={k} maxtries={maxtries} restarts={restarts} warm={warm_start} "
+              f"dec_boost={decisive_boost} =====", flush=True)
         result = run_confined_episode(
             backend, rect=rect, seed=SEED, max_steps=MAX_STEPS, chunk=MAX_STEPS + 10,
             k=k, lr=lr, maxtries=maxtries, trial=trial, run_dir=RUN_DIR, tag=tag, record_dir=rec,
+            patch_mode=mode, restarts=restarts, warm_start=warm_start,
+            decisive_boost=decisive_boost,
         )
         result["corner"] = corner
         summary.append(result)
@@ -98,10 +108,12 @@ def main() -> None:
 
     print("\n===== CORNER SUMMARY =====", flush=True)
     for r in summary:
-        print(f"  {r['corner']}:{r['rect']}  area={r['area_frac']:.1%}  "
-              f"targeted={r['targeted']}  latch={r['latch_step']}  "
-              f"min_dist={r['min_target_dist_m']}  mean_match={r['mean_token_match']:.2f}",
-              flush=True)
+        red = r.get("redirection", {})
+        print(f"  {r['corner']}:{r['rect']}  area={r['area_frac']:.1%}  mode={r.get('patch_mode')}  "
+              f"targeted={r['targeted']}  commanded={r.get('commanded_success')}  "
+              f"latch={r['latch_step']}  min_dist={r['min_target_dist_m']}  "
+              f"decisive_forcing={r.get('mean_decisive_forcing')}  "
+              f"min_eef->tgt={red.get('min_eef_to_target_obj_m')}", flush=True)
 
 
 if __name__ == "__main__":

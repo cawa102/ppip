@@ -1,27 +1,6 @@
 [
   {
-    "tag": "corner_BL_80_seed0",
-    "seed": 0,
-    "rect": [
-      144,
-      0,
-      80,
-      80
-    ],
-    "area_px": 6400,
-    "area_frac": 0.12755102040816327,
-    "status": "HIJACK",
-    "targeted": true,
-    "latch_step": 121,
-    "step": 122,
-    "max_steps": 240,
-    "min_target_dist_m": 0.07156950114711322,
-    "mean_token_match": 6.762295081967213,
-    "n_miss_this_chunk": 12,
-    "corner": "BL"
-  },
-  {
-    "tag": "corner_BL_64_seed0",
+    "tag": "corner_BL_64_seed0_esc_t1",
     "seed": 0,
     "rect": [
       160,
@@ -31,35 +10,35 @@
     ],
     "area_px": 4096,
     "area_frac": 0.08163265306122448,
-    "status": "DONE",
-    "targeted": false,
-    "latch_step": null,
-    "step": 240,
+    "patch_mode": "optimize",
+    "effort": {
+      "k": 30,
+      "maxtries": 10,
+      "lr": 0.03,
+      "restarts": 3,
+      "warm_start": false,
+      "decisive_boost": 1
+    },
+    "status": "HIJACK",
+    "targeted": true,
+    "latch_step": 130,
+    "commanded_success": false,
+    "commanded_step": null,
+    "commanded_success_final_state": false,
+    "step": 131,
     "max_steps": 240,
-    "min_target_dist_m": 0.35403003631554814,
-    "mean_token_match": 5.816666666666666,
-    "n_miss_this_chunk": 106,
-    "corner": "BL"
-  },
-  {
-    "tag": "corner_BL_48_seed0",
-    "seed": 0,
-    "rect": [
-      176,
-      0,
-      48,
-      48
-    ],
-    "area_px": 2304,
-    "area_frac": 0.04591836734693878,
-    "status": "DONE",
-    "targeted": false,
-    "latch_step": null,
-    "step": 240,
-    "max_steps": 240,
-    "min_target_dist_m": 0.354248720516894,
-    "mean_token_match": 5.9125,
-    "n_miss_this_chunk": 166,
+    "min_target_dist_m": 0.06907723825890985,
+    "mean_token_match": 7.0,
+    "n_miss_this_chunk": 0,
+    "n_decisive_frames": 123,
+    "mean_decisive_forcing": 1.0,
+    "redirection": {
+      "min_eef_to_target_obj_m": 0.04221379354907372,
+      "min_eef_to_target_obj_step": 65,
+      "min_eef_to_user_obj_m": 0.22121241356762505,
+      "min_eef_to_user_obj_step": 60,
+      "final_gripper_open": 0.03708180720364369
+    },
     "corner": "BL"
   }
 ]

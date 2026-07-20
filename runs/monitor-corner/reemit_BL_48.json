@@ -1,0 +1,37 @@
+{
+  "tag": "BL_48",
+  "seed": 0,
+  "n_steps": 240,
+  "commanded_success": false,
+  "commanded_step": null,
+  "commanded_success_final_state": false,
+  "targeted_success": false,
+  "targeted_latch_step": null,
+  "targeted_success_final_state": false,
+  "min_target_obj_region_dist_m": 0.354248720516894,
+  "redirection": {
+    "min_eef_to_target_obj_m": 0.10483797613206078,
+    "min_eef_to_target_obj_step": 163,
+    "min_eef_to_user_obj_m": 0.07814421219530493,
+    "min_eef_to_user_obj_step": 239,
+    "final_eef_to_target_obj_m": 0.14599536870192684,
+    "final_eef_to_user_obj_m": 0.07814421219530493,
+    "target_obj_displacement_m": 1.7666093899408397e-10,
+    "user_obj_displacement_m": 1.084333621584488e-13
+  },
+  "entities": {
+    "target_obj": "salad_dressing_1",
+    "target_region": "basket_1_contain_region",
+    "user_obj": "alphabet_soup_1",
+    "user_region": "basket_1_contain_region"
+  },
+  "source_rec_dir": "/home/40473058@eeecs.qub.ac.uk/autoresearch/runs/monitor-corner/rec_BL_48",
+  "replay_fidelity": {
+    "orig_min_target_dist_m": 0.354248720516894,
+    "replay_min_target_dist_m": 0.354248720516894,
+    "abs_drift_m": 0.0,
+    "orig_targeted": false,
+    "replay_targeted": false,
+    "faithful": true
+  }
+}

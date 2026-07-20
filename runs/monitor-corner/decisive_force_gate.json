@@ -1,0 +1,382 @@
+[
+  {
+    "corner": "BL",
+    "size": 64,
+    "rect": [
+      160,
+      0,
+      64,
+      64
+    ],
+    "area_frac": 0.08163265306122448,
+    "budget": "default",
+    "budget_params": {
+      "k": 10,
+      "maxtries": 6,
+      "restarts": 1
+    },
+    "cells": [
+      {
+        "frame": 40,
+        "n_decisive_dims": 3,
+        "decisive_hits": 1,
+        "decisive_forcing": 0.3333333333333333,
+        "full_match": 5,
+        "full_7of7": false,
+        "n_real_evals": 6
+      },
+      {
+        "frame": 70,
+        "n_decisive_dims": 5,
+        "decisive_hits": 3,
+        "decisive_forcing": 0.6,
+        "full_match": 5,
+        "full_7of7": false,
+        "n_real_evals": 6
+      },
+      {
+        "frame": 95,
+        "n_decisive_dims": 5,
+        "decisive_hits": 3,
+        "decisive_forcing": 0.6,
+        "full_match": 4,
+        "full_7of7": false,
+        "n_real_evals": 6
+      },
+      {
+        "frame": 105,
+        "n_decisive_dims": 4,
+        "decisive_hits": 3,
+        "decisive_forcing": 0.75,
+        "full_match": 5,
+        "full_7of7": false,
+        "n_real_evals": 6
+      },
+      {
+        "frame": 110,
+        "n_decisive_dims": 4,
+        "decisive_hits": 3,
+        "decisive_forcing": 0.75,
+        "full_match": 6,
+        "full_7of7": false,
+        "n_real_evals": 6
+      },
+      {
+        "frame": 115,
+        "n_decisive_dims": 5,
+        "decisive_hits": 0,
+        "decisive_forcing": 0.0,
+        "full_match": 2,
+        "full_7of7": false,
+        "n_real_evals": 6
+      },
+      {
+        "frame": 125,
+        "n_decisive_dims": 3,
+        "decisive_hits": 3,
+        "decisive_forcing": 1.0,
+        "full_match": 7,
+        "full_7of7": true,
+        "n_real_evals": 4
+      },
+      {
+        "frame": 135,
+        "n_decisive_dims": 4,
+        "decisive_hits": 3,
+        "decisive_forcing": 0.75,
+        "full_match": 6,
+        "full_7of7": false,
+        "n_real_evals": 6
+      }
+    ],
+    "n_decisive_frames": 8,
+    "mean_decisive_forcing": 0.5979166666666667,
+    "frac_decisive_frames_7of7": 0.125,
+    "mean_full_match": 5.0
+  },
+  {
+    "corner": "BL",
+    "size": 64,
+    "rect": [
+      160,
+      0,
+      64,
+      64
+    ],
+    "area_frac": 0.08163265306122448,
+    "budget": "escalated",
+    "budget_params": {
+      "k": 30,
+      "maxtries": 10,
+      "restarts": 3
+    },
+    "cells": [
+      {
+        "frame": 40,
+        "n_decisive_dims": 3,
+        "decisive_hits": 3,
+        "decisive_forcing": 1.0,
+        "full_match": 7,
+        "full_7of7": true,
+        "n_real_evals": 2
+      },
+      {
+        "frame": 70,
+        "n_decisive_dims": 5,
+        "decisive_hits": 5,
+        "decisive_forcing": 1.0,
+        "full_match": 7,
+        "full_7of7": true,
+        "n_real_evals": 6
+      },
+      {
+        "frame": 95,
+        "n_decisive_dims": 5,
+        "decisive_hits": 5,
+        "decisive_forcing": 1.0,
+        "full_match": 7,
+        "full_7of7": true,
+        "n_real_evals": 3
+      },
+      {
+        "frame": 105,
+        "n_decisive_dims": 4,
+        "decisive_hits": 4,
+        "decisive_forcing": 1.0,
+        "full_match": 7,
+        "full_7of7": true,
+        "n_real_evals": 2
+      },
+      {
+        "frame": 110,
+        "n_decisive_dims": 4,
+        "decisive_hits": 4,
+        "decisive_forcing": 1.0,
+        "full_match": 7,
+        "full_7of7": true,
+        "n_real_evals": 4
+      },
+      {
+        "frame": 115,
+        "n_decisive_dims": 5,
+        "decisive_hits": 5,
+        "decisive_forcing": 1.0,
+        "full_match": 7,
+        "full_7of7": true,
+        "n_real_evals": 26
+      },
+      {
+        "frame": 125,
+        "n_decisive_dims": 3,
+        "decisive_hits": 3,
+        "decisive_forcing": 1.0,
+        "full_match": 7,
+        "full_7of7": true,
+        "n_real_evals": 2
+      },
+      {
+        "frame": 135,
+        "n_decisive_dims": 4,
+        "decisive_hits": 4,
+        "decisive_forcing": 1.0,
+        "full_match": 7,
+        "full_7of7": true,
+        "n_real_evals": 7
+      }
+    ],
+    "n_decisive_frames": 8,
+    "mean_decisive_forcing": 1.0,
+    "frac_decisive_frames_7of7": 1.0,
+    "mean_full_match": 7.0
+  },
+  {
+    "corner": "BL",
+    "size": 80,
+    "rect": [
+      144,
+      0,
+      80,
+      80
+    ],
+    "area_frac": 0.12755102040816327,
+    "budget": "default",
+    "budget_params": {
+      "k": 10,
+      "maxtries": 6,
+      "restarts": 1
+    },
+    "cells": [
+      {
+        "frame": 40,
+        "n_decisive_dims": 3,
+        "decisive_hits": 3,
+        "decisive_forcing": 1.0,
+        "full_match": 7,
+        "full_7of7": true,
+        "n_real_evals": 4
+      },
+      {
+        "frame": 70,
+        "n_decisive_dims": 5,
+        "decisive_hits": 3,
+        "decisive_forcing": 0.6,
+        "full_match": 4,
+        "full_7of7": false,
+        "n_real_evals": 6
+      },
+      {
+        "frame": 95,
+        "n_decisive_dims": 5,
+        "decisive_hits": 5,
+        "decisive_forcing": 1.0,
+        "full_match": 7,
+        "full_7of7": true,
+        "n_real_evals": 4
+      },
+      {
+        "frame": 105,
+        "n_decisive_dims": 4,
+        "decisive_hits": 4,
+        "decisive_forcing": 1.0,
+        "full_match": 7,
+        "full_7of7": true,
+        "n_real_evals": 5
+      },
+      {
+        "frame": 110,
+        "n_decisive_dims": 4,
+        "decisive_hits": 4,
+        "decisive_forcing": 1.0,
+        "full_match": 7,
+        "full_7of7": true,
+        "n_real_evals": 4
+      },
+      {
+        "frame": 115,
+        "n_decisive_dims": 5,
+        "decisive_hits": 0,
+        "decisive_forcing": 0.0,
+        "full_match": 2,
+        "full_7of7": false,
+        "n_real_evals": 6
+      },
+      {
+        "frame": 125,
+        "n_decisive_dims": 3,
+        "decisive_hits": 3,
+        "decisive_forcing": 1.0,
+        "full_match": 7,
+        "full_7of7": true,
+        "n_real_evals": 3
+      },
+      {
+        "frame": 135,
+        "n_decisive_dims": 4,
+        "decisive_hits": 4,
+        "decisive_forcing": 1.0,
+        "full_match": 7,
+        "full_7of7": true,
+        "n_real_evals": 6
+      }
+    ],
+    "n_decisive_frames": 8,
+    "mean_decisive_forcing": 0.825,
+    "frac_decisive_frames_7of7": 0.75,
+    "mean_full_match": 6.0
+  },
+  {
+    "corner": "BL",
+    "size": 80,
+    "rect": [
+      144,
+      0,
+      80,
+      80
+    ],
+    "area_frac": 0.12755102040816327,
+    "budget": "escalated",
+    "budget_params": {
+      "k": 30,
+      "maxtries": 10,
+      "restarts": 3
+    },
+    "cells": [
+      {
+        "frame": 40,
+        "n_decisive_dims": 3,
+        "decisive_hits": 3,
+        "decisive_forcing": 1.0,
+        "full_match": 7,
+        "full_7of7": true,
+        "n_real_evals": 3
+      },
+      {
+        "frame": 70,
+        "n_decisive_dims": 5,
+        "decisive_hits": 5,
+        "decisive_forcing": 1.0,
+        "full_match": 7,
+        "full_7of7": true,
+        "n_real_evals": 3
+      },
+      {
+        "frame": 95,
+        "n_decisive_dims": 5,
+        "decisive_hits": 5,
+        "decisive_forcing": 1.0,
+        "full_match": 7,
+        "full_7of7": true,
+        "n_real_evals": 2
+      },
+      {
+        "frame": 105,
+        "n_decisive_dims": 4,
+        "decisive_hits": 4,
+        "decisive_forcing": 1.0,
+        "full_match": 7,
+        "full_7of7": true,
+        "n_real_evals": 2
+      },
+      {
+        "frame": 110,
+        "n_decisive_dims": 4,
+        "decisive_hits": 4,
+        "decisive_forcing": 1.0,
+        "full_match": 7,
+        "full_7of7": true,
+        "n_real_evals": 2
+      },
+      {
+        "frame": 115,
+        "n_decisive_dims": 5,
+        "decisive_hits": 5,
+        "decisive_forcing": 1.0,
+        "full_match": 7,
+        "full_7of7": true,
+        "n_real_evals": 4
+      },
+      {
+        "frame": 125,
+        "n_decisive_dims": 3,
+        "decisive_hits": 3,
+        "decisive_forcing": 1.0,
+        "full_match": 7,
+        "full_7of7": true,
+        "n_real_evals": 1
+      },
+      {
+        "frame": 135,
+        "n_decisive_dims": 4,
+        "decisive_hits": 4,
+        "decisive_forcing": 1.0,
+        "full_match": 7,
+        "full_7of7": true,
+        "n_real_evals": 3
+      }
+    ],
+    "n_decisive_frames": 8,
+    "mean_decisive_forcing": 1.0,
+    "frac_decisive_frames_7of7": 1.0,
+    "mean_full_match": 7.0
+  }
+]
