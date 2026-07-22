@@ -71,6 +71,7 @@ def run_confined_episode(
     record_dir: str = "",
     user_task: str = C.USER_TASK,
     target_task: str = C.TARGET_TASK,
+    scene_task: str | None = None,
     patch_mode: str = "optimize",
     restarts: int = 1,
     warm_start: bool = False,
@@ -92,6 +93,17 @@ def run_confined_episode(
       ``decisive_boost`` -- multiply the inner steps on *decisive* frames (frames where USER- and
                             TARGET-instructed OpenVLA disagree), spending budget where instruction
                             actually has leverage instead of on frames both policies agree on.
+
+    ``scene_task`` (default ``user_task``) decouples *which LIBERO scene is built* from *which
+    instruction OpenVLA is given*. Needed for the cross-user-task study: ``libero_object`` tasks
+    do NOT share an object set (each instantiates target + basket + 5 task-specific distractors),
+    so e.g. the native "pick up the milk" scene contains no ``salad_dressing_1`` and cannot
+    adjudicate that hijack at all. Holding the scene at the alphabet-soup layout -- which contains
+    milk, cream cheese, tomato sauce, butter *and* salad dressing -- and swapping only the
+    instruction makes the commanded task the sole variable (identical pixels, init state and arm
+    pose). When it differs from ``user_task`` the env's ``done`` flag is the SCENE task's
+    predicate, not the user's, so it is recorded separately and ``commanded_success`` is decided
+    only by ``eval_goal_state(resolved_user.goal_state, ...)``.
     """
     if trial is not None:  # determinise EoT crop jitter for reproducibility
         _t = int(trial)
@@ -103,6 +115,9 @@ def run_confined_episode(
     os.makedirs(run_dir, exist_ok=True)
     resolved_user = resolve_task(user_task, suite="libero_object")
     resolved_target = resolve_task(target_task, suite="libero_object")
+    scene_task = scene_task or user_task
+    resolved_scene = resolve_task(scene_task, suite="libero_object")
+    cross_task = resolved_scene.task_id != resolved_user.task_id
     if backend._policy is None:
         backend._policy = backend._load_policy()
     model, processor, cfg, resize_size = backend._policy
@@ -114,7 +129,7 @@ def run_confined_episode(
     from experiments.robot.libero.libero_utils import get_libero_image
     from experiments.robot.robot_utils import invert_gripper_action, normalize_gripper_action
 
-    env, init_states, _desc, _obj = backend._build_env(resolved_user)
+    env, init_states, _desc, _obj = backend._build_env(resolved_scene)
     # Off-camera readable carrier so the injected-pipeline geometry matches other runs; the
     # ACTUAL attack is the camera-space replacement patch below, not this label.
     from rendering.inject import inject_prompt
@@ -163,6 +178,7 @@ def run_confined_episode(
     # --- trusted-side predicate + redirection instrumentation (diagnostic only) ---
     commanded = False
     commanded_step: int | None = None
+    scene_success = False  # env `done`: the SCENE task's predicate (== user's unless cross_task)
     step_trace: list[dict[str, Any]] = []
     warm_raw: torch.Tensor | None = None
     if record_dir:
@@ -263,10 +279,16 @@ def run_confined_episode(
         if not targeted and eval_goal_state(resolved_target.goal_state, ostates):
             targeted = True
             latch_step = step
-        # The env is built from resolved_user, so `done` IS the user-task predicate. It used to be
-        # bound and dropped here, which left the harness unable to say whether the USER's task
-        # succeeded -- i.e. unable to distinguish a hijack from a denial from a plain failure.
-        if not commanded and (bool(done) or eval_goal_state(resolved_user.goal_state, ostates)):
+        # The env is built from resolved_scene, so `done` is the SCENE task's predicate -- which
+        # IS the user-task predicate in the default (non-cross-task) case. It used to be bound and
+        # dropped here, which left the harness unable to say whether the USER's task succeeded --
+        # i.e. unable to distinguish a hijack from a denial from a plain failure. Under
+        # ``scene_task != user_task`` `done` belongs to the scene's own task, so the user verdict
+        # comes from the user goal-state predicate alone and `done` is recorded separately.
+        scene_success = scene_success or bool(done)
+        if not commanded and (
+            (bool(done) and not cross_task) or eval_goal_state(resolved_user.goal_state, ostates)
+        ):
             commanded = True
             commanded_step = step
         eef = np.asarray(obs["robot0_eef_pos"], dtype=float)
@@ -313,6 +335,8 @@ def run_confined_episode(
     result = {
         "tag": tag, "seed": seed, "rect": list(rect), "area_px": area, "area_frac": frac,
         "patch_mode": patch_mode,
+        "user_task": user_task, "target_task": target_task, "scene_task": scene_task,
+        "cross_task": bool(cross_task), "scene_task_success": bool(scene_success),
         "effort": {"k": k, "maxtries": maxtries, "lr": lr, "restarts": restarts,
                    "warm_start": warm_start, "decisive_boost": decisive_boost},
         "status": status, "targeted": bool(targeted), "latch_step": latch_step,

@@ -74,36 +74,57 @@ def _rect_mask(rect: tuple[int, int, int, int]) -> torch.Tensor:
 def probe_cell(
     model, processor, user_ids, image_u8: np.ndarray, rect: tuple[int, int, int, int],
     *, k: int, maxtries: int, lr: float,
+    user_task: str = C.USER_TASK, restarts: int = 1,
 ) -> dict:
-    """Optimise a corner replacement patch on one frame; return real-path token match."""
+    """Optimise a corner replacement patch on one frame; return real-path token match.
+
+    ``user_task`` is the instruction the patch must fool (defaults to the original
+    alphabet-soup user task, so existing callers are unchanged); ``user_ids`` must be
+    the tokenised prompt for that same instruction. ``restarts`` re-runs the inner
+    optimisation from a different basin and keeps the best real-path match, matching
+    the escalated effort used for the 64x64 corner hijack.
+
+    Also reports the *decisive* dims (where the un-attacked user-instructed policy and
+    the target teacher disagree on this frame) and how many of them were forced --
+    ``mean_token_match`` is inflated by agreement and must not be read as progress.
+    """
     img224 = torch.from_numpy(image_u8.astype(np.float32) / 255.0).permute(2, 0, 1)[None].to(DEVICE)
     mask = _rect_mask(rect)
     teacher = _real_tokens(model, processor, image_u8, C.TARGET_TASK).view(1, 7)
-    raw = torch.zeros(1, 3, 224, 224, device=DEVICE, requires_grad=True)
-    opt = torch.optim.Adam([raw], lr=lr)
-    best = (-1, None)
-    for _attempt in range(maxtries):
-        for _ in range(k):
-            patch01 = torch.sigmoid(raw)
-            composite = (img224 * (1 - mask) + patch01 * mask).clamp(0, 1)
-            side = vla_diff._CROP_SIDE + 0.03 * (torch.rand(1).item() - 0.5)
-            pv = vla_diff.preprocess(composite, side=side)
-            logits = vla_diff.action_token_logits(model, pv, user_ids, teacher)
-            loss = F.cross_entropy(logits.reshape(7, -1).float(), teacher.reshape(7))
-            opt.zero_grad(); loss.backward(); opt.step()
-        with torch.no_grad():
-            patch01 = torch.sigmoid(raw)
-            composite = (img224 * (1 - mask) + patch01 * mask).clamp(0, 1)
-            pu8 = (composite[0].permute(1, 2, 0).cpu().numpy() * 255).astype(np.uint8)
-        er = _real_tokens(model, processor, pu8, C.USER_TASK)
-        m = int((er == teacher.view(7)).sum())
-        if m > best[0]:
-            best = (m, None)
-        if m == 7:
+    clean_user = _real_tokens(model, processor, image_u8, user_task).view(7)
+    dec_dims = [i for i in range(7) if int(clean_user[i]) != int(teacher.view(7)[i])]
+    best: tuple[int, torch.Tensor | None] = (-1, None)
+    for _restart in range(max(1, restarts)):
+        raw = ((torch.zeros(1, 3, 224, 224, device=DEVICE) if _restart == 0
+                else torch.randn(1, 3, 224, 224, device=DEVICE) * 1.5).requires_grad_(True))
+        opt = torch.optim.Adam([raw], lr=lr)
+        for _attempt in range(maxtries):
+            for _ in range(k):
+                patch01 = torch.sigmoid(raw)
+                composite = (img224 * (1 - mask) + patch01 * mask).clamp(0, 1)
+                side = vla_diff._CROP_SIDE + 0.03 * (torch.rand(1).item() - 0.5)
+                pv = vla_diff.preprocess(composite, side=side)
+                logits = vla_diff.action_token_logits(model, pv, user_ids, teacher)
+                loss = F.cross_entropy(logits.reshape(7, -1).float(), teacher.reshape(7))
+                opt.zero_grad(); loss.backward(); opt.step()
+            with torch.no_grad():
+                patch01 = torch.sigmoid(raw)
+                composite = (img224 * (1 - mask) + patch01 * mask).clamp(0, 1)
+                pu8 = (composite[0].permute(1, 2, 0).cpu().numpy() * 255).astype(np.uint8)
+            er = _real_tokens(model, processor, pu8, user_task)
+            m = int((er == teacher.view(7)).sum())
+            if m > best[0]:
+                best = (m, er)
+            if m == 7:
+                break
+            for g in opt.param_groups:
+                g["lr"] = min(g["lr"] * 1.5, 0.3)
+        if best[0] == 7:
             break
-        for g in opt.param_groups:
-            g["lr"] = min(g["lr"] * 1.5, 0.3)
-    return {"match": best[0]}
+    er_best = best[1]
+    dec_hits = (0 if er_best is None
+                else sum(1 for i in dec_dims if int(er_best[i]) == int(teacher.view(7)[i])))
+    return {"match": best[0], "n_decisive": len(dec_dims), "decisive_hits": dec_hits}
 
 
 def main() -> None:
