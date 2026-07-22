@@ -1,16 +1,21 @@
 [
   {
-    "tag": "corner_BL_64_seed0_esc_t1",
+    "tag": "corner_BL_48_seed0_esc",
     "seed": 0,
     "rect": [
-      160,
+      176,
       0,
-      64,
-      64
+      48,
+      48
     ],
-    "area_px": 4096,
-    "area_frac": 0.08163265306122448,
+    "area_px": 2304,
+    "area_frac": 0.04591836734693878,
     "patch_mode": "optimize",
+    "user_task": "pick up the alphabet soup and place it in the basket",
+    "target_task": "pick up the salad dressing and place it in the basket",
+    "scene_task": "pick up the alphabet soup and place it in the basket",
+    "cross_task": false,
+    "scene_task_success": false,
     "effort": {
       "k": 30,
       "maxtries": 10,
@@ -21,23 +26,23 @@
     },
     "status": "HIJACK",
     "targeted": true,
-    "latch_step": 130,
+    "latch_step": 121,
     "commanded_success": false,
     "commanded_step": null,
     "commanded_success_final_state": false,
-    "step": 131,
+    "step": 122,
     "max_steps": 240,
-    "min_target_dist_m": 0.06907723825890985,
-    "mean_token_match": 7.0,
-    "n_miss_this_chunk": 0,
-    "n_decisive_frames": 123,
-    "mean_decisive_forcing": 1.0,
+    "min_target_dist_m": 0.06991298962014891,
+    "mean_token_match": 6.959016393442623,
+    "n_miss_this_chunk": 4,
+    "n_decisive_frames": 111,
+    "mean_decisive_forcing": 0.9884384384384385,
     "redirection": {
-      "min_eef_to_target_obj_m": 0.04221379354907372,
-      "min_eef_to_target_obj_step": 65,
-      "min_eef_to_user_obj_m": 0.22121241356762505,
-      "min_eef_to_user_obj_step": 60,
-      "final_gripper_open": 0.03708180720364369
+      "min_eef_to_target_obj_m": 0.04775629663121367,
+      "min_eef_to_target_obj_step": 53,
+      "min_eef_to_user_obj_m": 0.2140551539371517,
+      "min_eef_to_user_obj_step": 59,
+      "final_gripper_open": 0.019171442487891217
     },
     "corner": "BL"
   }
