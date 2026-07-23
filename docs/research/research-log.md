@@ -4,6 +4,44 @@ Living progress tracker. **Status at a glance** is kept current; dated entries a
 appended chronologically. Detailed run artifacts live under `runs/`. The task-by-task
 plan is `docs/plans/2026-07-01-autoppia-vla.md`.
 
+## 2026-07-23 - ✅ Corner size sweep to the floor: **32×32 = 2.0% of frame** hijacks (below the on-object minimum)
+
+- **Task:** continue the corner size-minimization below 48×48 (autoresearch: cheap open-loop gate →
+  closed-loop rollout), find the smallest hijacking corner patch, tuning budget/latch as needed and
+  reporting the cost. Seed 0, patch provably off the object.
+- **Sweep result (all `targeted=True`, full placements min dist 0.069–0.070 m, `commanded=False`,
+  confinement invariant = 0 |δ| outside the rect on every frame):**
+  | rect | area | budget that hijacked | latch | n_miss | wall-clock |
+  |---|---|---|---|---|---|
+  | 40×40 | **3.2%** | escalated (K30,t10,r3) | 117 | 11/118 | ~1h53m |
+  | 32×32 | **2.0%** | **warm-start** + K30,t12,r4 | **147** | 32/148 | ~4h34m |
+- **40×40 = 3.2% ties the on-object floor** (`runs/monitor-patch/`, the smallest patch that ever
+  hijacked *on* the object) — now matched with the patch entirely in a corner, off the object, at the
+  same escalated budget as 48×48.
+- **32×32 = 2.0% is a new smallest, below the on-object floor — and the cost is the finding.** The
+  escalated budget that carried 64/48/40 **failed** at 32 (missed the approach frames, e.g. 4/7 at
+  step 15, never grasped). The enabler was **warm-start** (`MC_WARM=1`): init each step's patch from
+  the previous step's solution, which stabilises forcing across the near-continuous frame sequence
+  (cold-start kept falling into weaker basins each frame). Warm-start + K30/t12/r4 forced the
+  mid-trajectory cleanly (7/7 steps 50–70) and carried the dressing to the basket — but **slowly**,
+  latching at step **147** (vs 117 for 40×40), so the step budget had to be raised past the ~130 the
+  larger patches used (`MC_MAX_STEPS=150`; latched with 3 steps to spare).
+- **Degradation is smooth and measured:** `n_miss` climbs monotonically with shrinking area
+  (0→4→11→32 for 64→48→40→32); the 32 patch is near-saturated (mean |δ| inside 90.9/255). Both say it
+  is working near its degrees-of-freedom limit.
+- **The gate paid off:** `corner_decisive_probe.py` ranked the frontier before any rollout — 40
+  escalated scored 7/8 (like 48, which hijacked) while 32 escalated scored ~3/8, correctly flagging
+  that 32 needed the stronger recipe. It never mispredicted a rollout in this sweep.
+- **Cost note (honest):** GPU-1 was thermally throttled by GPU-0's reserved task the whole time
+  (~1–4 min/step, 32 latched at ~4.5 h). One escalated 32 attempt was aborted early once the approach
+  misses were clear, then the warm-start rollout succeeded.
+- **Confirmed non-occluding corner minimum: 32×32 = 2.0% of frame** at seed 0. ≤ 24×24 (~1.1%)
+  untested (weak gate signal + multi-hour rollouts under the thermal wall). Demos:
+  `demos/corner_BL_{40_esc,32_warm}_HIJACK.mp4`; write-up `runs/monitor-corner/RESULT.md` §
+  "Pushing further down". Search side only — zero evaluator/rendering/config/budget/task edits.
+  Caveats unchanged (white-box, test-time, teacher-forced, idealised camera-space patch, seed 0;
+  in-scope readable result stays DoS-only).
+
 ## 2026-07-22 - ✅ Corner minimum drops again: 48×48 = **4.6% of frame** also hijacks (closed-loop confirmed)
 
 - **Followed up the one loose end from 2026-07-20:** the 48×48 (4.6%) gate had forced 7/7 on 8/8
