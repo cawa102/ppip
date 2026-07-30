@@ -1,0 +1,915 @@
+<meta charset="utf-8">
+<title>How a robot brain reads a photo — and what a sticker can't do to it</title>
+<style>
+:root {
+  color-scheme: light dark;
+  --bg: #ffffff; --fg: #1c1f24; --muted: #5b6470; --rule: #e3e7ec;
+  --card: #f7f9fb; --card-2: #eef2f6;
+  --accent: #2f6f4f; --accent-bg: #eaf4ee;
+  --img: #1f5fa8; --img-bg: #e8f0fa;
+  --txt: #8a5c06; --txt-bg: #fbf1de;
+  --alarm: #be3a22; --alarm-bg: #fbeae6;
+  --code-bg: #f6f8fa;
+  --shadow: 0 1px 2px rgba(20,30,45,.06);
+  --font-display: "Avenir Next", Avenir, Futura, "Century Gothic", "Trebuchet MS", system-ui, sans-serif;
+  --font-body: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  --font-mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #14171a; --fg: #e6e9ed; --muted: #9aa4b0; --rule: #2b3138;
+    --card: #1b1f24; --card-2: #222831;
+    --accent: #7fc4a0; --accent-bg: #1b2a22;
+    --img: #74acf0; --img-bg: #172436;
+    --txt: #e0a64a; --txt-bg: #2c2415;
+    --alarm: #f0654a; --alarm-bg: #331b17;
+    --code-bg: #1b1f24;
+    --shadow: 0 1px 2px rgba(0,0,0,.4);
+  }
+}
+:root[data-theme="light"] {
+  --bg: #ffffff; --fg: #1c1f24; --muted: #5b6470; --rule: #e3e7ec;
+  --card: #f7f9fb; --card-2: #eef2f6;
+  --accent: #2f6f4f; --accent-bg: #eaf4ee;
+  --img: #1f5fa8; --img-bg: #e8f0fa;
+  --txt: #8a5c06; --txt-bg: #fbf1de;
+  --alarm: #be3a22; --alarm-bg: #fbeae6;
+  --code-bg: #f6f8fa;
+  --shadow: 0 1px 2px rgba(20,30,45,.06);
+}
+:root[data-theme="dark"] {
+  --bg: #14171a; --fg: #e6e9ed; --muted: #9aa4b0; --rule: #2b3138;
+  --card: #1b1f24; --card-2: #222831;
+  --accent: #7fc4a0; --accent-bg: #1b2a22;
+  --img: #74acf0; --img-bg: #172436;
+  --txt: #e0a64a; --txt-bg: #2c2415;
+  --alarm: #f0654a; --alarm-bg: #331b17;
+  --code-bg: #1b1f24;
+  --shadow: 0 1px 2px rgba(0,0,0,.4);
+}
+
+* { box-sizing: border-box; }
+body {
+  margin: 0; padding: 0 1.25rem 5rem; background: var(--bg); color: var(--fg);
+  font: 16.5px/1.68 var(--font-body); -webkit-text-size-adjust: 100%;
+}
+.wrap { max-width: 880px; margin: 0 auto; }
+p { max-width: 66ch; }
+
+/* ---------- masthead ---------- */
+header { padding: 3.2rem 0 1.9rem; border-bottom: 1px solid var(--rule); }
+.eyebrow {
+  font-family: var(--font-display); font-size: .72rem; letter-spacing: .13em;
+  text-transform: uppercase; color: var(--accent); font-weight: 700; margin: 0 0 .75rem;
+}
+h1 {
+  font-family: var(--font-display); font-weight: 700;
+  font-size: clamp(1.75rem, 5vw, 2.6rem); line-height: 1.12; letter-spacing: -.015em;
+  margin: 0 0 .8rem; text-wrap: balance; max-width: 20ch;
+}
+.lede { font-size: 1.1rem; color: var(--muted); margin: 0; max-width: 60ch; }
+.who {
+  margin: 1.6rem 0 0; font-size: .84rem; color: var(--muted);
+  display: flex; flex-wrap: wrap; gap: .5rem 1.4rem;
+}
+.who b { color: var(--fg); font-weight: 650; }
+
+/* ---------- numbered signal rail ---------- */
+.station { display: grid; grid-template-columns: 2.9rem 1fr; gap: 0 1.2rem; margin-top: 3.2rem; }
+.rail { position: relative; display: flex; justify-content: center; }
+.rail::before {
+  content: ""; position: absolute; top: 2.9rem; bottom: -3.2rem; width: 2px;
+  background: var(--rule);
+}
+.station:last-of-type .rail::before { display: none; }
+.marker {
+  position: relative; z-index: 1; width: 2.9rem; height: 2.9rem; border-radius: 50%;
+  background: var(--accent-bg); border: 2px solid var(--accent); color: var(--accent);
+  font-family: var(--font-mono); font-weight: 700; font-size: .95rem;
+  display: flex; align-items: center; justify-content: center;
+}
+.station h2 {
+  font-family: var(--font-display); font-weight: 700; font-size: 1.4rem;
+  letter-spacing: -.01em; margin: .35rem 0 .2rem; text-wrap: balance;
+}
+.station .sub {
+  font-family: var(--font-mono); font-size: .76rem; color: var(--muted);
+  letter-spacing: .02em; margin: 0 0 1rem;
+}
+.station .body > :first-child { margin-top: 0; }
+.station .body > :last-child { margin-bottom: 0; }
+
+/* ---------- generic pieces ---------- */
+code {
+  font-family: var(--font-mono); font-size: .86em; background: var(--code-bg);
+  padding: .12em .38em; border-radius: 4px; border: 1px solid var(--rule);
+  white-space: nowrap;
+}
+.panel {
+  background: var(--card); border: 1px solid var(--rule); border-radius: 10px;
+  padding: 1.15rem 1.25rem; margin: 1.5rem 0; box-shadow: var(--shadow);
+}
+.panel > :first-child { margin-top: 0; }
+.panel > :last-child { margin-bottom: 0; }
+.plabel {
+  font-family: var(--font-display); text-transform: uppercase; letter-spacing: .1em;
+  font-size: .68rem; font-weight: 700; color: var(--muted); margin: 0 0 .7rem;
+}
+.note { background: var(--accent-bg); border-left: 3px solid var(--accent);
+  padding: .9rem 1.1rem; border-radius: 0 6px 6px 0; margin: 1.4rem 0; }
+.note p { margin: 0; max-width: 62ch; }
+.note p + p { margin-top: .6rem; }
+.big-idea {
+  border: 2px solid var(--accent); background: var(--accent-bg);
+  border-radius: 10px; padding: 1.3rem 1.4rem; margin: 1.6rem 0;
+}
+.big-idea p { margin: 0; font-size: 1.06rem; max-width: 58ch; }
+.big-idea p + p { margin-top: .7rem; }
+.tag-img { color: var(--img); font-weight: 700; }
+.tag-txt { color: var(--txt); font-weight: 700; }
+.tag-bad { color: var(--alarm); font-weight: 700; }
+
+/* ---------- figure shell ---------- */
+figure { margin: 1.8rem 0; }
+.fig-box {
+  background: var(--card); border: 1px solid var(--rule); border-radius: 10px;
+  padding: 1.3rem; box-shadow: var(--shadow);
+}
+figcaption { font-size: .84rem; color: var(--muted); margin-top: .7rem; max-width: 64ch; }
+.controls { display: flex; flex-wrap: wrap; gap: .55rem; margin-top: 1rem; align-items: center; }
+button {
+  font-family: var(--font-display); font-size: .84rem; font-weight: 650;
+  padding: .5rem .95rem; border-radius: 6px; border: 1px solid var(--rule);
+  background: var(--bg); color: var(--fg); cursor: pointer;
+}
+button:hover { border-color: var(--accent); color: var(--accent); }
+button[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); color: var(--bg); }
+button:focus-visible, a:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
+
+/* ---------- figure 1: slicing ---------- */
+.slice-stage { display: flex; flex-wrap: wrap; gap: 1.4rem; align-items: center; }
+.slice-stage canvas {
+  width: 288px; max-width: 100%; height: auto; border-radius: 6px;
+  border: 1px solid var(--rule); background: var(--card-2); display: block;
+}
+.slice-read { flex: 1 1 220px; min-width: 200px; font-size: .9rem; }
+.slice-read dl { margin: 0; display: grid; grid-template-columns: auto 1fr; gap: .35rem .8rem; }
+.slice-read dt { color: var(--muted); font-size: .8rem; }
+.slice-read dd { margin: 0; font-family: var(--font-mono); font-size: .82rem; font-variant-numeric: tabular-nums; }
+
+/* ---------- figure 2: the 282-token strip ---------- */
+.strip-wrap { overflow-x: auto; padding-bottom: .4rem; }
+.strip { display: flex; align-items: flex-start; gap: 1.5rem; min-width: 430px; }
+.grp { display: flex; flex-direction: column; gap: .5rem; }
+.grp-head {
+  font-family: var(--font-display); font-size: .68rem; font-weight: 700;
+  letter-spacing: .09em; text-transform: uppercase;
+}
+.grp-head span { display: block; font-family: var(--font-mono); font-weight: 400;
+  letter-spacing: 0; text-transform: none; color: var(--muted); font-size: .72rem; margin-top: .15rem; }
+.cells { display: grid; gap: 2px; }
+.cell { width: var(--cell, 15px); height: var(--cell, 15px); border-radius: 2px;
+  background: var(--card-2); transition: background-color .5s ease, opacity .5s ease; }
+@media (prefers-reduced-motion: reduce) { .cell { transition: none; } }
+.g-bos .cells { grid-template-columns: repeat(1, var(--cell, 15px)); }
+.g-img .cells { grid-template-columns: repeat(16, var(--cell, 15px)); }
+.g-txt .cells { grid-template-columns: repeat(5, var(--cell, 15px)); }
+.g-bos .grp-head { color: var(--muted); }
+.g-img .grp-head { color: var(--img); }
+.g-txt .grp-head { color: var(--txt); }
+@media (max-width: 620px) { .strip { --cell: 12px; } }
+
+.scene-pair { display: flex; gap: .9rem; }
+.scene-pair figure { margin: 0; }
+.scene-pair canvas { width: 118px; height: 118px; border-radius: 5px; border: 1px solid var(--rule); display: block; }
+.scene-cap { font-size: .7rem; color: var(--muted); margin-top: .3rem; text-align: center;
+  font-family: var(--font-display); letter-spacing: .04em; text-transform: uppercase; }
+.readout { margin-top: 1.3rem; border-top: 1px solid var(--rule); padding-top: 1.1rem; }
+.meters { display: grid; gap: .75rem; }
+.meter { display: grid; grid-template-columns: 12.5rem 1fr 4.2rem; gap: .8rem; align-items: center; font-size: .84rem; }
+.meter .mlabel { color: var(--muted); }
+.meter .mtrack { height: 9px; border-radius: 5px; background: var(--card-2); overflow: hidden; }
+.meter .mfill { height: 100%; width: 0; border-radius: 5px; background: var(--img);
+  transition: width .6s ease, background-color .6s ease; }
+@media (prefers-reduced-motion: reduce) { .meter .mfill { transition: none; } }
+.meter .mval { font-family: var(--font-mono); font-variant-numeric: tabular-nums;
+  text-align: right; font-weight: 650; }
+.meter.is-text .mfill { background: var(--txt); }
+.meter.is-text .mval { color: var(--txt); }
+.verdict { margin-top: 1.1rem; font-size: .92rem; padding: .8rem 1rem; border-radius: 7px;
+  background: var(--card-2); }
+.verdict.hot { background: var(--alarm-bg); color: var(--alarm); font-weight: 600; }
+@media (max-width: 620px) {
+  .meter { grid-template-columns: 1fr; gap: .25rem; }
+  .meter .mval { text-align: left; }
+}
+
+/* ---------- action vector ---------- */
+.act { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: .4rem; margin-top: 1rem; }
+.act div { text-align: center; }
+.act .an { font-family: var(--font-display); font-size: .62rem; letter-spacing: .06em;
+  text-transform: uppercase; color: var(--muted); }
+.act .av { font-family: var(--font-mono); font-size: .8rem; font-variant-numeric: tabular-nums;
+  padding: .3rem 0; border-radius: 4px; background: var(--card-2); margin-top: .2rem; }
+.act .av.jump { background: var(--alarm-bg); color: var(--alarm); font-weight: 700; }
+.act .av.unk { color: var(--muted); opacity: .6; }
+.act-foot { font-size: .74rem; color: var(--muted); margin: .5rem 0 0; }
+
+/* ---------- tables ---------- */
+.tbl-scroll { overflow-x: auto; margin: 1.3rem 0; }
+table { border-collapse: collapse; width: 100%; font-size: .88rem; }
+th, td { text-align: left; padding: .52rem .7rem; border-bottom: 1px solid var(--rule); vertical-align: top; }
+th { font-family: var(--font-display); font-size: .68rem; text-transform: uppercase;
+  letter-spacing: .08em; color: var(--muted); font-weight: 700; }
+td.num { font-family: var(--font-mono); font-variant-numeric: tabular-nums; text-align: right; white-space: nowrap; }
+tr.hi td { background: var(--txt-bg); }
+
+/* ---------- glossary ---------- */
+.gloss { display: grid; gap: .9rem; margin: 1.4rem 0 0; }
+.gloss div { display: grid; grid-template-columns: 13rem 1fr; gap: 1rem; font-size: .9rem;
+  padding-bottom: .9rem; border-bottom: 1px solid var(--rule); }
+.gloss div:last-child { border-bottom: none; padding-bottom: 0; }
+.gloss dt { font-family: var(--font-mono); font-size: .82rem; color: var(--accent); font-weight: 650; }
+.gloss dd { margin: 0; color: var(--fg); }
+@media (max-width: 620px) { .gloss div { grid-template-columns: 1fr; gap: .2rem; } }
+
+footer { margin-top: 4rem; padding-top: 1.5rem; border-top: 1px solid var(--rule);
+  font-size: .84rem; color: var(--muted); }
+footer p { max-width: 68ch; }
+footer a { color: var(--accent); }
+@media (max-width: 620px) {
+  .station { grid-template-columns: 1fr; gap: 0; }
+  .rail { display: none; }
+}
+</style>
+
+<div class="wrap">
+
+<header>
+  <p class="eyebrow">Explainer &middot; robot vision &amp; security</p>
+  <h1>How a robot brain reads a photo &mdash; and what a sticker can't do to it</h1>
+  <p class="lede">A robot arm looks at a table and decides how to move. We put a probe inside its
+  brain and watched a single photo travel all the way to the motors. Then we taped a sticker onto
+  the scene to see what broke.</p>
+  <p class="who">
+    <span><b>Robot brain:</b> OpenVLA-7B</span>
+    <span><b>Job:</b> pick up the soup, put it in the basket</span>
+    <span><b>Everything here:</b> measured, not guessed</span>
+  </p>
+</header>
+
+<!-- ============ 1 ============ -->
+<section class="station">
+  <div class="rail"><div class="marker">1</div></div>
+  <div class="body">
+    <h2>Two things in, seven numbers out</h2>
+    <p class="sub">the whole robot, in one line</p>
+
+    <p>Forget the robot for a second and think about a very literal-minded assistant. Every third of
+    a second you hand them exactly two things:</p>
+
+    <div class="panel">
+      <p class="plabel">What goes in</p>
+      <p><span class="tag-img">A photo</span> &mdash; one 224&times;224 pixel snapshot from a camera
+      above the table. That's a small image, about the size of a postage stamp on your screen.</p>
+      <p><span class="tag-txt">A sentence</span> &mdash; the instruction, in plain English:
+      <em>&ldquo;pick up the alphabet soup and place it in the basket.&rdquo;</em></p>
+    </div>
+
+    <p>And they hand you back <strong>seven numbers</strong>. Not a plan, not a sentence &mdash; seven
+    numbers, which are wired straight to the arm:</p>
+
+    <div class="act" id="act-clean">
+      <div><div class="an">dx</div><div class="av">+0.002</div></div>
+      <div><div class="an">dy</div><div class="av">&minus;0.003</div></div>
+      <div><div class="an">dz</div><div class="av">0.000</div></div>
+      <div><div class="an">roll</div><div class="av">&minus;0.000</div></div>
+      <div><div class="an">pitch</div><div class="av">+0.0004</div></div>
+      <div><div class="an">yaw</div><div class="av">+0.0003</div></div>
+      <div><div class="an">grip</div><div class="av">0.996</div></div>
+    </div>
+
+    <p>The first six say <em>move a little this way, tilt a little that way</em>. The seventh says how
+    open the gripper is (0.996 &asymp; wide open). Those are the real numbers from the first frame of a
+    real run &mdash; tiny, because the arm is just settling.</p>
+
+    <p>Do that 280 times in a row and you get a robot that picks something up. Our question is simple:
+    <strong>if an attacker can change the photo, how much of that behaviour can they steal?</strong></p>
+  </div>
+</section>
+
+<!-- ============ 2 ============ -->
+<section class="station">
+  <div class="rail"><div class="marker">2</div></div>
+  <div class="body">
+    <h2>The photo gets cut into 256 tiles</h2>
+    <p class="sub">stage &#9312; &mdash; vision encoder</p>
+
+    <p>A brain built out of language can't read pixels. So the first thing that happens is that the
+    photo is chopped into a <strong>16&times;16 grid of tiles</strong> &mdash; 256 of them, each 14&times;14
+    pixels. Every tile gets summarised into a long list of numbers describing what's in it.</p>
+
+    <figure>
+      <div class="fig-box">
+        <div class="slice-stage">
+          <canvas id="slice-canvas" width="288" height="288"
+                  aria-label="A camera view of a table with a soup can and a basket, which splits apart into 256 square tiles."></canvas>
+          <div class="slice-read">
+            <dl>
+              <dt>Photo</dt><dd>224 &times; 224 px</dd>
+              <dt>Tiles</dt><dd>16 &times; 16 = 256</dd>
+              <dt>Each tile</dt><dd>14 &times; 14 px</dd>
+              <dt>Numbers per tile</dt><dd>2176</dd>
+            </dl>
+            <div class="controls">
+              <button id="slice-btn" type="button" aria-pressed="false">Cut it into tiles</button>
+            </div>
+          </div>
+        </div>
+      </div>
+      <figcaption><b>Figure 1.</b> The camera view, sliced the way the model actually slices it.
+      Press the button. Nothing about the picture changes &mdash; it's just been reorganised into 256
+      independent pieces, and from here on the model only ever sees the pieces.</figcaption>
+    </figure>
+
+    <p>Why 2176 numbers per tile? Because the robot looks at every tile <em>twice</em>, with two
+    different sets of eyes, and staples the results together:</p>
+
+    <div class="panel">
+      <p class="plabel">Two eyes on every tile</p>
+      <p><strong>SigLIP</strong> &rarr; 1152 numbers. Trained on images paired with captions, so it is
+      good at <em>what things are</em> &mdash; &ldquo;that's a soup can.&rdquo;</p>
+      <p><strong>DINOv2</strong> &rarr; 1024 numbers. Trained on images alone, so it is good at
+      <em>where things are</em> &mdash; edges, shapes, layout.</p>
+      <p>1152 + 1024 = <strong>2176</strong> numbers describing each tile.</p>
+    </div>
+
+    <p>So the photo has become a block of <code>256 &times; 2176</code> numbers. Or: 256 little
+    descriptions, one per tile.</p>
+  </div>
+</section>
+
+<!-- ============ 3 ============ -->
+<section class="station">
+  <div class="rail"><div class="marker">3</div></div>
+  <div class="body">
+    <h2>A translator turns tiles into &ldquo;words&rdquo;</h2>
+    <p class="sub">stage &#9313; &mdash; the projector</p>
+
+    <p>The language part of the robot only understands one kind of thing: a <strong>token</strong>, a
+    list of exactly 4096 numbers, which is how it stores a word. The tile descriptions are 2176 numbers
+    long, in a completely different format. They don't fit.</p>
+
+    <p>So there's a small translator in between &mdash; three quick layers of arithmetic:</p>
+
+    <div class="panel">
+      <p class="plabel">The translator (an MLP projector)</p>
+      <p style="font-family: var(--font-mono); font-size: .95rem;">2176 &rarr; 8704 &rarr; 4096 &rarr; 4096</p>
+      <p>Feed it a tile description, get back something the language model will happily read as if it
+      were a word. Do that 256 times and the photo has become <strong>256 image
+      &ldquo;words&rdquo;</strong>.</p>
+    </div>
+
+    <div class="note">
+      <p><strong>They aren't English words.</strong> Nobody can look one up in a dictionary. They're
+      positions in the same 4096-dimensional space where the model keeps &ldquo;basket&rdquo; and
+      &ldquo;pick&rdquo; &mdash; close enough that the language model can't tell it's being handed
+      pictures.</p>
+    </div>
+
+    <p>You can see the translator doing its job in the raw statistics. The vision encoder's output is
+    wild &mdash; a few values as large as <strong>+284</strong>. After the translator, everything sits in
+    a tidy range that matches real word-tokens:</p>
+
+    <div class="tbl-scroll">
+      <table>
+        <thead>
+          <tr><th>Stage</th><th>Shape</th><th>Average</th><th>Spread</th><th>Biggest value</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>The photo, as pixels</td><td><code>[1, 6, 224, 224]</code></td>
+              <td class="num">&minus;0.244</td><td class="num">0.442</td><td class="num">+2.56</td></tr>
+          <tr><td>&#9312; After the two eyes</td><td><code>[1, 256, 2176]</code></td>
+              <td class="num">&minus;0.087</td><td class="num">3.323</td><td class="num">+284.0</td></tr>
+          <tr><td>&#9313; After the translator</td><td><code>[1, 256, 4096]</code></td>
+              <td class="num">+0.004</td><td class="num">0.445</td><td class="num">+24.1</td></tr>
+          <tr><td>&#9314; Handed to the language model</td><td><code>[1, 282, 4096]</code></td>
+              <td class="num">+0.004</td><td class="num">0.424</td><td class="num">+24.1</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <p>&ldquo;Spread&rdquo; is how far the numbers scatter from the average. Notice it drops from 3.3 to
+    0.44 &mdash; the translator is squeezing the loud, spiky vision numbers into the calm range the
+    language model expects. And notice that six channels of pixels go in, not three: the photo is
+    normalised twice, once for each set of eyes.</p>
+  </div>
+</section>
+
+<!-- ============ 4 ============ -->
+<section class="station">
+  <div class="rail"><div class="marker">4</div></div>
+  <div class="body">
+    <h2>Photo and sentence become one long line</h2>
+    <p class="sub">stage &#9314; &mdash; 282 tokens</p>
+
+    <p>Here is the part that matters most, and it's much simpler than people expect. The image words
+    and the real words are just <strong>glued end to end into a single line</strong>, and that line is
+    what the language model reads:</p>
+
+    <div class="big-idea">
+      <p style="font-family: var(--font-mono); font-size: 1rem;">
+        [ START ] + [ <span class="tag-img">256 image words</span> ] + [ <span class="tag-txt">25 sentence words</span> ] = <strong>282</strong>
+      </p>
+      <p>One start marker, then the photo, then the instruction. That's the entire input. No separate
+      &ldquo;vision system&rdquo; talking to a &ldquo;language system&rdquo; &mdash; one line of 282
+      tokens, read left to right.</p>
+    </div>
+
+    <p>The model then writes seven more tokens on the end &mdash; and those seven get decoded into the
+    seven motor numbers from step&nbsp;1. That's it. That's the whole robot.</p>
+
+    <p>Because the language model reads left to right, the seven action tokens at the end can
+    &ldquo;look back&rdquo; at everything before them, including all 256 image words. That's the road
+    from <span class="tag-img">a pixel</span> to <span class="tag-bad">a motor</span> &mdash; and it's
+    the road an attacker has to use.</p>
+  </div>
+</section>
+
+<!-- ============ 5 ============ -->
+<section class="station">
+  <div class="rail"><div class="marker">5</div></div>
+  <div class="body">
+    <h2>Now we tape a sticker on the table</h2>
+    <p class="sub">the experiment &mdash; same brain, two photos</p>
+
+    <p>We ran the exact same instruction twice: once with a clean photo, once with a photo that has a
+    printed label stuck in the scene. Then we compared the two lines of 282 tokens, token by token.</p>
+
+    <p>To compare, we use <strong>similarity</strong>: <code>1.000</code> means <em>byte-for-byte
+    identical</em>, and lower means <em>more different</em>. Press the toggle.</p>
+
+    <figure>
+      <div class="fig-box">
+        <div class="scene-pair">
+          <figure>
+            <canvas id="mini-clean" width="118" height="118" aria-label="Clean camera view."></canvas>
+            <div class="scene-cap">Clean</div>
+          </figure>
+          <figure>
+            <canvas id="mini-dirty" width="118" height="118" aria-label="Same camera view with an added sticker in the corner."></canvas>
+            <div class="scene-cap">+ sticker</div>
+          </figure>
+        </div>
+
+        <div class="controls" style="margin-bottom: 1.2rem;">
+          <button id="atk-btn" type="button" aria-pressed="false">Add the sticker</button>
+        </div>
+
+        <div class="strip-wrap">
+          <div class="strip">
+            <div class="grp g-bos">
+              <div class="grp-head">Start<span>1</span></div>
+              <div class="cells" id="cells-bos"></div>
+            </div>
+            <div class="grp g-img">
+              <div class="grp-head">The photo<span>256 tokens</span></div>
+              <div class="cells" id="cells-img"></div>
+            </div>
+            <div class="grp g-txt">
+              <div class="grp-head">The instruction<span>25 tokens</span></div>
+              <div class="cells" id="cells-txt"></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="readout">
+          <div class="meters">
+            <div class="meter">
+              <span class="mlabel">Photo tokens, similarity</span>
+              <span class="mtrack"><span class="mfill" id="m-img"></span></span>
+              <span class="mval" id="v-img">1.0000</span>
+            </div>
+            <div class="meter is-text">
+              <span class="mlabel">Instruction tokens, similarity</span>
+              <span class="mtrack"><span class="mfill" id="m-txt"></span></span>
+              <span class="mval" id="v-txt">1.0000</span>
+            </div>
+          </div>
+
+          <div class="act" id="act-live">
+            <div><div class="an">dx</div><div class="av" data-a="0">+0.002</div></div>
+            <div><div class="an">dy</div><div class="av" data-a="1">&minus;0.003</div></div>
+            <div><div class="an">dz</div><div class="av" data-a="2">0.000</div></div>
+            <div><div class="an">roll</div><div class="av" data-a="3">&minus;0.000</div></div>
+            <div><div class="an">pitch</div><div class="av" data-a="4">+0.0004</div></div>
+            <div><div class="an">yaw</div><div class="av" data-a="5">+0.0003</div></div>
+            <div><div class="an">grip</div><div class="av" data-a="6">0.996</div></div>
+          </div>
+
+          <p class="act-foot"><code>n/r</code> = not recorded. The write-up publishes the sideways,
+          forward and gripper values for the attacked frame; the other four weren't kept.</p>
+
+          <div class="verdict" id="verdict">Clean photo. The arm creeps forward and the gripper stays open.</div>
+        </div>
+      </div>
+      <figcaption><b>Figure 2.</b> The full 282-token input. The photo block is drawn as the real
+      16&times;16 tile grid, and the instruction happens to be exactly 25 tokens, so it draws as a neat
+      5&times;5. Redness on an individual tile is an illustration &mdash; per-tile disturbance wasn't
+      measured separately. The two similarity numbers, and every motor value not marked
+      <code>n/r</code>, are the measured ones.</figcaption>
+    </figure>
+
+    <p>Two things happened, and the second one is the surprise.</p>
+
+    <div class="tbl-scroll">
+      <table>
+        <thead><tr><th>What we compared</th><th>Similarity, clean vs sticker</th><th>Meaning</th></tr></thead>
+        <tbody>
+          <tr><td>The raw pixels</td><td class="num">0.807</td><td>the sticker is visible</td></tr>
+          <tr><td>&#9312; After the two eyes</td><td class="num">0.746</td><td>the disturbance survives</td></tr>
+          <tr><td>&#9313; After the translator</td><td class="num">0.729</td><td>and gets passed along</td></tr>
+          <tr><td><span class="tag-img">The 256 photo tokens</span></td><td class="num">0.729</td><td>badly scrambled</td></tr>
+          <tr class="hi"><td><span class="tag-txt">The 25 instruction tokens</span></td><td class="num">1.0000</td><td><strong>not one bit changed</strong></td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <p><strong>Similarity 1.0000 is not &ldquo;almost the same&rdquo;. It is identical.</strong> Every
+    single one of those 25 numbers-per-token, in all 25 tokens, came out the same as before. Painting
+    words onto the table does <em>not</em> edit the instruction &mdash; there's no path in the wiring
+    from the photo into the sentence.</p>
+
+    <p>And yet the robot's motion changed hard. The sideways command went from
+    <code>&minus;0.003</code> to <code>&minus;0.293</code> &mdash; about <strong>100&times; bigger</strong>
+    &mdash; while the gripper command didn't move at all. The arm lurches sideways with its hand still
+    hanging open.</p>
+  </div>
+</section>
+
+<!-- ============ 6 ============ -->
+<section class="station">
+  <div class="rail"><div class="marker">6</div></div>
+  <div class="body">
+    <h2>Breaking a robot vs. bossing it around</h2>
+    <p class="sub">the point of the whole thing</p>
+
+    <p>Those two results together answer the question we started with, and they draw a sharp line
+    between two very different attacks:</p>
+
+    <div class="panel">
+      <p class="plabel">Two kinds of attack</p>
+      <p><strong>Denial of service &mdash; &ldquo;break it&rdquo;.</strong> Wreck the robot's sense of
+      where things are so it fails the job. Lurching sideways with an open gripper is exactly this.
+      <span class="tag-bad">This works.</span></p>
+      <p><strong>Hijack &mdash; &ldquo;boss it around&rdquo;.</strong> Make the robot smoothly and
+      deliberately do <em>your</em> task instead: pick up a different object, put it somewhere else.
+      That needs a coherent new goal, not a shove. <span class="tag-img">A readable sticker cannot do
+      this.</span></p>
+    </div>
+
+    <div class="big-idea">
+      <p>Fogging up someone's glasses will absolutely stop them cooking dinner.</p>
+      <p>It will never make them cook <em>your</em> dinner instead. To do that you'd have to get at the
+      recipe &mdash; and the recipe is in the block we measured at <strong>1.0000</strong>.</p>
+    </div>
+
+    <p>This is a fact about how the robot is <em>built</em>, not about how hard we tried. You could
+    write the world's most persuasive sentence on a sign and hold it in front of the camera: it still
+    lands in the photo block, and the instruction block still comes out identical. There is no reader
+    turning scene text back into language. The image can shove the motors, but it cannot rewrite the
+    goal.</p>
+
+    <p>So a research team hunting for a hijack by trying prettier, bolder, more legible signs is
+    searching a space where the answer provably isn't. That's a useful thing to know before spending a
+    month of GPU time on it.</p>
+  </div>
+</section>
+
+<!-- ============ 7 ============ -->
+<section class="station">
+  <div class="rail"><div class="marker">7</div></div>
+  <div class="body">
+    <h2>Then how <em>would</em> someone hijack it?</h2>
+    <p class="sub">and how you'd catch them</p>
+
+    <p>Not by writing something readable. By computing a pattern.</p>
+
+    <p>The robot is made of arithmetic, so you can run it backwards and ask: <em>which pixel should I
+    nudge, and in which direction, to make the seventh output number go up?</em> Repeat a few thousand
+    times and you get a patch that looks to us like coloured static, but which lands in exactly the
+    right spot in the model's 4096-number space to steer it on purpose. That's a real attack, it needs
+    full access to the model's internals, and it's a separate research question &mdash; the probe in
+    this article is what shows you precisely where such an attack would have to attach.</p>
+
+    <p>The defence falls out of the same measurement. The attack leaves a very specific fingerprint,
+    all three parts at once:</p>
+
+    <div class="panel">
+      <p class="plabel">The fingerprint of a visual injection</p>
+      <p>1. <span class="tag-txt">The instruction is untouched</span> &mdash; similarity exactly 1.0000.</p>
+      <p>2. <span class="tag-img">The photo tokens jumped</span> &mdash; similarity fell to 0.729.</p>
+      <p>3. <span class="tag-bad">The motor command jumped with it</span> &mdash; 100&times; on one axis.</p>
+      <p>Nothing in normal operation looks like that. A watchdog sitting between the eyes and the
+      language model can check for it on every single frame &mdash; a photo that argues with its own
+      instruction.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ============ glossary ============ -->
+<section class="station">
+  <div class="rail"><div class="marker">&#8250;</div></div>
+  <div class="body">
+    <h2>The real names for things</h2>
+    <p class="sub">so the vocabulary transfers</p>
+
+    <dl class="gloss">
+      <div><dt>token</dt><dd>One item in the line the model reads &mdash; here, a list of 4096 numbers. A word is a token; so is one image tile.</dd></div>
+      <div><dt>patch</dt><dd>One of the 256 tiles the photo is cut into. 14&times;14 pixels each.</dd></div>
+      <div><dt>vision encoder</dt><dd>The two sets of eyes (SigLIP + DINOv2) that summarise each tile into 2176 numbers.</dd></div>
+      <div><dt>projector</dt><dd>The translator. Three layers of arithmetic, 2176 &rarr; 4096, so tiles can sit in a line beside words.</dd></div>
+      <div><dt>cosine similarity</dt><dd>The comparison we used. 1.000 = identical direction, 0 = unrelated. It ignores overall size and asks only &ldquo;are these pointing the same way?&rdquo;</dd></div>
+      <div><dt>7-DoF action</dt><dd>Seven degrees of freedom: three for moving, three for rotating, one for the gripper.</dd></div>
+      <div><dt>VLA</dt><dd>Vision-Language-Action model. The family this robot brain belongs to: sees, reads, acts.</dd></div>
+      <div><dt>DoS / hijack</dt><dd>Denial of service = make it fail. Hijack = make it obey you. Very different threat levels.</dd></div>
+    </dl>
+  </div>
+</section>
+
+<footer>
+  <p><strong>Where these numbers come from.</strong> Every figure on this page was captured from a
+  live forward pass of <code>openvla/openvla-7b-finetuned-libero-object</code> on a real GPU, using
+  hooks placed on the vision encoder, the projector and the language model &mdash; nothing was
+  re-implemented or estimated. The scene is a LIBERO simulation; the task is
+  <em>&ldquo;pick up the alphabet soup and place it in the basket.&rdquo;</em></p>
+  <p>Simulation only. No physical robot was involved, and the model's training was never touched
+  &mdash; the sticker is added at the moment the photo is taken.</p>
+  <p>Full technical write-up, including how to reproduce it:
+  <code>docs/research/in-out.md</code>. The two illustrated camera views are stylised drawings of the
+  LIBERO scene, not the captured frames.</p>
+</footer>
+
+</div>
+
+<script>
+(function () {
+  "use strict";
+
+  var reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+  /* ---------- deterministic noise, so the page looks the same every load ---------- */
+  function hash(i) {
+    var x = Math.sin(i * 127.1 + 311.7) * 43758.5453;
+    return x - Math.floor(x);
+  }
+
+  /* ---------- the stylised camera view ---------- */
+  function drawScene(ctx, size, withSticker) {
+    var s = size / 224;
+    ctx.save();
+    ctx.scale(s, s);
+
+    // back wall
+    var wall = ctx.createLinearGradient(0, 0, 0, 90);
+    wall.addColorStop(0, "#6f7a84");
+    wall.addColorStop(1, "#98a2ab");
+    ctx.fillStyle = wall;
+    ctx.fillRect(0, 0, 224, 90);
+
+    // table top
+    var top = ctx.createLinearGradient(0, 90, 0, 224);
+    top.addColorStop(0, "#c9b394");
+    top.addColorStop(1, "#a4885f");
+    ctx.fillStyle = top;
+    ctx.fillRect(0, 90, 224, 134);
+
+    // wood grain
+    ctx.strokeStyle = "rgba(120, 92, 56, .22)";
+    ctx.lineWidth = 1;
+    for (var g = 0; g < 9; g++) {
+      var gy = 98 + g * 15;
+      ctx.beginPath();
+      ctx.moveTo(0, gy);
+      ctx.bezierCurveTo(70, gy + 3, 150, gy - 3, 224, gy + 1);
+      ctx.stroke();
+    }
+
+    // basket, right side
+    ctx.fillStyle = "#4a3b2c";
+    ctx.beginPath();
+    ctx.moveTo(140, 128);
+    ctx.lineTo(206, 128);
+    ctx.lineTo(198, 182);
+    ctx.lineTo(148, 182);
+    ctx.closePath();
+    ctx.fill();
+    ctx.fillStyle = "#241c14";
+    ctx.beginPath();
+    ctx.ellipse(173, 129, 33, 9, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.strokeStyle = "rgba(255,255,255,.13)";
+    ctx.lineWidth = 2;
+    for (var b = 1; b < 4; b++) {
+      ctx.beginPath();
+      ctx.moveTo(141 + b * 1.6, 128 + b * 13);
+      ctx.lineTo(205 - b * 1.6, 128 + b * 13);
+      ctx.stroke();
+    }
+
+    // soup can, left-centre
+    ctx.fillStyle = "#c9ccce";
+    ctx.fillRect(58, 116, 40, 58);
+    ctx.fillStyle = "#b52f27";
+    ctx.fillRect(58, 128, 40, 30);
+    ctx.fillStyle = "#eceef0";
+    ctx.beginPath();
+    ctx.ellipse(78, 116, 20, 6.5, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = "rgba(255,255,255,.75)";
+    for (var t = 0; t < 4; t++) { ctx.fillRect(64, 136 + t * 6, 28 - t * 4, 2.4); }
+    ctx.fillStyle = "rgba(0,0,0,.20)";
+    ctx.beginPath();
+    ctx.ellipse(80, 176, 22, 6, 0, 0, Math.PI * 2);
+    ctx.fill();
+
+    // gripper coming down from the top
+    ctx.fillStyle = "#3d444b";
+    ctx.fillRect(96, 0, 14, 40);
+    ctx.fillRect(86, 40, 34, 9);
+    ctx.fillRect(86, 49, 8, 22);
+    ctx.fillRect(112, 49, 8, 22);
+
+    if (withSticker) {
+      ctx.fillStyle = "#e8c53a";
+      ctx.fillRect(8, 100, 46, 34);
+      ctx.strokeStyle = "#20242a";
+      ctx.lineWidth = 2;
+      ctx.strokeRect(8, 100, 46, 34);
+      ctx.fillStyle = "#20242a";
+      for (var r = 0; r < 3; r++) {
+        ctx.fillRect(13, 107 + r * 9, r === 2 ? 22 : 36, 4.5);
+      }
+    }
+    ctx.restore();
+  }
+
+  /* ---------- Figure 1: slicing into 256 patches ---------- */
+  var sliceCanvas = document.getElementById("slice-canvas");
+  var sliceBtn = document.getElementById("slice-btn");
+  if (sliceCanvas && sliceCanvas.getContext) {
+    var SIZE = 288, N = 16, SRC = 224;
+    var ctx = sliceCanvas.getContext("2d");
+    var off = document.createElement("canvas");
+    off.width = SRC; off.height = SRC;
+    drawScene(off.getContext("2d"), SRC, false);
+
+    var spread = 0, targetSpread = 0, raf = null;
+
+    function paint(p) {
+      var gap = p * 5;                       // px between tiles at full spread
+      var tile = (SIZE - gap * (N - 1)) / N; // shrink tiles so the grid still fits
+      var src = SRC / N;
+      ctx.clearRect(0, 0, SIZE, SIZE);
+      for (var row = 0; row < N; row++) {
+        for (var col = 0; col < N; col++) {
+          ctx.drawImage(off, col * src, row * src, src, src,
+                        col * (tile + gap), row * (tile + gap), tile, tile);
+        }
+      }
+      if (p > 0.02) {
+        ctx.strokeStyle = "rgba(31, 95, 168, " + (0.28 * p) + ")";
+        ctx.lineWidth = 1;
+        for (var i = 0; i < N; i++) {
+          for (var j = 0; j < N; j++) {
+            ctx.strokeRect(j * (tile + gap) + .5, i * (tile + gap) + .5, tile - 1, tile - 1);
+          }
+        }
+      }
+    }
+
+    function tick() {
+      var d = targetSpread - spread;
+      if (Math.abs(d) < 0.005) { spread = targetSpread; paint(spread); raf = null; return; }
+      spread += d * 0.16;
+      paint(spread);
+      raf = window.requestAnimationFrame(tick);
+    }
+
+    paint(0);
+    sliceBtn.addEventListener("click", function () {
+      var on = sliceBtn.getAttribute("aria-pressed") === "true";
+      sliceBtn.setAttribute("aria-pressed", on ? "false" : "true");
+      sliceBtn.textContent = on ? "Cut it into tiles" : "Put it back together";
+      targetSpread = on ? 0 : 1;
+      if (reduce) { spread = targetSpread; paint(spread); return; }
+      if (!raf) { raf = window.requestAnimationFrame(tick); }
+    });
+  }
+
+  /* ---------- Figure 2: the 282-token strip ---------- */
+  var mini1 = document.getElementById("mini-clean");
+  var mini2 = document.getElementById("mini-dirty");
+  if (mini1 && mini1.getContext) { drawScene(mini1.getContext("2d"), 118, false); }
+  if (mini2 && mini2.getContext) { drawScene(mini2.getContext("2d"), 118, true); }
+
+  function fill(id, n) {
+    var host = document.getElementById(id);
+    if (!host) { return []; }
+    var made = [];
+    for (var i = 0; i < n; i++) {
+      var c = document.createElement("span");
+      c.className = "cell";
+      host.appendChild(c);
+      made.push(c);
+    }
+    return made;
+  }
+
+  var bosCells = fill("cells-bos", 1);
+  var imgCells = fill("cells-img", 256);
+  var txtCells = fill("cells-txt", 25);
+
+  function cssVar(name) {
+    return getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+  }
+
+  // "disturbance" per tile: strongest near the sticker (left, just below middle), noisy elsewhere.
+  var heat = [];
+  for (var i = 0; i < 256; i++) {
+    var row = Math.floor(i / 16), col = i % 16;
+    var dist = Math.sqrt(Math.pow(col - 2.2, 2) + Math.pow(row - 8.3, 2));
+    var near = Math.max(0, 1 - dist / 6.5);
+    heat.push(Math.min(1, 0.22 + near * 0.7 + hash(i) * 0.3));
+  }
+
+  var attacked = false;
+  var atkBtn = document.getElementById("atk-btn");
+  var mImg = document.getElementById("m-img"), vImg = document.getElementById("v-img");
+  var mTxt = document.getElementById("m-txt"), vTxt = document.getElementById("v-txt");
+  var verdict = document.getElementById("verdict");
+  var actCells = document.querySelectorAll("#act-live .av");
+
+  var CLEAN_ACT = ["+0.002", "−0.003", "0.000", "−0.000", "+0.0004", "+0.0003", "0.996"];
+  // only dx, dy and the gripper were written down for the attacked frame — the rest stay blank
+  var DIRTY_ACT = ["+0.089", "−0.293", "n/r", "n/r", "n/r", "n/r", "0.996"];
+  var JUMPED = [true, true, false, false, false, false, false];
+
+  function render() {
+    var imgCol = attacked ? cssVar("--alarm") : cssVar("--img");
+    var txtCol = cssVar("--txt");
+
+    bosCells[0].style.backgroundColor = cssVar("--muted");
+    bosCells[0].style.opacity = "0.5";
+
+    for (var i = 0; i < imgCells.length; i++) {
+      var a = attacked ? (0.30 + heat[i] * 0.70) : (0.22 + hash(i + 900) * 0.30);
+      imgCells[i].style.backgroundColor = imgCol;
+      imgCells[i].style.opacity = a.toFixed(3);
+    }
+    for (var j = 0; j < txtCells.length; j++) {
+      txtCells[j].style.backgroundColor = txtCol;
+      txtCells[j].style.opacity = (0.30 + hash(j + 40) * 0.45).toFixed(3);
+    }
+
+    // similarity bars run the honest full range, 0 to 1 — no truncated axis
+    var simImg = attacked ? 0.729 : 1.0;
+    mImg.style.width = (simImg * 100).toFixed(1) + "%";
+    mImg.style.backgroundColor = imgCol;
+    vImg.textContent = simImg.toFixed(4);
+    vImg.style.color = imgCol;
+
+    mTxt.style.width = "100%";
+    vTxt.textContent = "1.0000";
+
+    var acts = attacked ? DIRTY_ACT : CLEAN_ACT;
+    for (var k = 0; k < actCells.length; k++) {
+      actCells[k].textContent = acts[k];
+      if (attacked && JUMPED[k]) { actCells[k].className = "av jump"; }
+      else if (acts[k] === "n/r") { actCells[k].className = "av unk"; }
+      else { actCells[k].className = "av"; }
+    }
+
+    verdict.className = attacked ? "verdict hot" : "verdict";
+    verdict.textContent = attacked
+      ? "The photo block is scrambled, the instruction block is bit-for-bit identical — and the arm yanks sideways, 100× harder, gripper still open. Broken, not obedient."
+      : "Clean photo. The arm creeps forward and the gripper stays open.";
+  }
+
+  if (atkBtn) {
+    atkBtn.addEventListener("click", function () {
+      attacked = !attacked;
+      atkBtn.setAttribute("aria-pressed", attacked ? "true" : "false");
+      atkBtn.textContent = attacked ? "Take the sticker off" : "Add the sticker";
+      render();
+    });
+  }
+  render();
+
+  // keep colours correct when the viewer flips theme
+  window.matchMedia("(prefers-color-scheme: dark)").addEventListener("change", render);
+  new MutationObserver(render).observe(document.documentElement, {
+    attributes: true, attributeFilter: ["data-theme"]
+  });
+})();
+</script>
