@@ -40,6 +40,8 @@ import patch_config as C  # noqa: E402
 import vla_diff  # noqa: E402
 from adaptive_attack import _decode_action, _prompt_ids, _real_tokens  # noqa: E402
 from hijack_backend import HijackBackend  # noqa: E402
+from two_branch_loss import two_branch_loss  # noqa: E402
+from word_gate import resolve_gate_setup  # noqa: E402
 
 from evaluator.adjudicate import eval_goal_state  # noqa: E402
 from evaluator.libero_tasks import resolve_task  # noqa: E402
@@ -76,6 +78,10 @@ def run_confined_episode(
     restarts: int = 1,
     warm_start: bool = False,
     decisive_boost: int = 1,
+    gate_word: str | None = None,
+    word_index: int = 0,
+    dormancy_weight: float = 1.0,
+    deploy_word: bool = True,
 ) -> dict[str, Any]:
     """Run one confined-patch hijack episode; return + persist a result dict.
 
@@ -94,6 +100,23 @@ def run_confined_episode(
                             TARGET-instructed OpenVLA disagree), spending budget where instruction
                             actually has leverage instead of on frames both policies agree on.
 
+    Word-gate knobs (WP7 -- ``gate_word is None`` preserves the ungated behaviour bit-identically):
+      ``gate_word``       -- a natural trigger ``w``; when set, the per-frame optimiser becomes the
+                            TWO-BRANCH loss ``CE(f(patch,c⊕w), aᵀ) + dormancy_weight·CE(f(patch,c),
+                            aᵁ)`` (``two_branch_loss``): the armed branch forces the target action
+                            under the worded instruction, the dormant branch reproduces the CLEAN
+                            action under the plain one. Only ``patch_mode='optimize'`` is gateable.
+      ``word_index``      -- word-slot the trigger is inserted at (0 prepends); domain of E2.2's
+                            position profile.
+      ``dormancy_weight`` -- ``λ`` on the dormant branch; the dormancy↔potency frontier (E2.2d).
+      ``deploy_word``     -- which condition drives the env THIS rollout: ``True`` deploys ``c⊕w``
+                            (armed, expect ``targeted↑``), ``False`` deploys ``c`` (dormant, expect
+                            ``commanded↑``, ``targeted≈0``). The optimiser is identical either way;
+                            only the executed instruction (and its best-selection teacher) differs.
+                            The scene, adjudication predicates and clean teacher stay pinned to the
+                            plain ``user_task``, so the word changes what the policy DOES, never how
+                            the outcome is JUDGED.
+
     ``scene_task`` (default ``user_task``) decouples *which LIBERO scene is built* from *which
     instruction OpenVLA is given*. Needed for the cross-user-task study: ``libero_object`` tasks
     do NOT share an object set (each instantiates target + basket + 5 task-specific distractors),
@@ -105,6 +128,16 @@ def run_confined_episode(
     predicate, not the user's, so it is recorded separately and ``commanded_success`` is decided
     only by ``eval_goal_state(resolved_user.goal_state, ...)``.
     """
+    # Word gate (WP7): resolved before any GPU work so contamination / mode errors fail fast. A
+    # ``None`` setup means the ungated default -- every branch below then takes its original path.
+    gate_setup = resolve_gate_setup(user_task, gate_word, word_index, deploy_word)
+    if gate_setup is not None and patch_mode != "optimize":
+        raise ValueError(
+            "gate_word is only defined for the optimised two-branch patch; "
+            f"got patch_mode={patch_mode!r}"
+        )
+    dormant_deploy = gate_setup is not None and not gate_setup.deploy_word
+
     if trial is not None:  # determinise EoT crop jitter for reproducibility
         _t = int(trial)
         torch.manual_seed(_t)
@@ -124,7 +157,15 @@ def run_confined_episode(
     for pm in model.parameters():
         pm.requires_grad_(False)
     model.language_model.config.use_cache = False
-    user_ids = _prompt_ids(processor, user_task)
+    user_ids = _prompt_ids(processor, user_task)  # also the dormant branch's prompt (== c)
+    if gate_setup is not None:
+        armed_ids = _prompt_ids(processor, gate_setup.armed)  # word-present branch prompt (c⊕w)
+        dormant_ids = _prompt_ids(processor, gate_setup.dormant)  # word-absent branch prompt (c)
+        deploy_task = gate_setup.deploy  # what the executed action is taken under this rollout
+    else:
+        armed_ids = None
+        dormant_ids = None
+        deploy_task = user_task
 
     from experiments.robot.libero.libero_utils import get_libero_image
     from experiments.robot.robot_utils import invert_gripper_action, normalize_gripper_action
@@ -205,6 +246,10 @@ def run_confined_episode(
         # is inflated by agreement and runs backwards across our own size boundary).
         clean_user = _real_tokens(model, processor, image, user_task)
         dec_dims = [i for i in range(7) if int(clean_user[i]) != int(teacher.view(7)[i])]
+        # The deploy teacher = the tokens the executed instruction SHOULD emit, used to select the
+        # best patch across restarts and to early-stop. Ungated / armed deploy => the TARGET action;
+        # dormant deploy => the CLEAN action (the dormant rollout wants inertness, not the hijack).
+        deploy_teacher = clean_user if dormant_deploy else teacher
 
         def _to_u8(comp: torch.Tensor) -> np.ndarray:
             return (comp[0].permute(1, 2, 0).cpu().numpy() * 255).astype(np.uint8)
@@ -240,15 +285,31 @@ def run_confined_episode(
                         composite = (img224 * (1 - mask) + patch01 * mask).clamp(0, 1)
                         side = vla_diff._CROP_SIDE + 0.03 * (torch.rand(1).item() - 0.5)
                         pv = vla_diff.preprocess(composite, side=side)
-                        logits = vla_diff.action_token_logits(model, pv, user_ids, teacher)
-                        loss = F.cross_entropy(logits.reshape(7, -1).float(), teacher.reshape(7))
+                        if gate_setup is None:
+                            logits = vla_diff.action_token_logits(model, pv, user_ids, teacher)
+                            loss = F.cross_entropy(
+                                logits.reshape(7, -1).float(), teacher.reshape(7)
+                            )
+                        else:
+                            # Two-branch: force the target under c⊕w AND reproduce the clean action
+                            # under c, so one patch must satisfy both word conditions at once.
+                            clean_1x7 = clean_user.view(1, 7)
+                            armed_logits = vla_diff.action_token_logits(
+                                model, pv, armed_ids, teacher
+                            )
+                            dormant_logits = vla_diff.action_token_logits(
+                                model, pv, dormant_ids, clean_1x7
+                            )
+                            loss = two_branch_loss(
+                                armed_logits, teacher, dormant_logits, clean_1x7, dormancy_weight
+                            )
                         opt.zero_grad(); loss.backward(); opt.step()
                     with torch.no_grad():
                         patch01 = torch.sigmoid(raw)
                         composite = (img224 * (1 - mask) + patch01 * mask).clamp(0, 1)
                         pu8 = _to_u8(composite)
-                    er = _real_tokens(model, processor, pu8, user_task)
-                    m = int((er == teacher.view(7)).sum())
+                    er = _real_tokens(model, processor, pu8, deploy_task)
+                    m = int((er == deploy_teacher.view(7)).sum())
                     if m > best[0]:
                         best = (m, er, pu8)
                         if warm_start:
@@ -339,6 +400,13 @@ def run_confined_episode(
         "cross_task": bool(cross_task), "scene_task_success": bool(scene_success),
         "effort": {"k": k, "maxtries": maxtries, "lr": lr, "restarts": restarts,
                    "warm_start": warm_start, "decisive_boost": decisive_boost},
+        # Self-describing word-gate metadata (null on the ungated default). ``deploy`` records which
+        # instruction actually drove the env, so an armed/dormant pair is unambiguous downstream.
+        "word_gate": None if gate_setup is None else {
+            "word": gate_word, "word_index": word_index, "dormancy_weight": dormancy_weight,
+            "deploy_word": deploy_word, "deploy": deploy_task,
+            "armed": gate_setup.armed, "dormant": gate_setup.dormant,
+        },
         "status": status, "targeted": bool(targeted), "latch_step": latch_step,
         # the USER task predicate -- previously computed by the env and thrown away
         "commanded_success": bool(commanded), "commanded_step": commanded_step,

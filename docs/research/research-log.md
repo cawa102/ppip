@@ -4,6 +4,80 @@ Living progress tracker. **Status at a glance** is kept current; dated entries a
 appended chronologically. Detailed run artifacts live under `runs/`. The task-by-task
 plan is `docs/plans/2026-07-01-autoppia-vla.md`.
 
+## 2026-07-30 (later) - 🧩 Word-gated patch WP7 landed: `run_confined_episode` two-branch kwargs (still no GPU spend)
+
+- **WP7 built + tested** (`docs/plans/2026-07-30-word-gated-patch.md`): `run_confined_episode`
+  (`monitor_patch_attack.py`) gains four **additive** kwargs — `gate_word`, `word_index`,
+  `dormancy_weight` (λ), `deploy_word` — the last GPU-free piece; the per-frame **targeted** gate
+  (E2.1) is now unblocked in code (the `word_gated_attack.run_perframe_targeted_gate` seam can drive
+  it by calling this twice, armed then dormant). **Nothing hits GPU** — same gate as WP1–6 (professor
+  sign-off + GPU-1 free).
+- **The surgical change:** when `gate_word` is set, the proven per-frame optimise loop switches to the
+  **two-branch** loss `CE(f(patch, c⊕w), aᵀ) + λ·CE(f(patch, c), aᵁ)` (`two_branch_loss`), mirroring
+  `word_gate_probe.probe_frame` byte-for-byte (armed branch teacher-forces the target under `c⊕w`;
+  dormant branch reproduces the clean action under `c`). The **executed** instruction and the
+  best-selection teacher follow the deployed condition (`deploy_word=True` → armed `c⊕w` toward `aᵀ`;
+  `False` → dormant `c` toward `aᵁ`), so an armed rollout is coherent and a dormant rollout stays
+  inert — while the **scene, adjudication predicates and clean teacher stay pinned to the plain
+  `user_task`**. The word changes what the policy *does*, never how the outcome is *judged* (integrity
+  boundary intact; same decoupling as WP6's `set_instruction_override`).
+- **Behavior-preserving default proven:** `gate_word is None` returns `None` from the pure
+  `resolve_gate_setup` and the loop takes its **original single-branch path bit-identically** (same
+  RNG draws, same computation, same deploy = `user_task`); the only added output is a null `word_gate`
+  record. The resolver + `GateSetup` live in the **pure** `word_gate.py` (ruff + mypy-strict clean),
+  so the CPU test suite imports them without torch.
+- **Fail-fast guards, reachable on CPU:** `gate_word` requires `patch_mode='optimize'` and a
+  **novel** trigger (uncontaminated dormant baseline) — both resolved before any policy load / env
+  build, so a dummy backend exercises them without a GPU.
+- **Tests:** 12 new CPU resolver cases in `test_word_gate.py` + 2 CPU guard cases and 3
+  `@requires_gpu` end-to-end smoke seams (armed / dormant / ungated) in `test_word_gate_kwargs.py`.
+  `word_gate` + the two touched/added test files are ruff-clean; `monitor_patch_attack.py` keeps only
+  its 4 pre-existing lint items (untouched lines). **`tests/patch_attack` green** — 238 passed, 13
+  GPU-skipped; the two reds (`test_forcing_loss` missing-module collection error, `test_crop_geometry`
+  0.9988-vs-1.0 tolerance) are **pre-existing and independent** (neither imports the word-gate code).
+- **Next:** the word-gated experiment is now **fully coded, GPU-free, and waiting only on GPU-1 +
+  professor sign-off** (open questions 1–4). First milestone on the card is still the DoS gate (Exp 1),
+  which additionally needs the DoS armed-teacher decision (open Q3).
+
+## 2026-07-30 - 🧱 Word-gated patch (P2): full GPU-free prep BUILT + tested (WP1–WP6), no spend yet
+
+- **New P2 side-track** (`docs/plans/2026-07-30-word-gated-patch.md`): a **dormant, language-gated**
+  adversarial patch — one visual patch ε (frozen model, test-time, white-box) whose effect is
+  **gated by a natural word `w`** in the instruction: word present → force target `T`; word absent →
+  clean task. ε is optimized; `w` / model / evaluator fixed. New *conditionality* axis of the
+  controllability program. Queued behind the stealth/EoT runs holding **GPU-1** — **nothing hits GPU**
+  until those free the card **and** the 4 open questions clear with the professor.
+- **GPU-free core landed — all TDD, ruff + mypy --strict clean:**
+  - **WP1 instruction construction** (`word_gate.py`): dormant `c` / armed `c⊕w`, every insertion
+    slot (position sweep), single-token guard.
+  - **WP4 first word = `please`** — semantically neutral, so any hijack is attributable to the
+    *patch* being gated, not the model obeying the word; `FIRST_WORD` + `assert_trigger_novel`
+    contamination guard.
+  - **WP2 gate metrics** (`gate_metrics.py`, 9 tests): `gate_report` → `gate_margin`,
+    `armed_forcing_fraction`, `false_fire_rate` + raw counts, **targeted & DoS** variants. Built on the
+    fixed `evaluator.metrics.summarize_rollouts` — it *derives*, never re-judges (scoring invariant intact).
+  - **WP3 two-branch loss** (`two_branch_loss.py`, 8 tests): `CE(armed,target) + λ·CE(dormant,clean)`,
+    CE mirrors `monitor_patch_attack.py:244`; λ weights only the dormancy branch (E2.2d frontier knob).
+  - **WP5 open-loop probe scaffold** (`word_gate_probe.py`, 13 pure tests + `@requires_gpu` seam):
+    frame listing, `decisive_dims`/`forced_fraction`, `aggregate_gate_diagram`,
+    `gradient_gate_signal` (the feasibility-hinge diagnostic); `probe_frame` seam mirrors the proven
+    per-frame optimize loop with the dormancy branch added. Own-code mypy-strict clean (GPU-seam file
+    like `monitor_patch_attack` — direct `vla_diff`/`adaptive_attack` imports surface *their* debt).
+  - **WP6 closed-loop driver scaffold** (`word_gated_attack.py`, 5 pure tests + `@requires_gpu` seam):
+    `assemble_word_gate_result` / `reportable_inits` / E2.1 deferral; `run_static_dos_gate` (E1.1)
+    composes the fixed pieces via the `ceiling_screen` mechanism — **adjudicate on the clean task,
+    override only the policy instruction** — so the word changes behavior, never the verdict. Fully
+    ruff + mypy --strict clean.
+- **Design finding (surfaced building WP5):** the **DoS armed-teacher is unsettled** (halt teacher vs
+  untargeted divergence — the WP3 open item), so the probe wires `--effect targeted` now and **defers
+  `--effect dos`** loudly. This sharpens open question #3 for the professor: the first-milestone DoS
+  gate is blocked on that teacher choice, not on plumbing.
+- **Full `tests/patch_attack` suite green** — 210 passed, 10 GPU-skipped. All new files are additive;
+  no trusted-side or stealth-session files touched.
+- **Next:** WP7 (`run_confined_episode` additive `gate_word`/`dormancy_weight` kwargs) stays deferred
+  until the stealth session frees the file **and** professor sign-off; and the DoS-teacher decision
+  unblocks the Exp-1 first milestone. Everything GPU-free is now built and tested.
+
 ## 2026-07-23 - ✅ Corner size sweep to the floor: **32×32 = 2.0% of frame** hijacks (below the on-object minimum)
 
 - **Task:** continue the corner size-minimization below 48×48 (autoresearch: cheap open-loop gate →
