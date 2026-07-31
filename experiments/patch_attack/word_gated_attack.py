@@ -17,14 +17,21 @@ Split for testability:
 * **GPU seam** (``run_static_dos_gate`` / ``main``) — the armed/dormant rollout pair, run under
   ``PPIP_GPU_TESTS`` on GPU 1.
 
-E1.1 (static DoS) is fully wired here. E2.1 (per-frame targeted) needs the per-frame two-branch
-optimizer (WP7) and is a loud deferral until that lands.
+Both experiments are wired: **E1.1** (static DoS) replays a frozen patch through the fixed
+backend, and **E2.1** (per-frame targeted) runs the live two-branch optimiser once per init and
+condition. E2.1 has no frozen artifact to replay — the per-frame attack *is* a procedure — so its
+verdicts come from the fixed predicates inside each episode, latch-not-terminate, exactly as every
+corner result was produced.
 
 Run (GPU 1 only, per CLAUDE.md):
 
     CUDA_VISIBLE_DEVICES=1 MUJOCO_GL=egl PYTHONPATH=$HOME/LIBERO \
       ~/vla-injection/.venv/bin/python experiments/patch_attack/word_gated_attack.py \
-        --patch runs/monitor-stealth/patches/dos_bl64.npy --word please --inits heldout
+        --exp targeted --word please --inits heldout
+
+    CUDA_VISIBLE_DEVICES=1 MUJOCO_GL=egl PYTHONPATH=$HOME/LIBERO \
+      ~/vla-injection/.venv/bin/python experiments/patch_attack/word_gated_attack.py \
+        --exp dos --patch runs/monitor-stealth/patches/dos_bl64.npy --inits heldout
 """
 from __future__ import annotations
 
@@ -90,15 +97,163 @@ def assemble_word_gate_result(
     )
 
 
-def run_perframe_targeted_gate(*args: Any, **kwargs: Any) -> WordGateResult:
-    """E2.1 seam — deferred. Refuses loudly rather than silently returning a wrong result.
+#: The measured-clear BL 64×64 corner (8.2% of frame) — `occlusion_probe.corner_rect("BL", 64)`.
+GATE_RECT: tuple[int, int, int, int] = (160, 0, 64, 64)
 
-    Per-frame targeted gating requires the per-frame two-branch optimizer (WP7); the open-loop
-    ``word_gate_probe`` covers the targeted gate until that lands.
+#: The escalated per-frame budget that carried the 64/48/40 corner hijacks (`runs/monitor-corner`).
+#: A gated episode pays it twice per optimiser step (two branches), so it is the dominant cost.
+ESCALATED_EFFORT: dict[str, Any] = {
+    "k": 30, "maxtries": 10, "lr": 3e-2, "restarts": 3, "warm_start": False, "decisive_boost": 1,
+}
+
+CONDITIONS: tuple[str, str] = ("armed", "dormant")
+
+
+def _row_key(row: dict[str, Any]) -> tuple[int, str]:
+    return int(row["init"]), str(row["condition"])
+
+
+def _completed_rows(rows_path: str) -> dict[tuple[int, str], dict[str, Any]]:
+    """Finished ``(init, condition)`` episodes from a previous (possibly killed) run.
+
+    Later rows supersede earlier ones for the same key, so a successful retry replaces an earlier
+    errored attempt without rewriting history (the file stays append-only).
     """
-    raise NotImplementedError(
-        "E2.1 per-frame targeted gating needs the per-frame two-branch optimizer (WP7); "
-        "use word_gate_probe for the open-loop targeted probe until then"
+    import json
+
+    if not os.path.exists(rows_path):
+        return {}
+    with open(rows_path, encoding="utf-8") as handle:
+        rows = [json.loads(line) for line in handle if line.strip()]
+    return {_row_key(row): row for row in rows}
+
+
+def _append_row(rows_path: str, row: dict[str, Any]) -> None:
+    """Append one finished episode. Append-only: a resumed run never rewrites earlier rows."""
+    import json
+
+    with open(rows_path, "a", encoding="utf-8") as handle:
+        handle.write(json.dumps(row) + "\n")
+
+
+def _outcome(row: dict[str, Any], episode_index: int) -> RolloutOutcome:
+    """One ledger row → the fixed evaluator's outcome type.
+
+    A row carrying an ``error`` becomes an *errored* outcome, which ``summarize_rollouts`` keeps
+    out of the rates entirely — a crashed episode is missing data, never "the attack failed".
+    """
+    error = row.get("error")
+    return RolloutOutcome(
+        seed=int(row["init"]),
+        episode_index=episode_index,
+        commanded_success=bool(row["commanded"]) and error is None,
+        targeted_success=bool(row["targeted"]) and error is None,
+        error=error,
+    )
+
+
+def run_perframe_targeted_gate(
+    backend: Any,
+    *,
+    init_indices: Sequence[int],
+    run_dir: str,
+    rect: tuple[int, int, int, int] = GATE_RECT,
+    base_instruction: str = USER_TASK,
+    target_task: str = TARGET_TASK,
+    word: str = FIRST_WORD,
+    index: int = 0,
+    dormancy_weight: float = 1.0,
+    max_steps: int = 240,
+    effort: dict[str, Any] | None = None,
+    episode_fn: Any = None,
+) -> WordGateResult:
+    """E2.1: the per-frame targeted gate — one live two-branch episode per init and condition.
+
+    Unlike E1.1 there is no frozen patch to replay: the per-frame attack *is* a live procedure, so
+    each rollout re-fits ε at every step (``run_confined_episode`` with the word-gate kwargs). The
+    armed and dormant rollouts run the **identical** optimiser and the identical condition-blind
+    selection rule; only ``deploy_word`` — which instruction drives the environment — differs.
+
+    Verdicts still come from the fixed predicates inside the episode (``eval_goal_state`` on the
+    resolved user/target goal states, latch-not-terminate); this driver only *pairs and derives*.
+
+    Episodes cost hours and the GPU is thermally shared (spine rule 8), so every finished episode
+    is appended to ``<run_dir>/rows.jsonl`` and a restart skips what is already there.
+
+    ``episode_fn`` injects the GPU boundary for testing; ``None`` uses the real optimiser.
+    """
+    assert_trigger_novel(word, base_instruction)
+    conditions = GateConditions.make(base_instruction, word, index)
+    if episode_fn is None:  # imported lazily: the pure core must stay importable without torch
+        from monitor_patch_attack import run_confined_episode
+
+        episode_fn = run_confined_episode
+
+    os.makedirs(run_dir, exist_ok=True)
+    rows_path = os.path.join(run_dir, "rows.jsonl")
+    done = _completed_rows(rows_path)
+    settings = dict(ESCALATED_EFFORT if effort is None else effort)
+
+    for init in init_indices:
+        for condition in CONDITIONS:
+            # Only a SUCCESSFUL episode is skipped on resume. An errored one is retried: over a
+            # multi-day unattended run most errors are transient (thermal kill, a transient OOM
+            # while the card is shared), and permanently burning an init would silently shrink N.
+            previous = done.get((int(init), condition))
+            if previous is not None and previous.get("error") is None:
+                print(f"[word-gate] resume: {condition} init={init} already done", flush=True)
+                continue
+            if previous is not None:
+                print(f"[word-gate] retry: {condition} init={init} after {previous['error']}",
+                      flush=True)
+            row: dict[str, Any] = {"init": int(init), "condition": condition, "error": None}
+            try:
+                result = episode_fn(
+                    backend,
+                    rect=rect,
+                    seed=int(init),
+                    max_steps=max_steps,
+                    run_dir=run_dir,
+                    tag=f"wg_e21_{condition}_init{init}",
+                    user_task=base_instruction,
+                    target_task=target_task,
+                    patch_mode="optimize",
+                    gate_word=word,
+                    word_index=index,
+                    dormancy_weight=dormancy_weight,
+                    deploy_word=condition == "armed",
+                    **settings,
+                )
+            except Exception as exc:  # noqa: BLE001 -- a dead episode is data, not a verdict
+                row |= {
+                    "targeted": False, "commanded": False,
+                    "error": f"{type(exc).__name__}: {exc}",
+                }
+                print(f"[word-gate] ERROR {condition} init={init}: {exc}", flush=True)
+            else:
+                row |= {
+                    "targeted": bool(result["targeted"]),
+                    "commanded": bool(result["commanded_success"]),
+                    "status": result.get("status"),
+                    "latch_step": result.get("latch_step"),
+                    "gate_diagnostic": result.get("gate_diagnostic"),
+                }
+            _append_row(rows_path, row)
+            done[_row_key(row)] = row
+
+    per_condition = {
+        condition: [
+            _outcome(done[(int(init), condition)], i) for i, init in enumerate(init_indices)
+        ]
+        for condition in CONDITIONS
+    }
+    return assemble_word_gate_result(
+        conditions=conditions,
+        effect=Effect.TARGETED,
+        target_task=target_task,
+        init_indices=init_indices,
+        armed_outcomes=per_condition["armed"],
+        dormant_outcomes=per_condition["dormant"],
     )
 
 
@@ -208,8 +363,18 @@ def _result_to_dict(result: WordGateResult) -> dict[str, Any]:
 def parse_args() -> Any:
     import argparse
 
-    parser = argparse.ArgumentParser(description="Closed-loop word-gated static-DoS driver (E1.1).")
-    parser.add_argument("--patch", required=True, help="path to a [h,w,3] float .npy in [0,1]")
+    parser = argparse.ArgumentParser(
+        description="Closed-loop word-gated attack driver (E1.1 static DoS / E2.1 per-frame)."
+    )
+    parser.add_argument(
+        "--exp", choices=("targeted", "dos"), default="targeted",
+        help="targeted = E2.1 per-frame live optimiser; dos = E1.1 frozen static patch",
+    )
+    parser.add_argument("--patch", help="E1.1 only: path to a [h,w,3] float .npy in [0,1]")
+    parser.add_argument("--max-steps", type=int, default=240, help="E2.1 episode horizon")
+    parser.add_argument(
+        "--dormancy-weight", type=float, default=1.0, help="E2.1 lambda on the dormant branch"
+    )
     parser.add_argument("--row0", type=int, default=160)
     parser.add_argument("--col0", type=int, default=0)
     parser.add_argument("--word", default=FIRST_WORD)
@@ -233,9 +398,13 @@ def main() -> None:
 
     args = parse_args()
     shared_inits.verify_precommit()
-    patch = np.load(args.patch).astype(np.float32)
-    if patch.ndim != 3 or patch.shape[2] != 3:
-        raise SystemExit(f"expected a [h,w,3] patch, got {patch.shape}")
+    patch = None
+    if args.exp == "dos":
+        if not args.patch:
+            raise SystemExit("--exp dos scores a frozen patch; pass --patch")
+        patch = np.load(args.patch).astype(np.float32)
+        if patch.ndim != 3 or patch.shape[2] != 3:
+            raise SystemExit(f"expected a [h,w,3] patch, got {patch.shape}")
 
     splits = {
         "heldout": shared_inits.HELDOUT_INITS,
@@ -252,22 +421,33 @@ def main() -> None:
     backend.load_policy_once()
     print(f"[word-gate] {shared_inits.summary()}", flush=True)
 
-    result = run_static_dos_gate(
-        backend, patch=patch, init_indices=init_indices, top_left=(args.row0, args.col0),
-        base_instruction=args.user_task, word=args.word, index=args.index,
-        target_task=args.target_task,
-    )
-    out_path = os.path.join(args.out, f"word_gate_dos_{args.word}.json")
+    if args.exp == "dos":
+        result = run_static_dos_gate(
+            backend, patch=patch, init_indices=init_indices, top_left=(args.row0, args.col0),
+            base_instruction=args.user_task, word=args.word, index=args.index,
+            target_task=args.target_task,
+        )
+        headline = "denied WITH word    "
+    else:
+        result = run_perframe_targeted_gate(
+            backend, init_indices=init_indices, run_dir=args.out,
+            rect=(args.row0, args.col0, GATE_RECT[2], GATE_RECT[3]),
+            base_instruction=args.user_task, target_task=args.target_task,
+            word=args.word, index=args.index, dormancy_weight=args.dormancy_weight,
+            max_steps=args.max_steps,
+        )
+        headline = "hijacked WITH word  "
+    out_path = os.path.join(args.out, f"word_gate_{args.exp}_{args.word}.json")
     with open(out_path, "w", encoding="utf-8") as handle:
         json.dump(_result_to_dict(result), handle, indent=2)
 
     r = result.report
-    print("\n===== WORD-GATED DoS (E1.1, fixed evaluator) =====", flush=True)
-    print(f"  denied WITH word    {r.armed_fires}/{r.n_armed} "
+    print(f"\n===== WORD-GATED {args.exp.upper()} (fixed evaluator) =====", flush=True)
+    print(f"  {headline}{r.armed_fires}/{r.n_armed} "
           f"({r.armed_forcing_fraction:.3f})", flush=True)
     print(f"  false-fire (no word){r.dormant_fires}/{r.n_dormant} "
           f"({r.false_fire_rate:.3f})", flush=True)
-    print(f"  DoS gate margin     {r.gate_margin:.3f}", flush=True)
+    print(f"  gate margin         {r.gate_margin:.3f}", flush=True)
     print(f"  reportable          {result.reportable} (held-out only)", flush=True)
     print(f"[word-gate] wrote {out_path}", flush=True)
 

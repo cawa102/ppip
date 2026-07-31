@@ -218,6 +218,12 @@ def probe_frame(
     from adaptive_attack import _prompt_ids, _real_tokens
     from two_branch_loss import two_branch_loss
 
+    # The model is FROZEN -- only ε is optimised. Without this, backward also allocates gradient
+    # buffers for all 7B weights and the two-branch pass OOMs the card (mirrors
+    # ``monitor_patch_attack.py``'s freeze before its optimise loop).
+    for parameter in model.parameters():
+        parameter.requires_grad_(False)
+
     frame_u8 = np.asarray(frame_u8, dtype=np.uint8)
     img224 = (
         torch.from_numpy(frame_u8.astype(np.float32) / 255.0).permute(2, 0, 1)[None].to(DEVICE)
@@ -364,10 +370,6 @@ def main() -> None:
     print(f"[word-gate] wrote {out_path}", flush=True)
 
 
-if __name__ == "__main__":
-    main()
-
-
 def list_frame_paths(train_dir: str) -> list[str]:
     """Sorted policy-input frames (``f*.png``) under a ``frames/train/`` buffer, recursively.
 
@@ -378,3 +380,9 @@ def list_frame_paths(train_dir: str) -> list[str]:
     if not os.path.isdir(train_dir):
         raise ValueError(f"frame buffer {train_dir!r} does not exist")
     return sorted(glob.glob(os.path.join(train_dir, "**", "f*.png"), recursive=True))
+
+
+# The entry point stays LAST: `main()` calls module-level helpers, so anything defined below this
+# guard would not exist yet when the file is run as a script (it only worked under import).
+if __name__ == "__main__":
+    main()

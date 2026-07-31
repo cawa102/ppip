@@ -10,6 +10,7 @@ GPU work, so it is exercised on CPU with a dummy backend. See
 from __future__ import annotations
 
 import os
+from typing import Any
 
 import pytest
 
@@ -21,6 +22,18 @@ requires_gpu = pytest.mark.skipif(
 USER_TASK = "pick up the alphabet soup and place it in the basket"
 TARGET_TASK = "pick up the salad dressing and place it in the basket"
 PROBE_RECT = (160, 0, 64, 64)  # the measured-clear BL 64x64 corner
+
+
+def _trace_rows(run_dir: object) -> list[dict[str, Any]]:
+    """The per-step trace ``run_confined_episode`` writes beside its result JSON."""
+    import glob
+    import json
+
+    paths = glob.glob(os.path.join(str(run_dir), "trace_*.json"))
+    assert len(paths) == 1, f"expected exactly one trace file, got {paths}"
+    with open(paths[0], encoding="utf-8") as handle:
+        rows: list[dict[str, Any]] = json.load(handle)
+    return rows
 
 
 def test_gate_word_requires_optimize_patch_mode_fails_before_gpu() -> None:
@@ -102,6 +115,17 @@ def test_armed_word_gated_episode_runs_two_branch_optimiser_end_to_end(tmp_path:
     assert isinstance(result["targeted"], bool)
     assert isinstance(result["commanded_success"], bool)
 
+    # Per-step same-frame gate record: both instructions evaluated on the SAME composite, which
+    # the condition-blind selection already computes (so it costs no extra forward pass).
+    rows = _trace_rows(tmp_path)
+    gated = [r["gate"] for r in rows if r["gate"] is not None]
+    assert gated, "a gated episode must record the per-step armed/dormant comparison"
+    for g in gated:
+        assert len(g["armed_tokens"]) == 7 and len(g["dormant_tokens"]) == 7
+        assert 0 <= g["armed_match"] <= 7 and 0 <= g["dormant_match"] <= 7
+        assert 0.0 <= g["armed_forced"] <= 1.0 and 0.0 <= g["dormant_forced"] <= 1.0
+        assert g["branches_differ"] == (g["armed_tokens"] != g["dormant_tokens"])
+
 
 @requires_gpu
 def test_dormant_word_gated_episode_deploys_the_plain_instruction(tmp_path: object) -> None:
@@ -129,6 +153,9 @@ def test_dormant_word_gated_episode_deploys_the_plain_instruction(tmp_path: obje
 
     assert result["word_gate"]["deploy_word"] is False
     assert result["word_gate"]["deploy"] == USER_TASK  # deployed the plain instruction
+    # The dormant rollout records the same two-branch comparison as the armed one: the optimiser
+    # and the selection rule are identical in both conditions, only the deployment differs.
+    assert [r["gate"] for r in _trace_rows(tmp_path) if r["gate"] is not None]
 
 
 @requires_gpu
@@ -154,3 +181,6 @@ def test_ungated_default_records_no_word_gate(tmp_path: object) -> None:
     )
 
     assert result["word_gate"] is None
+    assert result["gate_diagnostic"] is None
+    # The trace schema is unchanged for every pre-existing run: the gate slot is simply null.
+    assert all(row["gate"] is None for row in _trace_rows(tmp_path))

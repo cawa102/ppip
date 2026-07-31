@@ -37,11 +37,13 @@ for p in ("autoresearch/src", "autoresearch", "openvla", "autoresearch/experimen
     sys.path.insert(0, os.path.join(HOME, p))
 
 import patch_config as C  # noqa: E402
+import stealth_patch as SP  # noqa: E402
 import vla_diff  # noqa: E402
 from adaptive_attack import _decode_action, _prompt_ids, _real_tokens  # noqa: E402
 from hijack_backend import HijackBackend  # noqa: E402
 from two_branch_loss import two_branch_loss  # noqa: E402
-from word_gate import resolve_gate_setup  # noqa: E402
+from word_gate import GATE_SELECTION_MAX, gate_step_selection, resolve_gate_setup  # noqa: E402
+from word_gate_probe import forced_fraction  # noqa: E402
 
 from evaluator.adjudicate import eval_goal_state  # noqa: E402
 from evaluator.libero_tasks import resolve_task  # noqa: E402
@@ -82,6 +84,8 @@ def run_confined_episode(
     word_index: int = 0,
     dormancy_weight: float = 1.0,
     deploy_word: bool = True,
+    stealth_base: torch.Tensor | None = None,
+    stealth_eps: float | None = None,
 ) -> dict[str, Any]:
     """Run one confined-patch hijack episode; return + persist a result dict.
 
@@ -117,6 +121,18 @@ def run_confined_episode(
                             plain ``user_task``, so the word changes what the policy DOES, never how
                             the outcome is JUDGED.
 
+    Stealth knobs (``stealth_base is None`` preserves the free-range behaviour bit-identically):
+      ``stealth_base``  -- a FULL-FRAME ``[1,3,224,224]`` carrier image (the logo drawn into the
+                          rect). When set, the per-step patch becomes
+                          ``clamp(base + eps*tanh(raw), 0, 1)`` instead of ``sigmoid(raw)``, so it
+                          is provably within ``eps`` of the carrier by construction -- no
+                          projection step and no way for the optimiser to exceed the budget it
+                          claims. ``raw = 0`` (the loop's own init) is then exactly the pure
+                          carrier, which makes the eps-0 control the initialisation rather than a
+                          separate code path.
+      ``stealth_eps``   -- the L-infinity budget. ``0`` runs the pure-carrier control (the patch
+                          never moves), ``1`` is effectively free-range.
+
     ``scene_task`` (default ``user_task``) decouples *which LIBERO scene is built* from *which
     instruction OpenVLA is given*. Needed for the cross-user-task study: ``libero_object`` tasks
     do NOT share an object set (each instantiates target + basket + 5 task-specific distractors),
@@ -136,7 +152,29 @@ def run_confined_episode(
             "gate_word is only defined for the optimised two-branch patch; "
             f"got patch_mode={patch_mode!r}"
         )
-    dormant_deploy = gate_setup is not None and not gate_setup.deploy_word
+    # Stealth ball, resolved on the same fail-fast footing: a half-specified pair would
+    # otherwise silently run free-range while the metadata claimed a budget.
+    stealth = SP.resolve_confined_stealth(stealth_base, stealth_eps)
+    if stealth is not None and patch_mode != "optimize":
+        raise ValueError(
+            "stealth_base is only defined for the optimised patch; "
+            f"got patch_mode={patch_mode!r}"
+        )
+
+    def build_patch(raw: torch.Tensor) -> torch.Tensor:
+        """The per-step patch: free-range ``sigmoid(raw)``, or the eps-ball around the carrier.
+
+        One definition serves both the optimisation step and the no-grad verification, so the
+        patch that gets scored is always the patch that was optimised.
+        """
+        if stealth is None:
+            return torch.sigmoid(raw)
+        return SP.stealth_patch(raw, stealth.base, stealth.eps)
+
+    #: Largest deviation from the carrier seen on any EXECUTED patch, over the whole episode.
+    #: The bound is guaranteed by the parameterization; this re-measures it anyway, because a
+    #: stealth claim that is only ever self-reported is not evidence.
+    stealth_linf_max = 0.0
 
     if trial is not None:  # determinise EoT crop jitter for reproducibility
         _t = int(trial)
@@ -246,14 +284,13 @@ def run_confined_episode(
         # is inflated by agreement and runs backwards across our own size boundary).
         clean_user = _real_tokens(model, processor, image, user_task)
         dec_dims = [i for i in range(7) if int(clean_user[i]) != int(teacher.view(7)[i])]
-        # The deploy teacher = the tokens the executed instruction SHOULD emit, used to select the
-        # best patch across restarts and to early-stop. Ungated / armed deploy => the TARGET action;
-        # dormant deploy => the CLEAN action (the dormant rollout wants inertness, not the hijack).
-        deploy_teacher = clean_user if dormant_deploy else teacher
 
         def _to_u8(comp: torch.Tensor) -> np.ndarray:
             return (comp[0].permute(1, 2, 0).cpu().numpy() * 255).astype(np.uint8)
 
+        # Per-step same-frame gate evidence; stays None for the ungated path and for the
+        # unoptimised control modes (which the gate guard already refuses to pair with a word).
+        gate_step_record: dict[str, Any] | None = None
         if patch_mode == "none":  # clean control -- no patch at all
             exec_pu8 = image
             exec_real = clean_user
@@ -268,10 +305,15 @@ def run_confined_episode(
             exec_real = _real_tokens(model, processor, exec_pu8, user_task)
             match = int((exec_real == teacher.view(7)).sum())
         else:
-            # Optimise a free [0,1] replacement patch confined to the rectangle. sigmoid(raw)
+            # Optimise a replacement patch confined to the rectangle -- free-range by default
+            # (``build_patch`` above; eps-ball around a carrier when stealthy). sigmoid(raw)
             # spans the monitor's full dynamic range (unlike GATE-B's eps-0.15 additive).
             k_step = k * decisive_boost if len(dec_dims) >= 2 else k
-            best: tuple[int, Any, Any] = (-1, None, None)  # (real_match, tokens, patched_u8)
+            # (rank, tokens, patched_u8, deploy_match, gate_record). `rank` is the selection key:
+            # the plain teacher match when ungated, and the deploy-INDEPENDENT two-branch score
+            # when gated (see word_gate.gate_step_selection).
+            best: tuple[int, Any, Any, int, dict[str, Any] | None] = (-1, None, None, 0, None)
+            full_rank = GATE_SELECTION_MAX if gate_setup is not None else 7
             for _restart in range(max(1, restarts)):
                 if _restart == 0:
                     raw = ((warm_raw.clone() if (warm_start and warm_raw is not None)
@@ -281,7 +323,7 @@ def run_confined_episode(
                 opt = torch.optim.Adam([raw], lr=lr)
                 for _attempt in range(maxtries):
                     for _ in range(k_step):
-                        patch01 = torch.sigmoid(raw)
+                        patch01 = build_patch(raw)
                         composite = (img224 * (1 - mask) + patch01 * mask).clamp(0, 1)
                         side = vla_diff._CROP_SIDE + 0.03 * (torch.rand(1).item() - 0.5)
                         pv = vla_diff.preprocess(composite, side=side)
@@ -305,22 +347,62 @@ def run_confined_episode(
                             )
                         opt.zero_grad(); loss.backward(); opt.step()
                     with torch.no_grad():
-                        patch01 = torch.sigmoid(raw)
+                        patch01 = build_patch(raw)
                         composite = (img224 * (1 - mask) + patch01 * mask).clamp(0, 1)
                         pu8 = _to_u8(composite)
-                    er = _real_tokens(model, processor, pu8, deploy_task)
-                    m = int((er == deploy_teacher.view(7)).sum())
-                    if m > best[0]:
-                        best = (m, er, pu8)
+                        if stealth is not None:
+                            # Measured inside the mask only: outside it the "base" is never
+                            # shown, so including it would understate the deviation.
+                            stealth_linf_max = max(
+                                stealth_linf_max,
+                                float(((patch01 - stealth.base) * mask).abs().max().item()),
+                            )
+                    if gate_setup is None:
+                        er = _real_tokens(model, processor, pu8, user_task)
+                        m = int((er == teacher.view(7)).sum())
+                        rank, perfect, gate_record = m, m == 7, None
+                    else:
+                        # Condition-BLIND selection: the attacker places one patch without knowing
+                        # whether the operator will utter w, so both rollouts must rank candidates
+                        # by the same two-branch score. Only the EXECUTED action follows the
+                        # deployed instruction. Ranking on the deployed condition instead would
+                        # pick the most forcing patch when armed and the most inert one when
+                        # dormant -- inflating the gate margin from both ends.
+                        er_armed = _real_tokens(model, processor, pu8, gate_setup.armed)
+                        er_dormant = _real_tokens(model, processor, pu8, gate_setup.dormant)
+                        armed_match = int((er_armed == teacher.view(7)).sum())
+                        dormant_match = int((er_dormant == clean_user.view(7)).sum())
+                        sel = gate_step_selection(
+                            armed_match=armed_match,
+                            dormant_match=dormant_match,
+                            deploy_word=gate_setup.deploy_word,
+                        )
+                        er = er_armed if sel.execute_armed else er_dormant
+                        m, rank, perfect = sel.deploy_match, sel.score, sel.is_perfect
+                        # Same-frame gate evidence, free: both branches were just evaluated on the
+                        # SAME composite, so this is the open-loop probe's comparison taken live at
+                        # every step (Stage B0's short-horizon pre-flight reads it).
+                        armed_list = [int(t) for t in er_armed.view(7)]
+                        dormant_list = [int(t) for t in er_dormant.view(7)]
+                        target_list = [int(t) for t in teacher.view(7)]
+                        gate_record = {
+                            "armed_tokens": armed_list, "dormant_tokens": dormant_list,
+                            "armed_match": armed_match, "dormant_match": dormant_match,
+                            "armed_forced": forced_fraction(armed_list, target_list, dec_dims),
+                            "dormant_forced": forced_fraction(dormant_list, target_list, dec_dims),
+                            "branches_differ": armed_list != dormant_list,
+                        }
+                    if rank > best[0]:
+                        best = (rank, er, pu8, m, gate_record)
                         if warm_start:
                             warm_raw = raw.detach().clone()
-                    if m == 7:
+                    if perfect:
                         break
                     for g in opt.param_groups:  # escalate optimisation pressure on hard frames
                         g["lr"] = min(g["lr"] * 1.5, 0.3)
-                if best[0] == 7:
+                if best[0] == full_rank:
                     break
-            match, exec_real, exec_pu8 = best
+            _rank, exec_real, exec_pu8, match, gate_step_record = best
         match_trace.append(match)
         dec_hits = sum(1 for i in dec_dims if int(exec_real[i]) == int(teacher.view(7)[i]))
         if record_dir and exec_pu8 is not None:
@@ -366,6 +448,8 @@ def run_confined_episode(
             "d_targetobj_region": d,
             "d_userobj_region": backend._distance_between(ostates, uobj, ureg),
             "commanded": commanded, "targeted": targeted,
+            # Null on every ungated run, so the existing trace schema is unchanged.
+            "gate": gate_step_record,
         })
         if step % 5 == 0 or targeted:
             print(f"[monpatch] step={step} tok_match={match}/7 decisive={dec_hits}/{len(dec_dims)} "
@@ -393,6 +477,20 @@ def run_confined_episode(
     dec = [t for t in step_trace if t["n_decisive_dims"] >= 2]
     min_eef_t, min_eef_t_step = _argmin("d_eef_target")
     min_eef_u, min_eef_u_step = _argmin("d_eef_user")
+    # Same-frame gate evidence aggregated over DECISIVE steps only (steps where the two teachers
+    # disagree -- elsewhere there is nothing to force and a "match" proves nothing). This is what
+    # the short-horizon pre-flight reads: does the word change the action on the same observation?
+    gate_rows = [
+        t["gate"] for t in step_trace if t.get("gate") is not None and t["n_decisive_dims"] > 0
+    ]
+    gate_diagnostic = None if not gate_rows else {
+        "n_decisive_steps": len(gate_rows),
+        "mean_armed_forced": float(np.mean([g["armed_forced"] for g in gate_rows])),
+        "mean_dormant_forced": float(np.mean([g["dormant_forced"] for g in gate_rows])),
+        "branches_differ_fraction": float(
+            np.mean([1.0 if g["branches_differ"] else 0.0 for g in gate_rows])
+        ),
+    }
     result = {
         "tag": tag, "seed": seed, "rect": list(rect), "area_px": area, "area_frac": frac,
         "patch_mode": patch_mode,
@@ -400,6 +498,12 @@ def run_confined_episode(
         "cross_task": bool(cross_task), "scene_task_success": bool(scene_success),
         "effort": {"k": k, "maxtries": maxtries, "lr": lr, "restarts": restarts,
                    "warm_start": warm_start, "decisive_boost": decisive_boost},
+        # Null on the free-range default. ``linf_measured_max`` is re-measured from the executed
+        # patches rather than asserted from ``eps``.
+        "stealth": None if stealth is None else {
+            "eps": stealth.eps, "linf_measured_max": stealth_linf_max,
+            "bound_holds": stealth_linf_max <= stealth.eps + 1e-6,
+        },
         # Self-describing word-gate metadata (null on the ungated default). ``deploy`` records which
         # instruction actually drove the env, so an armed/dormant pair is unambiguous downstream.
         "word_gate": None if gate_setup is None else {
@@ -407,6 +511,9 @@ def run_confined_episode(
             "deploy_word": deploy_word, "deploy": deploy_task,
             "armed": gate_setup.armed, "dormant": gate_setup.dormant,
         },
+        # Derived from the per-step records above; null when ungated. NOT a verdict -- the
+        # targeted/commanded keys below remain the fixed predicates' and are untouched by it.
+        "gate_diagnostic": gate_diagnostic,
         "status": status, "targeted": bool(targeted), "latch_step": latch_step,
         # the USER task predicate -- previously computed by the env and thrown away
         "commanded_success": bool(commanded), "commanded_step": commanded_step,

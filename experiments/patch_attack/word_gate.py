@@ -26,6 +26,15 @@ from typing import Final
 #: the word. See docs/plans/2026-07-30-word-gated-patch.md (WP4).
 FIRST_WORD: Final[str] = "please"
 
+#: OpenVLA action-token count (matches ``two_branch_loss.ACTION_DIM``; kept local so this
+#: pure core imports without pulling in torch — same convention as ``word_gate_probe``).
+ACTION_DIM: Final[int] = 7
+
+#: Best possible rank for a gated candidate patch: both word conditions fully satisfied by the
+#: SAME patch (armed branch forced to the target *and* dormant branch reproducing the clean
+#: action). Reaching it is the gated early-stop, replacing the ungated ``match == ACTION_DIM``.
+GATE_SELECTION_MAX: Final[int] = 2 * ACTION_DIM
+
 
 def normalize_instruction(instruction: str) -> str:
     """Collapse runs of whitespace to single spaces and strip the ends.
@@ -167,6 +176,51 @@ class GateSetup:
     def deploy(self) -> str:
         """Instruction the executed action is taken under: armed if ``w`` uttered, else ``c``."""
         return self.conditions.armed if self.deploy_word else self.conditions.dormant
+
+
+@dataclass(frozen=True)
+class GateStepSelection:
+    """How one candidate patch ranks at an optimiser step, and which branch's action executes.
+
+    ``score`` is deliberately **independent of the deployed condition**: the attacker places one
+    patch without knowing whether the operator will utter ``w``, so the same candidate must win
+    in the armed and dormant rollouts alike. Ranking on the deployed condition instead would pick
+    the most target-forcing patch when armed and the most clean-looking patch when dormant —
+    inflating the gate margin from both ends and measuring our own selection rather than the
+    model's cross-modal gating.
+
+    ``execute_armed`` / ``deploy_match`` are the parts that *do* follow the deployment: the
+    environment must be driven by the action the policy emits under the instruction actually
+    given, and the step trace records that branch's teacher match.
+    """
+
+    score: int
+    execute_armed: bool
+    deploy_match: int
+
+    @property
+    def is_perfect(self) -> bool:
+        """True when one patch satisfies BOTH word conditions — the gated early stop."""
+        return self.score == GATE_SELECTION_MAX
+
+
+def gate_step_selection(
+    *, armed_match: int, dormant_match: int, deploy_word: bool
+) -> GateStepSelection:
+    """Rank one candidate patch by both branches at once (see :class:`GateStepSelection`).
+
+    ``armed_match`` = action tokens matching the **target** teacher under ``c⊕w``;
+    ``dormant_match`` = tokens matching the **clean** teacher under ``c``. Both are counts out
+    of :data:`ACTION_DIM`; anything else is a caller bug and raises.
+    """
+    for name, value in (("armed_match", armed_match), ("dormant_match", dormant_match)):
+        if not 0 <= value <= ACTION_DIM:
+            raise ValueError(f"{name} must be in [0, {ACTION_DIM}], got {value}")
+    return GateStepSelection(
+        score=armed_match + dormant_match,
+        execute_armed=deploy_word,
+        deploy_match=armed_match if deploy_word else dormant_match,
+    )
 
 
 def resolve_gate_setup(

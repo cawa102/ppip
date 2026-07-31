@@ -4,6 +4,87 @@ Living progress tracker. **Status at a glance** is kept current; dated entries a
 appended chronologically. Detailed run artifacts live under `runs/`. The task-by-task
 plan is `docs/plans/2026-07-01-autoppia-vla.md`.
 
+## 2026-07-31 - 🔍 Word-gate prep audited: 3 defects found and fixed (WP8/WP9) before any spend
+
+An audit of the **code** (not the docs) before the first word-gate GPU run. The prep was reported
+"fully coded, awaiting only GPU-1 + sign-off"; it was **not run-ready**. Professor has since signed
+off (open Q1–Q4 resolved, targeted-first) and GPU-1 is available, so the fixes were the blocker.
+
+- **Defect 1 — condition-aware selection would have inflated the headline (the serious one).**
+  WP7's optimiser ranked candidate patches (and early-stopped, and carried `warm_raw` across steps)
+  by the **deployed** condition: the armed rollout kept the ε that best forced the target, the
+  dormant rollout kept the ε that best reproduced the clean action. That contradicts the design's
+  own premise — ε cannot know whether `w` was uttered, the model's cross-modal routing must do the
+  gating — and inflates the gate margin from **both** ends. If the attacker could see the
+  instruction, the gate would be scientifically pointless (they would simply attack when the word
+  appears). **Fixed (WP8):** a pure `gate_step_selection` in `word_gate.py` ranks by
+  `armed_match + dormant_match`, identically in both rollouts; only the *executed* action follows
+  the deployed instruction. Costs +1 forward per attempt (~3–5%). The **two-branch loss was never
+  affected** — it was already condition-blind.
+- **Defect 2 — the E2.1 driver was still a stub.** `run_perframe_targeted_gate` raised
+  `NotImplementedError("...(WP7)")` and its test asserted that; WP7 unblocked it but nobody wired
+  it. **Fixed (WP9):** loops inits × {armed, dormant}, verdicts from the fixed predicates inside
+  each episode → `RolloutOutcome` → `gate_report`. Every finished episode appends to `rows.jsonl`
+  and a restart skips it (rule 8 — episodes are hours on a thermally shared card); a crashed
+  episode becomes an **errored** outcome, kept out of the rates rather than scored as "the attack
+  failed". The GPU boundary is injected (`episode_fn`), so pairing/resume/mapping are CPU-tested.
+- **Defect 3 — the Phase-0 probe would have OOM'd on its first real run.** `probe_frame` never
+  froze the model parameters, so `backward()` allocated gradient buffers for all 7B weights
+  (`run_confined_episode` freezes at line ~157; the probe did not). Found by running the
+  `@requires_gpu` seams *before* the experiment: `torch.cuda.OutOfMemoryError` at 22.25/23.55 GiB.
+  One-line fix; the seam passes now.
+- **Free diagnostic, no new knob.** Because the fixed selection already evaluates *both*
+  instructions on the *same* composite, the per-step armed-vs-dormant comparison costs zero extra
+  forwards. Recorded as a `gate` slot per trace row (null when ungated) plus an aggregated
+  `gate_diagnostic` over decisive steps — same-frame gate evidence at every step of a live rollout,
+  which is what the short-horizon pre-flight reads.
+- **Stage 0 (settled, cheap):** `please` is a **single Llama token** (id 3113); the armed prompt is
+  25 tokens vs the dormant 24, so the two conditions differ by exactly one token. The "single magic
+  word" framing holds literally, not just informally.
+- **Tests:** `tests/patch_attack` green — 303 passed, 13 GPU-skipped; +16 new CPU tests (9 for the
+  selection invariance property over the whole match grid, 7 for the driver). All word-gate GPU
+  seams pass on GPU-1. ruff clean, own-code `mypy --strict` clean. *(Note: run the GPU seam files
+  **one at a time** — two module-scoped policy fixtures in one pytest process OOM the card.)*
+- **Ungated path is bit-identical**, so no existing corner/stealth result is re-scored by any of
+  this. `monitor_patch_attack.py` is being edited concurrently by the stealth session; the two
+  changes merged cleanly (their `build_patch`/ε-ball refactor, our gated selection below it).
+- **Next:** the short-horizon closed-loop pre-flight, then E2.1 on `GATE_INITS` before committing
+  held-out budget. Exp 1 (static DoS) stays deferred: it needs the armed-teacher decision **and** a
+  static gated-DoS optimizer that does not exist (`run_static_dos_gate` only *scores* a patch
+  handed to it).
+
+## 2026-07-31 - ✅ Stage A (Phase 0): the targeted gate EXISTS open-loop — margin 0.958
+
+First word-gate GPU spend. Open-loop two-branch probe (`word_gate_probe --effect targeted`), BL
+64×64 corner (8.2%), `w = please` at slot 0, λ = 1, 300 optimiser steps per frame. Thresholds were
+**precommitted before the run** and are recorded in `docs/plans/2026-07-30-word-gated-patch.md`
+§"Phases" (Stage A row): armed ≥ 0.7, dormant false-fire ≤ 0.2, margin ≥ 0.5, gradient hinge
+clearly > 0.
+
+- **Result — GO on all four.** armed forcing **0.964**, dormant false-fire **0.005**, gate margin
+  **0.958** over **32/32 decisive frames**, gradient hinge **0.885** relative change. Artifact:
+  `runs/monitor-stealth/word-gate/lam1.0/probe_targeted_please.json`.
+- **One patch, both conditions, per frame.** The two-branch objective is satisfiable: on almost
+  every frame a single ε forces the attacker action under `c⊕w` *and* leaves the clean action under
+  `c`. Only 2/32 frames deviated (one armed 0.83, one armed 0.00 — init34 f0035).
+- **`gate_present` reads False, and that is a threshold artifact, not a negative.** The module's
+  heuristic fires at `relative_change ≥ 1.0`; we measured 0.885, i.e. inserting `please` moves the
+  targeting gradient by 88% of that gradient's own magnitude. Its own docstring defers the call to
+  analysis. Recorded here so the JSON's boolean is not misread later.
+- **Frame sampling (methodology).** The buffer holds **1471** train frames (8 init dirs, not 8
+  frames — an earlier note miscounted). Probing all of them is days of GPU, and taking the first N
+  would sample one episode's consecutive, highly correlated frames. Used a **stratified 32-frame
+  sample**: 4 frames per init across all 8 `TRAIN_INITS`, evenly spaced within each episode so
+  approach / grasp / transport phases are all represented.
+- **What this does NOT yet show (stated so it is not over-read).** (a) `dormant_false_fire` counts
+  decisive dims where the dormant action matches the **target** — 0.005 means "almost never emits
+  the attacker's action", not "reproduces the clean action exactly"; true inertness is
+  `commanded_rate(dormant)` closed-loop (and the new per-step `dormant_match`). (b) Open-loop
+  forcing is a **predictor**, not a verdict — only `eval_goal_state` counts. (c) This is the
+  per-frame regime with 300 steps per frame; staticness is untouched (R1).
+- **λ:** stays at **1** — it clears every threshold with no headroom to chase. The λ frontier moves
+  to E2.2d characterization (cheap, open-loop) rather than spending Stage-A budget on it.
+
 ## 2026-07-30 (later) - 🧩 Word-gated patch WP7 landed: `run_confined_episode` two-branch kwargs (still no GPU spend)
 
 - **WP7 built + tested** (`docs/plans/2026-07-30-word-gated-patch.md`): `run_confined_episode`

@@ -9,13 +9,16 @@ from __future__ import annotations
 
 import pytest
 from word_gate import (
+    ACTION_DIM,
     FIRST_WORD,
+    GATE_SELECTION_MAX,
     GateConditions,
     GateSetup,
     all_placements,
     armed_instruction,
     assert_trigger_novel,
     dormant_instruction,
+    gate_step_selection,
     insert_word,
     is_trigger_novel,
     normalize_instruction,
@@ -193,3 +196,85 @@ class TestResolveGateSetup:
         assert setup is not None
         with pytest.raises(AttributeError):
             setup.deploy_word = False  # type: ignore[misc]
+
+
+class TestGateStepSelection:
+    """The rule deciding WHICH candidate patch is deployed at one optimiser step.
+
+    The threat model's whole premise is that the patch cannot know whether ``w`` was uttered --
+    the model's own cross-modal routing must do the gating. So the *ranking* of candidates must
+    be identical in the armed and dormant rollouts; only which branch's action is *executed*
+    follows the deployed instruction. Ranking on the deployed condition would let the attacker
+    pick the patch that best forces the target when armed AND the patch that best mimics the
+    clean policy when dormant -- inflating the gate margin from both ends.
+    """
+
+    _GRID = [(a, d) for a in range(ACTION_DIM + 1) for d in range(ACTION_DIM + 1)]
+
+    def test_score_sums_both_branches(self) -> None:
+        sel = gate_step_selection(armed_match=5, dormant_match=6, deploy_word=True)
+        assert sel.score == 11
+
+    def test_score_is_invariant_to_the_deployed_condition(self) -> None:
+        # THE property this function exists to guarantee, over the whole match grid.
+        for armed, dormant in self._GRID:
+            armed_deploy = gate_step_selection(
+                armed_match=armed, dormant_match=dormant, deploy_word=True
+            )
+            dormant_deploy = gate_step_selection(
+                armed_match=armed, dormant_match=dormant, deploy_word=False
+            )
+            assert armed_deploy.score == dormant_deploy.score
+
+    def test_ranking_picks_the_same_winner_under_either_deployment(self) -> None:
+        # The consequence that matters: a whole sweep of candidates yields one winner, and it is
+        # the same patch whether or not the operator uttered the word.
+        candidates = [(7, 0), (3, 5), (6, 6), (0, 7), (5, 4)]
+
+        def winner(deploy_word: bool) -> tuple[int, int]:
+            return max(
+                candidates,
+                key=lambda c: gate_step_selection(
+                    armed_match=c[0], dormant_match=c[1], deploy_word=deploy_word
+                ).score,
+            )
+
+        assert winner(True) == winner(False) == (6, 6)
+
+    def test_executed_branch_follows_the_deployed_instruction(self) -> None:
+        # Selection is condition-blind, execution is not: the env must be driven by the action
+        # the policy emits under the instruction the operator actually gave.
+        assert gate_step_selection(armed_match=1, dormant_match=7, deploy_word=True).execute_armed
+        assert not gate_step_selection(
+            armed_match=7, dormant_match=1, deploy_word=False
+        ).execute_armed
+
+    def test_deploy_match_reports_the_executed_branch(self) -> None:
+        armed = gate_step_selection(armed_match=4, dormant_match=6, deploy_word=True)
+        dormant = gate_step_selection(armed_match=4, dormant_match=6, deploy_word=False)
+        assert armed.deploy_match == 4  # trace semantics: "did the executed action hit its teacher"
+        assert dormant.deploy_match == 6
+
+    def test_perfect_requires_both_branches(self) -> None:
+        # Early stop only when ONE patch satisfies both word conditions at once -- a fully forced
+        # armed branch with a broken dormant branch is not a gate.
+        assert gate_step_selection(
+            armed_match=ACTION_DIM, dormant_match=ACTION_DIM, deploy_word=True
+        ).is_perfect
+        assert not gate_step_selection(
+            armed_match=ACTION_DIM, dormant_match=ACTION_DIM - 1, deploy_word=True
+        ).is_perfect
+
+    def test_max_score_is_both_branches_fully_forced(self) -> None:
+        assert GATE_SELECTION_MAX == 2 * ACTION_DIM
+
+    def test_rejects_matches_outside_the_action_dims(self) -> None:
+        with pytest.raises(ValueError):
+            gate_step_selection(armed_match=-1, dormant_match=3, deploy_word=True)
+        with pytest.raises(ValueError):
+            gate_step_selection(armed_match=3, dormant_match=ACTION_DIM + 1, deploy_word=True)
+
+    def test_selection_is_immutable(self) -> None:
+        sel = gate_step_selection(armed_match=3, dormant_match=3, deploy_word=True)
+        with pytest.raises(AttributeError):
+            sel.score = 14  # type: ignore[misc]

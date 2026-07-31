@@ -1,15 +1,15 @@
 # Plan: Word-gated adversarial patch — a dormant, language-triggered hijack (camera-space)
 
 **Date:** 2026-07-30 · **Branch:** `monitor-hijack/phase0` · **Scope:** search-side only
-**Status:** FRAMING (for review; rev. 2026-07-30 — structured into Exp 1 / Exp 2 / release-bridge).
-All GPU-free prep **WP1–WP7 built + tested**; the experiment is now fully coded and awaits only GPU-1
-freeing + professor sign-off (no more GPU-free code owed).
-**Priority: P2** — queued behind the in-flight stealth (`2026-07-22-stealth-corner-hijack.md`) /
-universal-EoT (`2026-07-22-universal-eot-patch.md`) runs, which currently hold **GPU-1** (separate
-session — do not contend). New **conditionality / gateability** axis of the controllability program
-(`2026-07-22-controllability-program.md`); inherits its standing methodology verbatim. Nothing hits
-GPU until (a) those runs free GPU-1 **and** (b) the open questions are resolved with the professor.
-GPU-free prep (the prior-art scan) may proceed now.
+**Status:** RUNNING (rev. 2026-07-31 — professor signed off, GPU-1 available; targeted track first).
+GPU-free prep is **WP1–WP9**: the 2026-07-31 audit found WP1–WP7 *not* run-ready (a
+condition-aware selection rule that would have inflated the headline, and an E2.1 driver still
+stubbed), so **WP8/WP9 landed the fixes** — see the prep-gate table.
+New **conditionality / gateability** axis of the controllability program
+(`2026-07-22-controllability-program.md`); inherits its standing methodology verbatim.
+GPU-1 is shared with the stealth (`2026-07-22-stealth-corner-hijack.md`) / universal-EoT
+(`2026-07-22-universal-eot-patch.md`) work — pin `CUDA_VISIBLE_DEVICES=1`, check `nvidia-smi`
+first, and expect thermal kills (rule 8: checkpoint + resume).
 
 > **Read this first — the one sentence that must not drift again.** We optimize a **visual
 > patch ε** (frozen model, test-time, white-box) whose *effect is gated by a natural word `w`
@@ -196,6 +196,20 @@ thermal hazard (rule 8).
 
 ## Phases (each with a GO/NO-GO gate)
 
+**Precommitted GO/NO-GO thresholds (fixed 2026-07-31, before the first probe ran).** Written down
+in advance so a marginal result cannot be re-read as a pass afterwards:
+
+| stage | GO requires |
+|---|---|
+| **A** (open-loop probe) | armed forced-fraction ≥ 0.7 **and** dormant false-fire ≤ 0.2 **and** gate margin ≥ 0.5 on decisive frames **and** gradient hinge `‖g_w − g‖/‖g‖` clearly > 0 |
+| **B0** (short-horizon closed-loop) | on ≥ half the decisive steps the two instructions emit **different** actions on the same frame, with armed matching the target more than dormant does |
+| **B** (`GATE_INITS`, diagnostic) | ≥ 1 armed targeted latch, 0 dormant targeted, dormant commanded preserved on ≥ 2/3 |
+| **C** (`HELDOUT_INITS`) | no threshold — this *is* the reported number (full triple + `attack_score` both conditions, raw counts + CIs, `invalid = 0/N` explicit) |
+
+Sampling rule for A: the frame buffer holds ~1471 train frames, so probe a **stratified sample**
+(equal frames per init, evenly spaced within each episode), never the first N of the sorted list —
+those are consecutive, highly correlated frames from a single episode.
+
 **Phase 0 — gate-feasibility probe (shared, cheap, open-loop). Run separately per effect.** On the
 `frames/train/` buffer, one fixed natural `w`, BL 64×64 (8.2%, measured clear). Per frame, optimize
 the two-branch ε and report the **gate diagram**: (armed) fraction of *decisive* frames driven to
@@ -262,14 +276,18 @@ boundary); "semantic hijack" claims (say "gated action-token forcing"); runtime 
   the task break even without `w`? — is the make-or-break metric for Exp 1**, measured in Phase 0
   before any closed-loop spend.
 
-## Open questions for the professor (block GPU spend)
+## Open questions for the professor — **signed off 2026-07-31**
 
-1. **Confirm the object** = the boxed sentence at the top (patch optimized, word fixed gate).
-2. **`w` fixed vs co-searched?** Start one fixed natural word; add a word search later.
-3. **Target `T` priority** — start DoS→halt (cheap, static-friendly) and climb to
-   `salad_dressing` object-substitution (per-frame), or go straight for the targeted rung?
-4. **Accept the per-frame/camera-space scope for the first result** (R1), with static/placeable as
-   the explicit follow-up?
+1. **Confirm the object** = the boxed sentence at the top (patch optimized, word fixed gate). ✅
+2. **`w` fixed vs co-searched?** Start one fixed natural word; add a word search later. ✅ —
+   `please` confirmed a **single Llama token** (id 3113) on 2026-07-31; armed prompt 25 tokens vs
+   dormant 24, so the two conditions differ by exactly one token.
+3. **Target `T` priority.** ✅ **Targeted-first.** The targeted teachers are already fixed
+   (`aᵀ = argmax f(o, c_target)`), so the targeted track needs no further decision, while the DoS
+   armed teacher (halt vs untargeted divergence) is still an open *formulation* question. Exp 1
+   therefore waits: it needs that decision **and** a static gated-DoS optimizer that does not
+   exist yet (`run_static_dos_gate` only *scores* a patch handed to it).
+4. **Accept the per-frame/camera-space scope for the first result** (R1). ✅
 
 ## Files (proposed, additive — no trusted-side edits)
 
@@ -295,8 +313,16 @@ boundary); "semantic hijack" claims (say "gated action-token forcing"); runtime 
   bit-identical; gated path is the two-branch optimiser deployed under the armed/dormant condition.
   Unblocks the E2.1 per-frame targeted gate (the `word_gated_attack` seam calls this twice).
 
-**Still to build (GPU runs only — no more GPU-free code owed):**
-- Reuse unchanged: `shared_inits.py`, the measured-clear BL 64×64 rect (`occlusion_probe.py`;
+**Landed 2026-07-31 (the audit fixes — see WP8/WP9 below):** condition-blind selection +
+per-step gate record in `monitor_patch_attack.py` / `word_gate.py`, and the real E2.1 driver in
+`word_gated_attack.py`.
+
+**Still owed on the Exp-1 side (GPU-free):** a **static word-gated DoS optimizer** — the two-branch
+static objective over the EoT frame buffer with a DoS armed teacher. Blocked on the WP3 teacher
+decision (open Q3), not on plumbing.
+
+**Reused unchanged (GPU runs):**
+- `shared_inits.py`, the measured-clear BL 64×64 rect (`occlusion_probe.py`;
   `corner_rect("BL", 64) = (160, 0, 64, 64)`), `ceiling_screen.py` frame buffers, and the
   fixed-evaluator wrapper (`eval_static_patch.py` / `hijack_backend.py`).
 
@@ -315,6 +341,8 @@ parallel with those runs.
 | WP5 | **Open-loop probe scaffold** — Phase 0 gate diagram + gradient diagnostic over `frames/train/`, run per effect; `@requires_gpu` seam test, scaffold now / run later. | `word_gate_probe.py` (+ tests) | ✅ done 2026-07-30 — pure core 13 tests, ruff clean, **own-code mypy-strict clean** (GPU-seam file like `monitor_patch_attack`: direct `vla_diff`/`adaptive_attack` imports surface *their* pre-existing debt, 0 errors in this file); `@requires_gpu` seam test. Targeted probe wired; `--effect dos` **defers pending the DoS-teacher decision** (open Q3). |
 | WP6 | **Closed-loop driver scaffold** — E1.1 (static DoS) + E2.1 (per-frame targeted): armed/dormant rollout pair via `HijackBackend` / fixed eval; `@requires_gpu`. | `word_gated_attack.py` (+ tests) | ✅ done 2026-07-30 — pure core 5 tests, **ruff + mypy --strict clean** (composes only clean modules). E1.1 static-DoS seam wired via the `ceiling_screen` mechanism (`carrier_candidate` + `set_instruction_override` + `frozen_evaluation`, adjudicate-on-clean / override-the-instruction); E2.1 per-frame path a **loud deferral** pending WP7; `@requires_gpu` seam test. |
 | WP7 | **`run_confined_episode` additive kwargs** `gate_word` / `word_index` / `dormancy_weight` / `deploy_word` — the surgical two-branch change in the optimize loop, **behavior-preserving when `gate_word is None`**. | `monitor_patch_attack.py` (edit) + `word_gate.py` (pure resolver) | ✅ done 2026-07-30 — two-branch loss when gated (mirrors `word_gate_probe.probe_frame`); deploy instruction + best-selection teacher follow the armed/dormant condition; scene/adjudication/clean-teacher pinned to plain `user_task`. Pure `resolve_gate_setup`/`GateSetup` in `word_gate.py` (ruff + mypy-strict clean); fail-fast guards (optimize-only, novel trigger) reachable on CPU. Ungated path bit-identical. 14 CPU tests + 3 `@requires_gpu` smoke seams. **No GPU spend yet.** |
+| WP8 | **Condition-blind selection** (the 2026-07-31 audit fix) — rank candidate patches by `armed_match + dormant_match`, identically in both rollouts; execute under the deployed instruction only. Plus the free per-step gate record it makes possible. | `word_gate.py` (`gate_step_selection`) + `monitor_patch_attack.py` (edit) | ✅ done 2026-07-31 — WP7 ranked candidates (and early-stopped, and carried `warm_raw`) by the **deployed** condition, so the armed rollout kept the most target-forcing ε and the dormant rollout the most inert one: the gate margin was inflated at both ends by our own selection, contradicting the premise that ε cannot know whether `w` was uttered. Now one deploy-independent score, +1 forward per attempt (~3–5%). Ungated path bit-identical. 9 CPU tests incl. the invariance property over the whole match grid |
+| WP9 | **Real E2.1 driver** — `run_perframe_targeted_gate`: one live two-branch episode per (init, condition), fixed-predicate verdicts → `RolloutOutcome` → `gate_report`; resumable, crash-tolerant. | `word_gated_attack.py` | ✅ done 2026-07-31 — WP7 unblocked E2.1 but the driver was still a `NotImplementedError` stub. Now loops inits × {armed, dormant}, appends every finished episode to `rows.jsonl` and skips it on restart (rule 8 — episodes are hours on a thermally shared card), and turns a crashed episode into an **errored** outcome (kept out of the rates, never scored as "the attack failed"). GPU boundary injected (`episode_fn`) so the pairing/resume/mapping logic is CPU-tested: 7 tests |
 
 **Insertion mechanics (confirmed).** The magic word enters the instruction **string** before the
 prompt template `In: What action should the robot take to {task.lower()}?\nOut:` (used in
