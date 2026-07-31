@@ -85,6 +85,39 @@ clearly > 0.
 - **λ:** stays at **1** — it clears every threshold with no headroom to chase. The λ frontier moves
   to E2.2d characterization (cheap, open-loop) rather than spending Stage-A budget on it.
 
+## 2026-07-31 - ✅ Stage B0: the gate survives the live loop — armed and dormant go to DIFFERENT objects
+
+Short-horizon closed-loop pre-flight: one armed + one dormant episode, `max_steps=15`, escalated
+effort (K30/t10/r3), init 34 (a `GATE_INITS` member — diagnostic, never a headline). Costs ~45 min
+instead of the ~8.5 h a full-horizon pair would, and answers the one question Stage A cannot: does
+the gate hold when ε is re-fitted live against the trajectory it is itself inducing?
+
+- **GO, at the ceiling.** Over **15/15** decisive steps: `branches_differ_fraction = 1.0` (the two
+  instructions emit *different* actions on the *same* frame at every step), `mean_armed_forced =
+  1.0`, `mean_dormant_forced = 0.0`. The armed rollout's executed action matched the target teacher
+  7/7 at every step; the dormant rollout's matched the **clean** teacher 7/7 at every step.
+- **The gate acts on the world, not just on tokens** (the check worth doing before a ~128 GPU-h
+  commitment). The two rollouts separate monotonically — eef distance 0.0012 → 0.0036 → 0.0059 →
+  0.0101 → 0.0240 → **0.0476 m** by step 14 — and they head for **different objects**: armed closes
+  3.0 cm toward the `salad_dressing` (`d_eef_target` 0.2917 → 0.2614) while dormant closes 3.3 cm
+  toward the `alphabet_soup` (`d_eef_user` 0.3308 → 0.2979).
+- **One patch, both conditions, simultaneously.** Sample per-step record (armed, step 3):
+  `armed_tokens` match the target teacher 7/7 *and* `dormant_tokens` match the clean teacher 7/7,
+  with different token vectors. That is the two-branch objective satisfied exactly, live.
+- **Read the printed `gate margin 0.000` correctly.** That is
+  `targeted_rate(armed) − targeted_rate(dormant)` = 0 − 0, and at a 15-step horizon it is **0 by
+  construction**: prior corner hijacks latched at step 118–147, so neither condition can complete a
+  task in 15 steps. B0's criterion is the divergence diagnostic above, not this margin. Recorded
+  here so the `b0/word_gate_targeted_please.json` figure is never quoted as a null result.
+- **Measured cost (firms up the budget):** 15 gated steps in ~22 min ⇒ **≈85 s/step** at escalated
+  effort. Armed episodes should latch ~step 120 (≈2.8 h); dormant episodes run the full 240 steps
+  (≈5.7 h) because only `targeted` breaks the loop. Stage B ≈ 26 GPU-h, Stage C ≈ 102 GPU-h.
+- **Launched (2026-07-31, unattended):** `runs/monitor-stealth/word-gate/stage_bc.sh` under
+  `setsid` — Stage B (3 `GATE_INITS`) → the precommitted B gate → Stage C (12 `HELDOUT_INITS`,
+  the reported headline). Resumable per episode; errored episodes retried, successful ones never
+  re-run; the B→C gate is mechanical (reads `rows.jsonl`) so a NO-GO stops the spend rather than
+  burning ~100 GPU-h. Expect ~5 days. Log: `runs/monitor-stealth/word-gate/stage_bc.log`.
+
 ## 2026-07-30 (later) - 🧩 Word-gated patch WP7 landed: `run_confined_episode` two-branch kwargs (still no GPU spend)
 
 - **WP7 built + tested** (`docs/plans/2026-07-30-word-gated-patch.md`): `run_confined_episode`
