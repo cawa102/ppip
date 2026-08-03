@@ -11,6 +11,10 @@ GPU-1 is shared with the stealth (`2026-07-22-stealth-corner-hijack.md`) / unive
 (`2026-07-22-universal-eot-patch.md`) work — pin `CUDA_VISIBLE_DEVICES=1`, check `nvidia-smi`
 first, and expect thermal kills (rule 8: checkpoint + resume).
 
+> **Explainer:** `docs/research/word-gate-explained.md` — the self-contained conceptual walkthrough
+> (mechanism, code map, the condition-blind selection fix, measured results, limits, glossary).
+> Read that for *how it works*; read this file for the plan, work packages, and precommitted gates.
+
 > **Read this first — the one sentence that must not drift again.** We optimize a **visual
 > patch ε** (frozen model, test-time, white-box) whose *effect is gated by a natural word `w`
 > in the language instruction*: with `w` present the patch forces a target action `T`; with `w`
