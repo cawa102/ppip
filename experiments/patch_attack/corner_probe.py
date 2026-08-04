@@ -4,7 +4,7 @@ Question: can a per-step optimised replacement patch placed in a *corner* (NOT c
 graspable objects) force OpenVLA's action tokens toward the attacker target
 (salad_dressing) on realistic rollout frames? This ranks corners/sizes WITHOUT paying for a
 full closed-loop rollout: it reuses saved clean agentview frames and, per (corner, size,
-frame), runs the SAME proven per-step optimisation as ``monitor_patch_attack`` and reports
+frame), runs the SAME proven per-step optimisation as ``ce_monitor_patch_attack`` and reports
 the REAL-inference-path token match (out of 7).
 
 Object keep-out box (graspable soup + salad_dressing, seed-0 init frame): rows 95..170,

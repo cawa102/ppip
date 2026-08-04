@@ -17,6 +17,20 @@ Mechanism (the PROVEN adaptive loop from ``adaptive_attack.py``, spatially confi
 Purely vision-layer; scored by the FIXED target predicate ``eval_goal_state``. Env state is
 checkpointed so a long rollout survives across invocations, but the placement works best run
 continuously in one process (the OSC controller resets on chunk boundaries).
+
+Objective (why this file is named ``ce_``, renamed 2026-08-04):
+  This module holds the shared per-frame core AND pins ``objective='ce'`` as its default --
+  all-7-dim cross-entropy, **the loss every published corner result was produced with**
+  (``runs/monitor-corner/``: non-occluding hijack down to 32x32 = 2.0% of frame). Keeping a
+  file whose default cannot drift is what makes those results reproducible bit-identically.
+  The hinge-default entry point is the sibling ``hinge_monitor_patch_attack.py``, which
+  delegates here rather than copying the loop, so the two can never diverge mechanically --
+  only in objective. Pick the module that matches the run you intend; do not rely on reading
+  an ``objective=`` kwarg at the call site to tell the two regimes apart after the fact.
+
+Regime: this is the **dynamic / per-frame** attack (the patch is re-solved every step), which
+is the regime this project targets. The static frozen-patch route lives in
+``stealth_optimize.py`` and is a reported negative result, not the goal.
 """
 
 from __future__ import annotations
@@ -30,12 +44,12 @@ from typing import Any
 
 import numpy as np
 import torch
-import torch.nn.functional as F
 
 HOME = os.path.expanduser("~")
 for p in ("autoresearch/src", "autoresearch", "openvla", "autoresearch/experiments/patch_attack"):
     sys.path.insert(0, os.path.join(HOME, p))
 
+import forcing_loss as FL  # noqa: E402
 import patch_config as C  # noqa: E402
 import stealth_patch as SP  # noqa: E402
 import vla_diff  # noqa: E402
@@ -86,6 +100,10 @@ def run_confined_episode(
     deploy_word: bool = True,
     stealth_base: torch.Tensor | None = None,
     stealth_eps: float | None = None,
+    objective: str = "ce",
+    kappa: float = FL.DEFAULT_KAPPA,
+    temperature: float = FL.DEFAULT_TEMPERATURE,
+    anchor: float = 0.0,
 ) -> dict[str, Any]:
     """Run one confined-patch hijack episode; return + persist a result dict.
 
@@ -121,6 +139,22 @@ def run_confined_episode(
                             plain ``user_task``, so the word changes what the policy DOES, never how
                             the outcome is JUDGED.
 
+    Objective knobs (``objective='ce'`` preserves the historical behaviour bit-identically):
+      ``objective``   -- which loss the per-frame optimiser minimises, via the shared
+                        ``forcing_loss.action_loss``. ``ce`` (default) is all-7 cross-entropy, the
+                        loss every published corner result was produced with. ``hinge`` is the
+                        Carlini-Wagner margin restricted to the **decisive** dims: it goes to zero
+                        once a dim wins by ``kappa``, so a won dim stops consuming perturbation
+                        budget. That saturation is why a *minimum-perturbation* measurement wants
+                        it -- a threshold found with a non-saturating loss is an upper bound on the
+                        threshold, not the threshold. ``ce_decisive`` and ``directional`` are the
+                        remaining members of the family.
+      ``kappa``       -- the hinge margin. Defaults to ``forcing_loss.DEFAULT_KAPPA`` rather than a
+                        literal, so it cannot drift from the sweep that set it (6.0; 3.0 silently
+                        capped forcing at 2-of-3 decisive dims).
+      ``temperature`` -- softmax temperature for ``directional``'s soft action decode.
+      ``anchor``      -- weight of a light decisive-dim CE term mixed into a saturating objective.
+
     Stealth knobs (``stealth_base is None`` preserves the free-range behaviour bit-identically):
       ``stealth_base``  -- a FULL-FRAME ``[1,3,224,224]`` carrier image (the logo drawn into the
                           rect). When set, the per-step patch becomes
@@ -152,6 +186,12 @@ def run_confined_episode(
             "gate_word is only defined for the optimised two-branch patch; "
             f"got patch_mode={patch_mode!r}"
         )
+    # Objective, validated before any policy load: a typo must not surface hours into a rollout
+    # -- or, worse, after one, with the artifact already written.
+    if objective not in FL.OBJECTIVES:
+        raise ValueError(f"unknown objective {objective!r}; choose from {FL.OBJECTIVES}")
+    if kappa < 0:
+        raise ValueError(f"kappa must be non-negative, got {kappa}")
     # Stealth ball, resolved on the same fail-fast footing: a half-specified pair would
     # otherwise silently run free-range while the metadata claimed a budget.
     stealth = SP.resolve_confined_stealth(stealth_base, stealth_eps)
@@ -329,8 +369,15 @@ def run_confined_episode(
                         pv = vla_diff.preprocess(composite, side=side)
                         if gate_setup is None:
                             logits = vla_diff.action_token_logits(model, pv, user_ids, teacher)
-                            loss = F.cross_entropy(
-                                logits.reshape(7, -1).float(), teacher.reshape(7)
+                            # `objective='ce'` routes to the identical all-7 cross-entropy this
+                            # line used to compute inline, so the default path is unchanged.
+                            loss = FL.action_loss(
+                                logits.reshape(7, -1).float(),
+                                teacher.reshape(7),
+                                clean_user.reshape(7),
+                                dec_dims,
+                                objective=objective, kappa=kappa,
+                                temperature=temperature, anchor=anchor,
                             )
                         else:
                             # Two-branch: force the target under c⊕w AND reproduce the clean action
@@ -498,6 +545,10 @@ def run_confined_episode(
         "cross_task": bool(cross_task), "scene_task_success": bool(scene_success),
         "effort": {"k": k, "maxtries": maxtries, "lr": lr, "restarts": restarts,
                    "warm_start": warm_start, "decisive_boost": decisive_boost},
+        # Self-describing: before this field existed, a result JSON could not say which loss
+        # produced it, and the closed-loop and static tracks silently used different ones.
+        "objective": {"name": objective, "kappa": kappa,
+                      "temperature": temperature, "anchor": anchor},
         # Null on the free-range default. ``linf_measured_max`` is re-measured from the executed
         # patches rather than asserted from ``eps``.
         "stealth": None if stealth is None else {

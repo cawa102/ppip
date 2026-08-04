@@ -9,7 +9,7 @@ operator utters the magic word ``w``):
 
 ``λ`` weights the dormancy (word-absent) branch — the dormancy↔potency frontier the
 ``λ`` sweep (E2.2d) explores. Both cross-entropies mirror the existing per-frame forcing
-loss (``monitor_patch_attack.py:244``):
+loss (``ce_monitor_patch_attack.py:244``):
 ``F.cross_entropy(logits.reshape(7,-1), teacher.reshape(7))``.
 
 This is the *method* objective (agent-editable). It never produces a reported number —

@@ -1,0 +1,1057 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Running OpenVLA on LIBERO — a clean rollout</title>
+<style>
+:root {
+  --bg: #ffffff; --fg: #1c1f24; --muted: #5b6470; --rule: #e3e7ec;
+  --card: #f7f9fb; --accent: #2f6f4f; --accent-bg: #eaf4ee;
+  --warn-bg: #fdf4e6; --warn-br: #e0a95c; --code-bg: #f6f8fa;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #14171a; --fg: #e6e9ed; --muted: #9aa4b0; --rule: #2b3138;
+    --card: #1b1f24; --accent: #7fc4a0; --accent-bg: #1b2a22;
+    --warn-bg: #2a2115; --warn-br: #a5772f; --code-bg: #1b1f24;
+  }
+}
+* { box-sizing: border-box; }
+body {
+  margin: 0; padding: 0 1.25rem 5rem; background: var(--bg); color: var(--fg);
+  font: 16px/1.65 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  -webkit-text-size-adjust: 100%;
+}
+.wrap { max-width: 860px; margin: 0 auto; }
+header { padding: 3rem 0 1.75rem; border-bottom: 1px solid var(--rule); }
+.eyebrow {
+  font-size: .75rem; letter-spacing: .09em; text-transform: uppercase;
+  color: var(--accent); font-weight: 650; margin: 0 0 .6rem;
+}
+h1 { font-size: clamp(1.6rem, 4vw, 2.1rem); line-height: 1.2; margin: 0 0 .6rem; letter-spacing: -.01em; }
+.lede { font-size: 1.06rem; color: var(--muted); margin: 0; max-width: 62ch; }
+h2 {
+  font-size: 1.22rem; margin: 2.75rem 0 .9rem; padding-top: 1.4rem;
+  border-top: 1px solid var(--rule); letter-spacing: -.005em;
+}
+h2:first-of-type { border-top: none; }
+h3 { font-size: 1rem; margin: 0 0 .3rem; }
+p { max-width: 68ch; }
+code {
+  font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+  font-size: .875em; background: var(--code-bg); padding: .12em .38em;
+  border-radius: 4px; border: 1px solid var(--rule);
+}
+pre {
+  background: var(--code-bg); border: 1px solid var(--rule); border-radius: 8px;
+  padding: .9rem 1rem; overflow-x: auto; font-size: .855rem; line-height: 1.55;
+}
+pre code { background: none; border: none; padding: 0; font-size: 1em; }
+.hl { background: none !important; }
+.diagram {
+  background: var(--card); border: 1px solid var(--rule); border-radius: 8px;
+  padding: 1rem; overflow-x: auto;
+}
+.diagram pre { background: none; border: none; padding: 0; font-size: .8rem; color: var(--fg); }
+.note {
+  background: var(--accent-bg); border-left: 3px solid var(--accent);
+  padding: .85rem 1rem; border-radius: 0 6px 6px 0; margin: 1.25rem 0;
+}
+.warn {
+  background: var(--warn-bg); border-left: 3px solid var(--warn-br);
+  padding: .85rem 1rem; border-radius: 0 6px 6px 0; margin: 1.25rem 0;
+}
+.note p, .warn p { margin: 0; }
+.note p + p, .warn p + p { margin-top: .6rem; }
+.trap { display: flex; gap: .95rem; margin: 1.4rem 0; }
+.trap-n {
+  flex: 0 0 1.7rem; height: 1.7rem; border-radius: 50%; background: var(--accent);
+  color: var(--bg); font-weight: 700; font-size: .82rem;
+  display: flex; align-items: center; justify-content: center; margin-top: .12rem;
+}
+.trap p { margin: 0; color: var(--muted); }
+.dl {
+  display: inline-flex; align-items: center; gap: .5rem; margin: .4rem .5rem .4rem 0;
+  background: var(--accent); color: #fff; text-decoration: none;
+  padding: .6rem 1.05rem; border-radius: 6px; font-weight: 600; font-size: .92rem;
+  border: none; cursor: pointer; font-family: inherit;
+}
+.dl.secondary { background: none; color: var(--accent); border: 1px solid var(--accent); }
+.cmd-label { font-size: .82rem; color: var(--muted); margin: 1.4rem 0 .4rem; font-weight: 600; }
+table { border-collapse: collapse; width: 100%; font-size: .9rem; margin: 1rem 0; display: block; overflow-x: auto; }
+th, td { text-align: left; padding: .5rem .7rem; border-bottom: 1px solid var(--rule); vertical-align: top; }
+th { font-size: .78rem; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); }
+td code { white-space: nowrap; }
+footer {
+  margin-top: 3.5rem; padding-top: 1.4rem; border-top: 1px solid var(--rule);
+  font-size: .84rem; color: var(--muted);
+}
+.src-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: .6rem; justify-content: space-between; }
+.path { font-family: ui-monospace, Menlo, Consolas, monospace; font-size: .82rem; color: var(--muted); }
+pre { line-height: 125%; }
+td.linenos .normal { color: #666666; background-color: transparent; padding-left: 5px; padding-right: 5px; }
+span.linenos { color: #666666; background-color: transparent; padding-left: 5px; padding-right: 5px; }
+td.linenos .special { color: #000000; background-color: #ffffc0; padding-left: 5px; padding-right: 5px; }
+span.linenos.special { color: #000000; background-color: #ffffc0; padding-left: 5px; padding-right: 5px; }
+.hl .hll { background-color: #ffffcc }
+.hl { background: #f0f0f0; }
+.hl .c { color: #60A0B0; font-style: italic } /* Comment */
+.hl .err { border: 1px solid #F00 } /* Error */
+.hl .k { color: #007020; font-weight: bold } /* Keyword */
+.hl .o { color: #666 } /* Operator */
+.hl .ch { color: #60A0B0; font-style: italic } /* Comment.Hashbang */
+.hl .cm { color: #60A0B0; font-style: italic } /* Comment.Multiline */
+.hl .cp { color: #007020 } /* Comment.Preproc */
+.hl .cpf { color: #60A0B0; font-style: italic } /* Comment.PreprocFile */
+.hl .c1 { color: #60A0B0; font-style: italic } /* Comment.Single */
+.hl .cs { color: #60A0B0; background-color: #FFF0F0 } /* Comment.Special */
+.hl .gd { color: #A00000 } /* Generic.Deleted */
+.hl .ge { font-style: italic } /* Generic.Emph */
+.hl .ges { font-weight: bold; font-style: italic } /* Generic.EmphStrong */
+.hl .gr { color: #F00 } /* Generic.Error */
+.hl .gh { color: #000080; font-weight: bold } /* Generic.Heading */
+.hl .gi { color: #00A000 } /* Generic.Inserted */
+.hl .go { color: #888 } /* Generic.Output */
+.hl .gp { color: #C65D09; font-weight: bold } /* Generic.Prompt */
+.hl .gs { font-weight: bold } /* Generic.Strong */
+.hl .gu { color: #800080; font-weight: bold } /* Generic.Subheading */
+.hl .gt { color: #04D } /* Generic.Traceback */
+.hl .kc { color: #007020; font-weight: bold } /* Keyword.Constant */
+.hl .kd { color: #007020; font-weight: bold } /* Keyword.Declaration */
+.hl .kn { color: #007020; font-weight: bold } /* Keyword.Namespace */
+.hl .kp { color: #007020 } /* Keyword.Pseudo */
+.hl .kr { color: #007020; font-weight: bold } /* Keyword.Reserved */
+.hl .kt { color: #902000 } /* Keyword.Type */
+.hl .m { color: #40A070 } /* Literal.Number */
+.hl .s { color: #4070A0 } /* Literal.String */
+.hl .na { color: #4070A0 } /* Name.Attribute */
+.hl .nb { color: #007020 } /* Name.Builtin */
+.hl .nc { color: #0E84B5; font-weight: bold } /* Name.Class */
+.hl .no { color: #60ADD5 } /* Name.Constant */
+.hl .nd { color: #555; font-weight: bold } /* Name.Decorator */
+.hl .ni { color: #D55537; font-weight: bold } /* Name.Entity */
+.hl .ne { color: #007020 } /* Name.Exception */
+.hl .nf { color: #06287E } /* Name.Function */
+.hl .nl { color: #002070; font-weight: bold } /* Name.Label */
+.hl .nn { color: #0E84B5; font-weight: bold } /* Name.Namespace */
+.hl .nt { color: #062873; font-weight: bold } /* Name.Tag */
+.hl .nv { color: #BB60D5 } /* Name.Variable */
+.hl .ow { color: #007020; font-weight: bold } /* Operator.Word */
+.hl .w { color: #BBB } /* Text.Whitespace */
+.hl .mb { color: #40A070 } /* Literal.Number.Bin */
+.hl .mf { color: #40A070 } /* Literal.Number.Float */
+.hl .mh { color: #40A070 } /* Literal.Number.Hex */
+.hl .mi { color: #40A070 } /* Literal.Number.Integer */
+.hl .mo { color: #40A070 } /* Literal.Number.Oct */
+.hl .sa { color: #4070A0 } /* Literal.String.Affix */
+.hl .sb { color: #4070A0 } /* Literal.String.Backtick */
+.hl .sc { color: #4070A0 } /* Literal.String.Char */
+.hl .dl { color: #4070A0 } /* Literal.String.Delimiter */
+.hl .sd { color: #4070A0; font-style: italic } /* Literal.String.Doc */
+.hl .s2 { color: #4070A0 } /* Literal.String.Double */
+.hl .se { color: #4070A0; font-weight: bold } /* Literal.String.Escape */
+.hl .sh { color: #4070A0 } /* Literal.String.Heredoc */
+.hl .si { color: #70A0D0; font-style: italic } /* Literal.String.Interpol */
+.hl .sx { color: #C65D09 } /* Literal.String.Other */
+.hl .sr { color: #235388 } /* Literal.String.Regex */
+.hl .s1 { color: #4070A0 } /* Literal.String.Single */
+.hl .ss { color: #517918 } /* Literal.String.Symbol */
+.hl .bp { color: #007020 } /* Name.Builtin.Pseudo */
+.hl .fm { color: #06287E } /* Name.Function.Magic */
+.hl .vc { color: #BB60D5 } /* Name.Variable.Class */
+.hl .vg { color: #BB60D5 } /* Name.Variable.Global */
+.hl .vi { color: #BB60D5 } /* Name.Variable.Instance */
+.hl .vm { color: #BB60D5 } /* Name.Variable.Magic */
+.hl .il { color: #40A070 } /* Literal.Number.Integer.Long */
+@media (prefers-color-scheme: dark) {
+pre { line-height: 125%; }
+td.linenos .normal { color: #6e7681; background-color: #0d1117; padding-left: 5px; padding-right: 5px; }
+span.linenos { color: #6e7681; background-color: #0d1117; padding-left: 5px; padding-right: 5px; }
+td.linenos .special { color: #e6edf3; background-color: #6e7681; padding-left: 5px; padding-right: 5px; }
+span.linenos.special { color: #e6edf3; background-color: #6e7681; padding-left: 5px; padding-right: 5px; }
+.hl .hll { background-color: #6e7681 }
+.hl { background: #0d1117; color: #E6EDF3 }
+.hl .c { color: #8B949E; font-style: italic } /* Comment */
+.hl .err { color: #F85149 } /* Error */
+.hl .esc { color: #E6EDF3 } /* Escape */
+.hl .g { color: #E6EDF3 } /* Generic */
+.hl .k { color: #FF7B72 } /* Keyword */
+.hl .l { color: #A5D6FF } /* Literal */
+.hl .n { color: #E6EDF3 } /* Name */
+.hl .o { color: #FF7B72; font-weight: bold } /* Operator */
+.hl .x { color: #E6EDF3 } /* Other */
+.hl .p { color: #E6EDF3 } /* Punctuation */
+.hl .ch { color: #8B949E; font-style: italic } /* Comment.Hashbang */
+.hl .cm { color: #8B949E; font-style: italic } /* Comment.Multiline */
+.hl .cp { color: #8B949E; font-weight: bold; font-style: italic } /* Comment.Preproc */
+.hl .cpf { color: #8B949E; font-style: italic } /* Comment.PreprocFile */
+.hl .c1 { color: #8B949E; font-style: italic } /* Comment.Single */
+.hl .cs { color: #8B949E; font-weight: bold; font-style: italic } /* Comment.Special */
+.hl .gd { color: #FFA198; background-color: #490202 } /* Generic.Deleted */
+.hl .ge { color: #E6EDF3; font-style: italic } /* Generic.Emph */
+.hl .ges { color: #E6EDF3; font-weight: bold; font-style: italic } /* Generic.EmphStrong */
+.hl .gr { color: #FFA198 } /* Generic.Error */
+.hl .gh { color: #79C0FF; font-weight: bold } /* Generic.Heading */
+.hl .gi { color: #56D364; background-color: #0F5323 } /* Generic.Inserted */
+.hl .go { color: #8B949E } /* Generic.Output */
+.hl .gp { color: #8B949E } /* Generic.Prompt */
+.hl .gs { color: #E6EDF3; font-weight: bold } /* Generic.Strong */
+.hl .gu { color: #79C0FF } /* Generic.Subheading */
+.hl .gt { color: #FF7B72 } /* Generic.Traceback */
+.hl .g-Underline { color: #E6EDF3; text-decoration: underline } /* Generic.Underline */
+.hl .kc { color: #79C0FF } /* Keyword.Constant */
+.hl .kd { color: #FF7B72 } /* Keyword.Declaration */
+.hl .kn { color: #FF7B72 } /* Keyword.Namespace */
+.hl .kp { color: #79C0FF } /* Keyword.Pseudo */
+.hl .kr { color: #FF7B72 } /* Keyword.Reserved */
+.hl .kt { color: #FF7B72 } /* Keyword.Type */
+.hl .ld { color: #79C0FF } /* Literal.Date */
+.hl .m { color: #A5D6FF } /* Literal.Number */
+.hl .s { color: #A5D6FF } /* Literal.String */
+.hl .na { color: #E6EDF3 } /* Name.Attribute */
+.hl .nb { color: #E6EDF3 } /* Name.Builtin */
+.hl .nc { color: #F0883E; font-weight: bold } /* Name.Class */
+.hl .no { color: #79C0FF; font-weight: bold } /* Name.Constant */
+.hl .nd { color: #D2A8FF; font-weight: bold } /* Name.Decorator */
+.hl .ni { color: #FFA657 } /* Name.Entity */
+.hl .ne { color: #F0883E; font-weight: bold } /* Name.Exception */
+.hl .nf { color: #D2A8FF; font-weight: bold } /* Name.Function */
+.hl .nl { color: #79C0FF; font-weight: bold } /* Name.Label */
+.hl .nn { color: #FF7B72 } /* Name.Namespace */
+.hl .nx { color: #E6EDF3 } /* Name.Other */
+.hl .py { color: #79C0FF } /* Name.Property */
+.hl .nt { color: #7EE787 } /* Name.Tag */
+.hl .nv { color: #79C0FF } /* Name.Variable */
+.hl .ow { color: #FF7B72; font-weight: bold } /* Operator.Word */
+.hl .pm { color: #E6EDF3 } /* Punctuation.Marker */
+.hl .w { color: #6E7681 } /* Text.Whitespace */
+.hl .mb { color: #A5D6FF } /* Literal.Number.Bin */
+.hl .mf { color: #A5D6FF } /* Literal.Number.Float */
+.hl .mh { color: #A5D6FF } /* Literal.Number.Hex */
+.hl .mi { color: #A5D6FF } /* Literal.Number.Integer */
+.hl .mo { color: #A5D6FF } /* Literal.Number.Oct */
+.hl .sa { color: #79C0FF } /* Literal.String.Affix */
+.hl .sb { color: #A5D6FF } /* Literal.String.Backtick */
+.hl .sc { color: #A5D6FF } /* Literal.String.Char */
+.hl .dl { color: #79C0FF } /* Literal.String.Delimiter */
+.hl .sd { color: #A5D6FF } /* Literal.String.Doc */
+.hl .s2 { color: #A5D6FF } /* Literal.String.Double */
+.hl .se { color: #79C0FF } /* Literal.String.Escape */
+.hl .sh { color: #79C0FF } /* Literal.String.Heredoc */
+.hl .si { color: #A5D6FF } /* Literal.String.Interpol */
+.hl .sx { color: #A5D6FF } /* Literal.String.Other */
+.hl .sr { color: #79C0FF } /* Literal.String.Regex */
+.hl .s1 { color: #A5D6FF } /* Literal.String.Single */
+.hl .ss { color: #A5D6FF } /* Literal.String.Symbol */
+.hl .bp { color: #E6EDF3 } /* Name.Builtin.Pseudo */
+.hl .fm { color: #D2A8FF; font-weight: bold } /* Name.Function.Magic */
+.hl .vc { color: #79C0FF } /* Name.Variable.Class */
+.hl .vg { color: #79C0FF } /* Name.Variable.Global */
+.hl .vi { color: #79C0FF } /* Name.Variable.Instance */
+.hl .vm { color: #79C0FF } /* Name.Variable.Magic */
+.hl .il { color: #A5D6FF } /* Literal.Number.Integer.Long */
+}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header>
+  <p class="eyebrow">AutoPPIA-VLA · onboarding</p>
+  <h1>Running OpenVLA on LIBERO — a clean rollout</h1>
+  <p class="lede">The smallest complete example in this project: load the OpenVLA-7B policy,
+  build a LIBERO scene, and close the perception–action loop until the robot succeeds.
+  No attack, no injected prompt — this is the baseline every attack result is measured against.</p>
+</header>
+
+<h2>What it does</h2>
+<p>One control step is the entire idea. The simulator renders a camera image, the policy reads
+that image plus the arm's proprioceptive state alongside a natural-language instruction, and it
+emits a 7-dimensional action that gets stepped back into the simulator:</p>
+
+<div class="diagram"><pre>obs ──get_libero_image──▶ 224×224 RGB ─┐
+                                       ├─▶ OpenVLA(image, instruction) ──▶ 7-d action
+obs ──eef pos/quat/gripper──▶ 8-d state ┘                                      │
+                                                                               ▼
+        next obs, done  ◀────────────  env.step(action)  ◀──── normalize/invert gripper</pre></div>
+
+<p>That repeats until LIBERO's own goal predicate fires (<code>done == True</code>, meaning the
+task genuinely succeeded) or the step cap is reached. Everything else in the file is setup and
+bookkeeping around this loop.</p>
+
+<div class="note">
+<p><strong>User task vs. teacher task.</strong> <code>--task</code> chooses both the scene that
+gets built and the instruction the policy is given, so success is always adjudicated by the
+predicate belonging to that task. To run the "teacher" (attacker) task, just pass it as
+<code>--task</code> — it gets its own scene and its own predicate.</p>
+</div>
+
+<h2>Before you run</h2>
+<p>You need a Python environment with the OpenVLA + LIBERO stack installed, plus the
+<code>openvla</code> and <code>LIBERO</code> source checkouts. On the project's GPU host that
+environment already exists — see <code>third_party/README.md</code> for the pinned commits and
+package versions.</p>
+
+<table>
+<tr><th>Setting</th><th>Why it matters</th></tr>
+<tr><td><code>MUJOCO_GL=egl</code></td><td>Headless off-screen rendering. Without it MuJoCo tries to open a window and dies on a server.</td></tr>
+<tr><td><code>CUDA_VISIBLE_DEVICES=1</code></td><td>Picks the GPU. <strong>On this host use GPU 1 only</strong> — GPU 0 is reserved for other people's jobs.</td></tr>
+<tr><td><code>OPENVLA_ROOT</code>, <code>LIBERO_ROOT</code></td><td>Optional. Only needed if those checkouts are not siblings of the repo or in your home directory.</td></tr>
+</table>
+
+<div class="warn">
+<p><strong>Resource reality check.</strong> The policy is a 7-billion-parameter model: expect
+roughly 30 seconds to load and about 16 GB of VRAM. If someone else's job is already on the
+GPU there may not be room — check <code>nvidia-smi</code> before you start.</p>
+</div>
+
+<h2>Run it</h2>
+
+<p class="cmd-label">The user task, first init state</p>
+<div class="hl"><pre><span></span><span class="nv">CUDA_VISIBLE_DEVICES</span><span class="o">=</span><span class="m">1</span><span class="w"> </span><span class="nv">MUJOCO_GL</span><span class="o">=</span>egl<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>~/vla-injection/.venv/bin/python<span class="w"> </span>experiments/clean_rollout.py<span class="w"> </span><span class="se">\</span>
+<span class="w">    </span>--task<span class="w"> </span><span class="s2">&quot;pick up the alphabet soup and place it in the basket&quot;</span>
+</pre></div>
+
+
+<p class="cmd-label">The teacher / attacker task instead</p>
+<div class="hl"><pre><span></span><span class="nv">CUDA_VISIBLE_DEVICES</span><span class="o">=</span><span class="m">1</span><span class="w"> </span><span class="nv">MUJOCO_GL</span><span class="o">=</span>egl<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>~/vla-injection/.venv/bin/python<span class="w"> </span>experiments/clean_rollout.py<span class="w"> </span><span class="se">\</span>
+<span class="w">    </span>--task<span class="w"> </span><span class="s2">&quot;pick up the salad dressing and place it in the basket&quot;</span>
+</pre></div>
+
+
+<p class="cmd-label">Several init states, saving a video of each episode</p>
+<div class="hl"><pre><span></span><span class="nv">CUDA_VISIBLE_DEVICES</span><span class="o">=</span><span class="m">1</span><span class="w"> </span><span class="nv">MUJOCO_GL</span><span class="o">=</span>egl<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>~/vla-injection/.venv/bin/python<span class="w"> </span>experiments/clean_rollout.py<span class="w"> </span><span class="se">\</span>
+<span class="w">    </span>--task<span class="w"> </span><span class="s2">&quot;pick up the alphabet soup and place it in the basket&quot;</span><span class="w"> </span><span class="se">\</span>
+<span class="w">    </span>--inits<span class="w"> </span><span class="m">0</span>,1,2<span class="w"> </span>--video-dir<span class="w"> </span>/tmp/clean_rollout
+</pre></div>
+
+
+<p class="cmd-label">If your checkouts live somewhere unusual</p>
+<div class="hl"><pre><span></span><span class="nv">OPENVLA_ROOT</span><span class="o">=</span>/data/openvla<span class="w"> </span><span class="nv">LIBERO_ROOT</span><span class="o">=</span>/data/LIBERO<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span><span class="nv">CUDA_VISIBLE_DEVICES</span><span class="o">=</span><span class="m">1</span><span class="w"> </span><span class="nv">MUJOCO_GL</span><span class="o">=</span>egl<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>python<span class="w"> </span>experiments/clean_rollout.py<span class="w"> </span>--task<span class="w"> </span><span class="s2">&quot;..&quot;</span>
+</pre></div>
+
+
+<h2>What you should see</h2>
+<p>Roughly 1–3 control steps per second once the model is resident. A well-matched task and init
+state typically succeeds somewhere around step 120–200; <code>alphabet_soup</code> at init 0 is a
+known-good sanity check. Output looks like this (step count shown is illustrative):</p>
+<pre><code>suite       : libero_object
+scene task  : &#x27;pick up the alphabet soup and place it in the basket&#x27; (task_id=0)
+instruction : &#x27;pick up the alphabet soup and place it in the basket&#x27;
+inits       : [0]   max_steps: 280
+
+loading OpenVLA-7B (~30 s, ~16 GB VRAM) ...
+loaded.
+
+[init 0] rolling out ...
+    step   0/280
+    step  20/280
+    ...
+[init 0] SUCCESS  steps=163  (94.1s)
+
+=== SUMMARY ===
+  init 0: success=True steps=163
+  1/1 succeeded</code></pre>
+
+<p>Init-state indices matter more than newcomers expect. LIBERO ships roughly 50 initial layouts
+per task, and the policy does not succeed from all of them — a failure at one init is not
+necessarily a bug. Compare across several before concluding anything.</p>
+
+<h2>Three things that bite people</h2>
+<div class="trap"><div class="trap-n">1</div><div><h3>The gripper convention is flipped</h3><p>OpenVLA emits a gripper value in a different convention from what LIBERO's <code>env.step</code> expects. You must <code>normalize_gripper_action(..., binarize=True)</code> and <em>then</em> <code>invert_gripper_action(...)</code>. Get this wrong and the failure is deceptive: the arm reaches the right object with a plausible trajectory and simply never closes its fingers.</p></div></div>
+<div class="trap"><div class="trap-n">2</div><div><h3>Let the scene settle first</h3><p>LIBERO drops the objects into the scene at reset, so the first few frames show objects still falling. The script steps a no-op action <code>num_steps_wait</code> times before the policy sees anything. Skip it and your first observations are physically unrepresentative.</p></div></div>
+<div class="trap"><div class="trap-n">3</div><div><h3>Load the 7B model once, outside the episode loop</h3><p>Re-creating the policy per episode without freeing the previous one exhausts VRAM. This exact bug killed a whole pilot run in this project (it OOM'd on the second condition). The script loads once and reuses the backend across every init.</p></div></div>
+
+<h2>Where this sits in the project</h2>
+<p>This is a <em>search-side</em> script, not part of the evaluator. It reuses the fixed
+evaluator's GPU seams — <code>OpenVLARolloutBackend._load_policy</code> and
+<code>._build_env</code> — so the physics, camera, and image preprocessing are bit-identical to a
+scored run. But it writes no metrics, no ledger row, and no score.</p>
+
+<div class="note">
+<p><strong>The project's one invariant:</strong> the evaluator is a fixed integrity boundary.
+The whole experiment is meaningless if the attack-search side can influence its own score, so
+nothing on the search side may modify evaluator code, metric definitions, the score formula,
+budget files, or task and seed definitions during a run.</p>
+<p>This script stays clean of that boundary by only ever <em>reading</em>. If you need an
+officially scored clean number, don't extend this file — run
+<code>experiments/run_candidate.py</code> with an off-camera carrier candidate so the result
+goes through the fixed evaluator and lands in the ledger.</p>
+</div>
+
+<h2>The script</h2>
+<div class="src-head">
+  <span class="path">experiments/clean_rollout.py</span>
+  <span>
+    <a class="dl" id="dl" download="clean_rollout.py"
+       href="data:text/x-python;base64,IiIiUnVuIE9wZW5WTEEtN0Igb24gYSBMSUJFUk8gdGFzayDigJQgQ0xFQU4sIG5vIGF0dGFjay4gU3RhcnQgaGVyZS4KClRoaXMgaXMgdGhlICJoZWxsbyB3b3JsZCIgb2YgdGhpcyBwcm9qZWN0OiBpdCBsb2FkcyB0aGUgT3BlblZMQSBwb2xpY3ksIGJ1aWxkcyBhIExJQkVSTwpzY2VuZSwgYW5kIGNsb3NlcyB0aGUgcGVyY2VwdGlvbi0+YWN0aW9uIGxvb3AgdW50aWwgdGhlIHRhc2sgc3VjY2VlZHMgb3IgdGhlIHN0ZXAgY2FwIGlzCmhpdC4gVGhlcmUgaXMgKipubyBpbmplY3RlZCBwcm9tcHQsIG5vIHBhdGNoLCBubyBwZXJ0dXJiYXRpb24qKiDigJQgaXQgaXMgdGhlIGJhc2VsaW5lIGV2ZXJ5CmF0dGFjayByZXN1bHQgaXMgbWVhc3VyZWQgYWdhaW5zdC4KCldoYXQgb25lIGNvbnRyb2wgc3RlcCBsb29rcyBsaWtlICh0aGlzIGlzIHRoZSB3aG9sZSBsb29wKToKCiAgICBvYnMgIC0tZ2V0X2xpYmVyb19pbWFnZS0tPiAgMjI0eDIyNCBSR0IgIOKUkAogICAgb2JzICAtLWVlZiBwb3MvcXVhdC9ncmlwcGVyLS0+ICA4LWQgc3RhdGUg4pSkLS0+IE9wZW5WTEEoaW1hZ2UsIGluc3RydWN0aW9uKSAtLT4gNy1kIGFjdGlvbgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAg4pSYCiAgICBhY3Rpb24gLS1ub3JtYWxpemUvaW52ZXJ0IGdyaXBwZXItLT4gZW52LnN0ZXAoYWN0aW9uKSAtLT4gbmV4dCBvYnMsIGRvbmUKCmBkb25lYCBpcyBMSUJFUk8ncyBvd24gZ29hbCBwcmVkaWNhdGUgZm9yIHRoZSB0YXNrIHRoZSAqc2NlbmUqIHdhcyBidWlsdCBmcm9tLCBzbwpgZG9uZSA9PSBUcnVlYCBtZWFucyB0aGUgY29tbWFuZGVkIHRhc2sgZ2VudWluZWx5IHN1Y2NlZWRlZC4KCi0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tClVzYWdlCi0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tCgpZb3UgbmVlZCBhIFB5dGhvbiBlbnYgd2l0aCB0aGUgT3BlblZMQSArIExJQkVSTyBzdGFjay4gT24gdGhpcyBwcm9qZWN0J3MgR1BVIGhvc3QgdGhhdAppcyBhIHJldXNlZCB2ZW52LCBgfi92bGEtaW5qZWN0aW9uLy52ZW52L2Jpbi9weXRob25gICh0aGlyZF9wYXJ0eS9SRUFETUUubWQgaGFzIHRoZQpwaW5uZWQgY29tbWl0cyBhbmQgcGFja2FnZSB2ZXJzaW9ucykuIFN1YnN0aXR1dGUgeW91ciBvd24gaW50ZXJwcmV0ZXIgaWYgaXQgZGlmZmVycy4KCmBNVUpPQ09fR0w9ZWdsYCBzZWxlY3RzIGhlYWRsZXNzIG9mZi1zY3JlZW4gcmVuZGVyaW5nIOKAlCB3aXRob3V0IGl0IE11Sm9DbyB0cmllcyB0byBvcGVuCmEgd2luZG93IGFuZCBkaWVzIG9uIGEgc2VydmVyLiBgQ1VEQV9WSVNJQkxFX0RFVklDRVNgIHBpY2tzIHRoZSBHUFU6ICoqb24gdGhpcyBob3N0IHVzZQpHUFUgMSBvbmx5LCBHUFUgMCBpcyByZXNlcnZlZCBmb3Igb3RoZXIgcGVvcGxlJ3Mgam9icy4qKgoKUnVuIHRoZSB1c2VyIHRhc2sgb24gdGhlIGZpcnN0IGluaXQgc3RhdGU6CgogICAgQ1VEQV9WSVNJQkxFX0RFVklDRVM9MSBNVUpPQ09fR0w9ZWdsIFwKICAgICAgfi92bGEtaW5qZWN0aW9uLy52ZW52L2Jpbi9weXRob24gZXhwZXJpbWVudHMvY2xlYW5fcm9sbG91dC5weSBcCiAgICAgICAgLS10YXNrICJwaWNrIHVwIHRoZSBhbHBoYWJldCBzb3VwIGFuZCBwbGFjZSBpdCBpbiB0aGUgYmFza2V0IgoKUnVuIHRoZSAidGVhY2hlciIvYXR0YWNrZXIgdGFzayBpbnN0ZWFkIOKAlCBzYW1lIHN1aXRlLCBpdHMgb3duIHNjZW5lIGFuZCBwcmVkaWNhdGU6CgogICAgLi4uIGV4cGVyaW1lbnRzL2NsZWFuX3JvbGxvdXQucHkgXAogICAgICAgIC0tdGFzayAicGljayB1cCB0aGUgc2FsYWQgZHJlc3NpbmcgYW5kIHBsYWNlIGl0IGluIHRoZSBiYXNrZXQiCgpTZXZlcmFsIGluaXQgc3RhdGVzICsgc2F2ZSBhIHZpZGVvIG9mIGVhY2ggZXBpc29kZToKCiAgICAuLi4gZXhwZXJpbWVudHMvY2xlYW5fcm9sbG91dC5weSBcCiAgICAgICAgLS10YXNrICJwaWNrIHVwIHRoZSBhbHBoYWJldCBzb3VwIGFuZCBwbGFjZSBpdCBpbiB0aGUgYmFza2V0IiBcCiAgICAgICAgLS1pbml0cyAwLDEsMiAtLXZpZGVvLWRpciAvdG1wL2NsZWFuX3JvbGxvdXQKCklmIHRoZSBvcGVudmxhIC8gTElCRVJPIGNoZWNrb3V0cyBhcmUgbm90IHNpYmxpbmdzIG9mIHRoaXMgcmVwbyBvciBpbiAkSE9NRSwgcG9pbnQgYXQKdGhlbSBleHBsaWNpdGx5IChubyBQWVRIT05QQVRIIG5lZWRlZCDigJQgdGhlIHNjcmlwdCBwdXRzIHRoZW0gb24gc3lzLnBhdGggaXRzZWxmKToKCiAgICBPUEVOVkxBX1JPT1Q9L2RhdGEvb3BlbnZsYSBMSUJFUk9fUk9PVD0vZGF0YS9MSUJFUk8gLi4uIGV4cGVyaW1lbnRzL2NsZWFuX3JvbGxvdXQucHkKCkV4cGVjdGVkOiB0aGUgbW9kZWwgbG9hZHMgKH4zMCBzLCB+MTYgR0IgVlJBTSksIHRoZW4gfjEtMyBzdGVwcy9zLiBBIGdvb2QgdGFzay9pbml0CnN1Y2NlZWRzIGFyb3VuZCBzdGVwIDEyMC0yMDAuIGBhbHBoYWJldF9zb3VwYCBhdCBpbml0IDAgaXMgYSBrbm93bi1nb29kIHNhbml0eSBjaGVjay4KCi0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tCldoZXJlIHRoaXMgc2l0cyBpbiB0aGUgcHJvamVjdAotLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLQpTZWFyY2ggc2lkZSwgbm90IHRoZSBldmFsdWF0b3IuIEl0IHJldXNlcyB0aGUgKmZpeGVkKiBldmFsdWF0b3IncyBHUFUgc2VhbXMKKGBPcGVuVkxBUm9sbG91dEJhY2tlbmQuX2xvYWRfcG9saWN5YCAvIGAuX2J1aWxkX2VudmApIHNvIHRoZSBwaHlzaWNzLCBjYW1lcmEsIGFuZApwcmVwcm9jZXNzaW5nIGFyZSBiaXQtaWRlbnRpY2FsIHRvIGEgc2NvcmVkIHJ1biDigJQgYnV0IGl0IHdyaXRlcyBubyBtZXRyaWNzLCBubyBsZWRnZXIKcm93LCBhbmQgbm8gc2NvcmUuIE5vdGhpbmcgaGVyZSBjYW4gaW5mbHVlbmNlIGhvdyBhbiBhdHRhY2sgaXMgZ3JhZGVkLCB3aGljaCBpcyB0aGUgb25lCmludmFyaWFudCB0aGlzIHByb2plY3QgcHJvdGVjdHMgKHNlZSBDTEFVREUubWQpLgoKSWYgeW91IG5lZWQgYW4gb2ZmaWNpYWxseSAqc2NvcmVkKiBjbGVhbiBudW1iZXIsIGRvbid0IGV4dGVuZCB0aGlzIGZpbGUg4oCUIHJ1bgpgZXhwZXJpbWVudHMvcnVuX2NhbmRpZGF0ZS5weWAgd2l0aCBhbiBvZmYtY2FtZXJhICh2aXNpYmlsaXR5IH4wKSBjYXJyaWVyIGNhbmRpZGF0ZSBzbwp0aGUgcmVzdWx0IGdvZXMgdGhyb3VnaCB0aGUgZml4ZWQgZXZhbHVhdG9yIGFuZCBsYW5kcyBpbiB0aGUgbGVkZ2VyLgoiIiIKCmZyb20gX19mdXR1cmVfXyBpbXBvcnQgYW5ub3RhdGlvbnMKCmltcG9ydCBhcmdwYXJzZQppbXBvcnQgb3MKaW1wb3J0IHN5cwppbXBvcnQgdGltZQpmcm9tIHBhdGhsaWIgaW1wb3J0IFBhdGgKCmltcG9ydCBudW1weSBhcyBucAoKIyAtLS0gaW1wb3J0IGJvb3RzdHJhcCAtLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tCiMgVGhyZWUgc2VwYXJhdGUgc291cmNlIHRyZWVzIGhhdmUgdG8gYmUgaW1wb3J0YWJsZSwgYW5kIG5vbmUgaXMgcGlwLWluc3RhbGxlZDoKIyAgIDxyZXBvPi9zcmMgICAtPiB0aGlzIHByb2plY3QncyBgZXZhbHVhdG9yYCBwYWNrYWdlCiMgICBvcGVudmxhICAgICAgLT4gYGV4cGVyaW1lbnRzLnJvYm90LipgIGhlbHBlcnMgKGdldF9hY3Rpb24sIGltYWdlIHV0aWxzKQojICAgTElCRVJPICAgICAgIC0+IHRoZSBgbGliZXJvYCBwYWNrYWdlICh0aGUgc2ltdWxhdG9yLCB0YXNrcywgYW5kIGluaXQgc3RhdGVzKQojCiMgTm90aGluZyBiZWxvdyBpcyBoYXJkY29kZWQgdG8gYSBwYXJ0aWN1bGFyIG1hY2hpbmU6IHRoZSByZXBvIGlzIGZvdW5kIHJlbGF0aXZlIHRvIHRoaXMKIyBmaWxlLCBhbmQgdGhlIHR3byBleHRlcm5hbCB0cmVlcyBhcmUgZm91bmQgdmlhICRPUEVOVkxBX1JPT1QgLyAkTElCRVJPX1JPT1QsIGZhbGxpbmcKIyBiYWNrIHRvIHNpYmxpbmdzIG9mIHRoZSByZXBvIGFuZCB0aGVuIHRvICRIT01FLiBPdmVycmlkZSB0aGUgZW52IHZhcnMgaWYgeW91cnMgbGl2ZQojIHNvbWV3aGVyZSBlbHNlLiBgZXhwZXJpbWVudHNgIHdvcmtzIGFzIGEgbmFtZXNwYWNlIHBhY2thZ2UgYWNyb3NzIHRoZSByZXBvIGFuZCBvcGVudmxhCiMgYmVjYXVzZSBuZWl0aGVyIGhhcyBhbiBfX2luaXRfXy5weSwgc28gYGV4cGVyaW1lbnRzLnJvYm90YCByZXNvbHZlcyBpbnRvIG9wZW52bGEuClJFUE9fUk9PVCA9IFBhdGgoX19maWxlX18pLnJlc29sdmUoKS5wYXJlbnRzWzFdCgoKZGVmIF9maW5kX3RyZWUobmFtZTogc3RyLCBlbnZfdmFyOiBzdHIsIG1hcmtlcjogc3RyKSAtPiBQYXRoOgogICAgIiIiTG9jYXRlIGFuIGV4dGVybmFsIGRlcGVuZGVuY3kgdHJlZSwgb3IgZXhpdCB3aXRoIGFuIGFjdGlvbmFibGUgbWVzc2FnZS4KCiAgICBBbiBleHBsaWNpdGx5LXNldCAkZW52X3ZhciBtdXN0IGJlIGNvcnJlY3Q6IGlmIGl0IGlzIHNldCBidXQgd3Jvbmcgd2UgZmFpbCBsb3VkbHkKICAgIHJhdGhlciB0aGFuIHF1aWV0bHkgZmFsbGluZyBiYWNrLCBzbyBhIHR5cG8nZCBwYXRoIGNhbiBuZXZlciBzZW5kIHlvdSBvZmYgZGVidWdnaW5nCiAgICB0aGUgd3JvbmcgY2hlY2tvdXQuCiAgICAiIiIKICAgIG92ZXJyaWRlID0gb3MuZW52aXJvbi5nZXQoZW52X3ZhcikKICAgIGlmIG92ZXJyaWRlOgogICAgICAgIHJvb3QgPSBQYXRoKG92ZXJyaWRlKS5leHBhbmR1c2VyKCkKICAgICAgICBpZiBub3QgKHJvb3QgLyBtYXJrZXIpLmV4aXN0cygpOgogICAgICAgICAgICByYWlzZSBTeXN0ZW1FeGl0KAogICAgICAgICAgICAgICAgZiJ7ZW52X3Zhcn09e292ZXJyaWRlfSBkb2VzIG5vdCBsb29rIGxpa2UgYSB7bmFtZX0gY2hlY2tvdXQgIgogICAgICAgICAgICAgICAgZiIobWlzc2luZyB7bWFya2VyfSkuIEZpeCBvciB1bnNldCBpdC4iCiAgICAgICAgICAgICkKICAgICAgICByZXR1cm4gcm9vdAoKICAgIGNhbmRpZGF0ZXMgPSBbUkVQT19ST09ULnBhcmVudCAvIG5hbWUsIFBhdGguaG9tZSgpIC8gbmFtZV0KICAgIGZvciBjYW5kaWRhdGUgaW4gY2FuZGlkYXRlczoKICAgICAgICBpZiAoY2FuZGlkYXRlIC8gbWFya2VyKS5leGlzdHMoKToKICAgICAgICAgICAgcmV0dXJuIGNhbmRpZGF0ZQogICAgc2VhcmNoZWQgPSAiXG4gICIuam9pbihzdHIoYykgZm9yIGMgaW4gY2FuZGlkYXRlcykKICAgIHJhaXNlIFN5c3RlbUV4aXQoCiAgICAgICAgZiJDb3VsZCBub3QgZmluZCB0aGUge25hbWV9IHNvdXJjZSB0cmVlIChsb29rZWQgZm9yIHtuYW1lfS97bWFya2VyfSkuXG4iCiAgICAgICAgZiJTZWFyY2hlZDpcbiAge3NlYXJjaGVkfVxuIgogICAgICAgIGYiU2V0IHtlbnZfdmFyfT0vcGF0aC90by97bmFtZX0gYW5kIHJlLXJ1bi4gIgogICAgICAgIGYiU2VlIHRoaXJkX3BhcnR5L1JFQURNRS5tZCBmb3IgdGhlIHBpbm5lZCBjb21taXQgdGhpcyBwcm9qZWN0IGV4cGVjdHMuIgogICAgKQoKCk9QRU5WTEFfUk9PVCA9IF9maW5kX3RyZWUoIm9wZW52bGEiLCAiT1BFTlZMQV9ST09UIiwgImV4cGVyaW1lbnRzL3JvYm90L3JvYm90X3V0aWxzLnB5IikKTElCRVJPX1JPT1QgPSBfZmluZF90cmVlKCJMSUJFUk8iLCAiTElCRVJPX1JPT1QiLCAibGliZXJvL2xpYmVyby9fX2luaXRfXy5weSIpCmZvciBfdHJlZSBpbiAoUkVQT19ST09UIC8gInNyYyIsIFJFUE9fUk9PVCwgT1BFTlZMQV9ST09ULCBMSUJFUk9fUk9PVCk6CiAgICBzeXMucGF0aC5pbnNlcnQoMCwgc3RyKF90cmVlKSkKCmZyb20gZXZhbHVhdG9yLmxpYmVyb190YXNrcyBpbXBvcnQgcmVzb2x2ZV90YXNrICAjIG5vcWE6IEU0MDIKZnJvbSBldmFsdWF0b3Iub3BlbnZsYV9iYWNrZW5kIGltcG9ydCBPcGVuVkxBUm9sbG91dEJhY2tlbmQgICMgbm9xYTogRTQwMgoKIyBMSUJFUk8gZXBpc29kZSBjYXBzIHVzZWQgYnkgdGhlIGZpeGVkIGV2YWx1YXRvciDigJQga2VlcCB0aGVzZSBpZiB5b3Ugd2FudCB5b3VyIG51bWJlcnMKIyBjb21wYXJhYmxlIHRvIHRoZSByZWNvcmRlZCBydW5zLgpERUZBVUxUX01BWF9TVEVQUyA9IHsibGliZXJvX29iamVjdCI6IDI4MCwgImxpYmVyb19zcGF0aWFsIjogMjIwLCAibGliZXJvX2dvYWwiOiAzMDB9CkRFTU9fUkVTID0gMzg0ICAjIHZpZGVvIGZyYW1lcyBhcmUgcmVuZGVyZWQgbGFyZ2VyIHRoYW4gdGhlIDIyNCB0aGUgcG9saWN5IHNlZXMKCgpkZWYgcGFyc2VfYXJncygpIC0+IGFyZ3BhcnNlLk5hbWVzcGFjZToKICAgIHBhcnNlciA9IGFyZ3BhcnNlLkFyZ3VtZW50UGFyc2VyKAogICAgICAgIGRlc2NyaXB0aW9uPSJSdW4gYSBjbGVhbiAodW4tYXR0YWNrZWQpIE9wZW5WTEEgcm9sbG91dCBvbiBhIExJQkVSTyB0YXNrLiIsCiAgICAgICAgZm9ybWF0dGVyX2NsYXNzPWFyZ3BhcnNlLkFyZ3VtZW50RGVmYXVsdHNIZWxwRm9ybWF0dGVyLAogICAgKQogICAgcGFyc2VyLmFkZF9hcmd1bWVudCgKICAgICAgICAiLS10YXNrIiwKICAgICAgICBkZWZhdWx0PSJwaWNrIHVwIHRoZSBhbHBoYWJldCBzb3VwIGFuZCBwbGFjZSBpdCBpbiB0aGUgYmFza2V0IiwKICAgICAgICBoZWxwPSJUYXNrIGxhbmd1YWdlIHN0cmluZy4gQnVpbGRzIHRoZSBzY2VuZSBBTkQgaXMgdGhlIGluc3RydWN0aW9uIGdpdmVuIHRvIE9wZW5WTEEuICIKICAgICAgICAiTXVzdCBtYXRjaCBhIHRhc2sgaW4gLS1zdWl0ZSBleGFjdGx5ICh1cCB0byBjYXNlL3B1bmN0dWF0aW9uKS4iLAogICAgKQogICAgcGFyc2VyLmFkZF9hcmd1bWVudCgKICAgICAgICAiLS1pbnN0cnVjdGlvbiIsCiAgICAgICAgZGVmYXVsdD1Ob25lLAogICAgICAgIGhlbHA9IkFEVkFOQ0VEOiBjb21tYW5kIGEgZGlmZmVyZW50IGluc3RydWN0aW9uIGluc2lkZSAtLXRhc2sncyBzY2VuZSAodGhlICdzMCAiCiAgICAgICAgInJlYWNoYWJpbGl0eScgcHJvYmUpLiBTdWNjZXNzIGlzIHN0aWxsIGp1ZGdlZCBieSAtLXRhc2sncyBwcmVkaWNhdGUsIHNvIGEgIgogICAgICAgICJzdWNjZXNzL2ZhaWx1cmUgaGVyZSBkb2VzIE5PVCBhZGp1ZGljYXRlIHRoZSBvdmVycmlkZGVuIGluc3RydWN0aW9uLiIsCiAgICApCiAgICBwYXJzZXIuYWRkX2FyZ3VtZW50KCItLXN1aXRlIiwgZGVmYXVsdD0ibGliZXJvX29iamVjdCIsIGhlbHA9IkxJQkVSTyB0YXNrIHN1aXRlLiIpCiAgICBwYXJzZXIuYWRkX2FyZ3VtZW50KAogICAgICAgICItLWluaXRzIiwKICAgICAgICBkZWZhdWx0PSIwIiwKICAgICAgICBoZWxwPSJDb21tYS1zZXBhcmF0ZWQgaW5pdC1zdGF0ZSBpbmRpY2VzIChMSUJFUk8gc2hpcHMgfjUwIHBlciB0YXNrKS4gIgogICAgICAgICJUaGUgc2NlbmUgbGF5b3V0IGRpZmZlcnMgcGVyIGluZGV4OyByZXN1bHRzIHZhcnkgd2l0aCBpdC4iLAogICAgKQogICAgcGFyc2VyLmFkZF9hcmd1bWVudCgKICAgICAgICAiLS1tYXgtc3RlcHMiLAogICAgICAgIHR5cGU9aW50LAogICAgICAgIGRlZmF1bHQ9Tm9uZSwKICAgICAgICBoZWxwPSJDb250cm9sLXN0ZXAgY2FwIHBlciBlcGlzb2RlIChkZWZhdWx0OiB0aGUgc3VpdGUncyBzdGFuZGFyZCBjYXApLiIsCiAgICApCiAgICBwYXJzZXIuYWRkX2FyZ3VtZW50KAogICAgICAgICItLXZpZGVvLWRpciIsCiAgICAgICAgZGVmYXVsdD1Ob25lLAogICAgICAgIGhlbHA9IklmIHNldCwgd3JpdGUgPHN1aXRlPl88aW5pdD4ubXA0IHBlciBlcGlzb2RlIGhlcmUuIiwKICAgICkKICAgIHJldHVybiBwYXJzZXIucGFyc2VfYXJncygpCgoKZGVmIHJ1bl9lcGlzb2RlKAogICAgKiwKICAgIGJhY2tlbmQ6IE9wZW5WTEFSb2xsb3V0QmFja2VuZCwKICAgIHBvbGljeTogdHVwbGUsCiAgICByZXNvbHZlZCwKICAgIGluaXRfaW5kZXg6IGludCwKICAgIGluc3RydWN0aW9uOiBzdHIsCiAgICBtYXhfc3RlcHM6IGludCwKICAgIHZpZGVvX3BhdGg6IHN0ciB8IE5vbmUsCikgLT4gZGljdDoKICAgICIiIlJvbGwgb25lIGNsZWFuIGVwaXNvZGUuIFJldHVybnMge3N1Y2Nlc3MsIHN0ZXBzLCBzZWNvbmRzfS4iIiIKICAgIGZyb20gZXhwZXJpbWVudHMucm9ib3QubGliZXJvLmxpYmVyb191dGlscyBpbXBvcnQgZ2V0X2xpYmVyb19pbWFnZSwgcXVhdDJheGlzYW5nbGUKICAgIGZyb20gZXhwZXJpbWVudHMucm9ib3Qucm9ib3RfdXRpbHMgaW1wb3J0ICgKICAgICAgICBnZXRfYWN0aW9uLAogICAgICAgIGludmVydF9ncmlwcGVyX2FjdGlvbiwKICAgICAgICBub3JtYWxpemVfZ3JpcHBlcl9hY3Rpb24sCiAgICApCgogICAgbW9kZWwsIHByb2Nlc3NvciwgY2ZnLCByZXNpemVfc2l6ZSA9IHBvbGljeQoKICAgICMgU2VlZCBldmVyeSBSTkcgZnJvbSB0aGUgaW5pdCBpbmRleCBzbyB0aGUgZXBpc29kZSBpcyByZXByb2R1Y2libGUuCiAgICBiYWNrZW5kLl9zZWVkX2V2ZXJ5dGhpbmcoaW5pdF9pbmRleCkKCiAgICAjIEJ1aWxkIHRoZSBzY2VuZSwgdGhlbiBqdW1wIHRvIHRoZSBjaG9zZW4gaW5pdCBzdGF0ZS4gTElCRVJPIG5lZWRzIG5vIGV4cGxpY2l0CiAgICAjIHJlc2V0KCkgaGVyZSDigJQgc2V0X2luaXRfc3RhdGUgZG9lcyBpdC4KICAgIGVudiwgaW5pdF9zdGF0ZXMsIHRhc2tfZGVzY3JpcHRpb24sIG9ial9vZl9pbnRlcmVzdCA9IGJhY2tlbmQuX2J1aWxkX2VudihyZXNvbHZlZCkKICAgIG9icyA9IGVudi5zZXRfaW5pdF9zdGF0ZShpbml0X3N0YXRlc1tpbml0X2luZGV4ICUgbGVuKGluaXRfc3RhdGVzKV0pCgogICAgIyBUaGUgc2NlbmUgZHJvcHMgb2JqZWN0cyBpbjsgYSBmZXcgbm8tb3Agc3RlcHMgbGV0IHBoeXNpY3Mgc2V0dGxlIGJlZm9yZSB0aGUgcG9saWN5CiAgICAjIHNlZXMgYW55dGhpbmcuIFNraXBwaW5nIHRoaXMgbWFrZXMgdGhlIGZpcnN0IG9ic2VydmF0aW9ucyB1bnJlcHJlc2VudGF0aXZlLgogICAgZHVtbXkgPSBiYWNrZW5kLl9kdW1teV9hY3Rpb24oY2ZnKQogICAgZm9yIF8gaW4gcmFuZ2UoYmFja2VuZC5udW1fc3RlcHNfd2FpdCk6CiAgICAgICAgb2JzLCBfcmV3YXJkLCBfZG9uZSwgX2luZm8gPSBlbnYuc3RlcChkdW1teSkKCiAgICBmcmFtZXM6IGxpc3QgPSBbXQogICAgc3VjY2VzcyA9IEZhbHNlCiAgICBzdGFydGVkID0gdGltZS50aW1lKCkKICAgIHN0ZXAgPSAwCiAgICB0cnk6CiAgICAgICAgZm9yIHN0ZXAgaW4gcmFuZ2UobWF4X3N0ZXBzKToKICAgICAgICAgICAgaWYgdmlkZW9fcGF0aCBpcyBub3QgTm9uZToKICAgICAgICAgICAgICAgIGZyYW1lcy5hcHBlbmQoZ2V0X2xpYmVyb19pbWFnZShvYnMsIERFTU9fUkVTKSkKCiAgICAgICAgICAgICMgLS0tIHdoYXQgdGhlIHBvbGljeSBhY3R1YWxseSBjb25zdW1lcyAtLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tCiAgICAgICAgICAgIGltYWdlID0gZ2V0X2xpYmVyb19pbWFnZShvYnMsIHJlc2l6ZV9zaXplKSAgIyB1aW50OCBbMjI0LCAyMjQsIDNdCiAgICAgICAgICAgIG9ic2VydmF0aW9uID0gewogICAgICAgICAgICAgICAgImZ1bGxfaW1hZ2UiOiBpbWFnZSwKICAgICAgICAgICAgICAgICJzdGF0ZSI6IG5wLmNvbmNhdGVuYXRlKAogICAgICAgICAgICAgICAgICAgICgKICAgICAgICAgICAgICAgICAgICAgICAgb2JzWyJyb2JvdDBfZWVmX3BvcyJdLAogICAgICAgICAgICAgICAgICAgICAgICBxdWF0MmF4aXNhbmdsZShvYnNbInJvYm90MF9lZWZfcXVhdCJdKSwKICAgICAgICAgICAgICAgICAgICAgICAgb2JzWyJyb2JvdDBfZ3JpcHBlcl9xcG9zIl0sCiAgICAgICAgICAgICAgICAgICAgKQogICAgICAgICAgICAgICAgKSwKICAgICAgICAgICAgfQogICAgICAgICAgICBhY3Rpb24gPSBnZXRfYWN0aW9uKGNmZywgbW9kZWwsIG9ic2VydmF0aW9uLCBpbnN0cnVjdGlvbiwgcHJvY2Vzc29yPXByb2Nlc3NvcikKCiAgICAgICAgICAgICMgT3BlblZMQSdzIGdyaXBwZXIgY29udmVudGlvbiBkaWZmZXJzIGZyb20gTElCRVJPJ3M6IGJpbmFyaXplLCB0aGVuIGZsaXAuCiAgICAgICAgICAgICMgR2V0IHRoaXMgd3JvbmcgYW5kIHRoZSByb2JvdCBhcHByb2FjaGVzIGNvcnJlY3RseSBidXQgbmV2ZXIgZ3Jhc3BzLgogICAgICAgICAgICBhY3Rpb24gPSBpbnZlcnRfZ3JpcHBlcl9hY3Rpb24obm9ybWFsaXplX2dyaXBwZXJfYWN0aW9uKGFjdGlvbiwgYmluYXJpemU9VHJ1ZSkpCgogICAgICAgICAgICBvYnMsIF9yZXdhcmQsIGRvbmUsIF9pbmZvID0gZW52LnN0ZXAoCiAgICAgICAgICAgICAgICBhY3Rpb24udG9saXN0KCkgaWYgaGFzYXR0cihhY3Rpb24sICJ0b2xpc3QiKSBlbHNlIGFjdGlvbgogICAgICAgICAgICApCiAgICAgICAgICAgIGlmIHN0ZXAgJSAyMCA9PSAwOgogICAgICAgICAgICAgICAgcHJpbnQoZiIgICAgc3RlcCB7c3RlcDozZH0ve21heF9zdGVwc30iLCBmbHVzaD1UcnVlKQogICAgICAgICAgICBpZiBkb25lOiAgIyBMSUJFUk8ncyBvd24gZ29hbCBwcmVkaWNhdGUgZm9yIHRoaXMgdGFzawogICAgICAgICAgICAgICAgc3VjY2VzcyA9IFRydWUKICAgICAgICAgICAgICAgIGJyZWFrCiAgICBmaW5hbGx5OgogICAgICAgIGVudi5jbG9zZSgpCgogICAgaWYgdmlkZW9fcGF0aCBpcyBub3QgTm9uZSBhbmQgZnJhbWVzOgogICAgICAgIGltcG9ydCBpbWFnZWlvLnYyIGFzIGltYWdlaW8KCiAgICAgICAgaW1hZ2Vpby5taW13cml0ZSh2aWRlb19wYXRoLCBmcmFtZXMsIGZwcz0yMCkKICAgICAgICBwcmludChmIiAgICB2aWRlbyAtPiB7dmlkZW9fcGF0aH0iLCBmbHVzaD1UcnVlKQoKICAgIHJldHVybiB7InN1Y2Nlc3MiOiBzdWNjZXNzLCAic3RlcHMiOiBzdGVwICsgMSwgInNlY29uZHMiOiByb3VuZCh0aW1lLnRpbWUoKSAtIHN0YXJ0ZWQsIDEpfQoKCmRlZiBtYWluKCkgLT4gTm9uZToKICAgIGFyZ3MgPSBwYXJzZV9hcmdzKCkKICAgIGluaXRzID0gW2ludCh4KSBmb3IgeCBpbiBhcmdzLmluaXRzLnNwbGl0KCIsIikgaWYgeC5zdHJpcCgpXQogICAgbWF4X3N0ZXBzID0gYXJncy5tYXhfc3RlcHMgb3IgREVGQVVMVF9NQVhfU1RFUFMuZ2V0KGFyZ3Muc3VpdGUsIDI4MCkKCiAgICAjIEZhaWwgZmFzdCBvbiBhIHR5cG8nZCB0YXNrIHN0cmluZywgQkVGT1JFIHNwZW5kaW5nIDMwIHMgbG9hZGluZyBhIDdCIG1vZGVsLgogICAgcmVzb2x2ZWQgPSByZXNvbHZlX3Rhc2soYXJncy50YXNrLCBzdWl0ZT1hcmdzLnN1aXRlKQogICAgaW5zdHJ1Y3Rpb24gPSBhcmdzLmluc3RydWN0aW9uIG9yIHJlc29sdmVkLmxhbmd1YWdlCgogICAgcHJpbnQoZiJzdWl0ZSAgICAgICA6IHthcmdzLnN1aXRlfSIpCiAgICBwcmludChmInNjZW5lIHRhc2sgIDoge3Jlc29sdmVkLmxhbmd1YWdlIXJ9ICh0YXNrX2lkPXtyZXNvbHZlZC50YXNrX2lkfSkiKQogICAgcHJpbnQoZiJpbnN0cnVjdGlvbiA6IHtpbnN0cnVjdGlvbiFyfSIpCiAgICBpZiBhcmdzLmluc3RydWN0aW9uOgogICAgICAgIHByaW50KCIgIF4gT1ZFUlJJRERFTjogJ3N1Y2Nlc3MnIGJlbG93IHN0aWxsIG1lYW5zIHRoZSBTQ0VORSB0YXNrJ3MgcHJlZGljYXRlIGZpcmVkLiIpCiAgICBwcmludChmImluaXRzICAgICAgIDoge2luaXRzfSAgIG1heF9zdGVwczoge21heF9zdGVwc31cbiIpCgogICAgaWYgYXJncy52aWRlb19kaXI6CiAgICAgICAgb3MubWFrZWRpcnMoYXJncy52aWRlb19kaXIsIGV4aXN0X29rPVRydWUpCgogICAgIyBPbmUgYmFja2VuZCwgb25lIG1vZGVsIGxvYWQsIHJldXNlZCBhY3Jvc3MgZXBpc29kZXMuIFJlLWxvYWRpbmcgcGVyIGVwaXNvZGUgd2l0aG91dAogICAgIyBmcmVlaW5nIHRoZSBvbGQgbW9kZWwgZXhoYXVzdHMgVlJBTSDigJQgdGhhdCBidWcgY29zdCB1cyBhIHdob2xlIHBpbG90IHJ1bi4KICAgIGJhY2tlbmQgPSBPcGVuVkxBUm9sbG91dEJhY2tlbmQodGFza19zdWl0ZT1hcmdzLnN1aXRlLCBtYXhfc3RlcHM9bWF4X3N0ZXBzKQogICAgcHJpbnQoImxvYWRpbmcgT3BlblZMQS03QiAofjMwIHMsIH4xNiBHQiBWUkFNKSAuLi4iLCBmbHVzaD1UcnVlKQogICAgcG9saWN5ID0gYmFja2VuZC5fbG9hZF9wb2xpY3koKQogICAgcHJpbnQoImxvYWRlZC5cbiIsIGZsdXNoPVRydWUpCgogICAgcmVzdWx0cyA9IFtdCiAgICBmb3IgaW5pdF9pbmRleCBpbiBpbml0czoKICAgICAgICBwcmludChmIltpbml0IHtpbml0X2luZGV4fV0gcm9sbGluZyBvdXQgLi4uIiwgZmx1c2g9VHJ1ZSkKICAgICAgICB2aWRlb19wYXRoID0gKAogICAgICAgICAgICBvcy5wYXRoLmpvaW4oYXJncy52aWRlb19kaXIsIGYie2FyZ3Muc3VpdGV9X2luaXR7aW5pdF9pbmRleH0ubXA0IikKICAgICAgICAgICAgaWYgYXJncy52aWRlb19kaXIKICAgICAgICAgICAgZWxzZSBOb25lCiAgICAgICAgKQogICAgICAgIHJlc3VsdCA9IHJ1bl9lcGlzb2RlKAogICAgICAgICAgICBiYWNrZW5kPWJhY2tlbmQsCiAgICAgICAgICAgIHBvbGljeT1wb2xpY3ksCiAgICAgICAgICAgIHJlc29sdmVkPXJlc29sdmVkLAogICAgICAgICAgICBpbml0X2luZGV4PWluaXRfaW5kZXgsCiAgICAgICAgICAgIGluc3RydWN0aW9uPWluc3RydWN0aW9uLAogICAgICAgICAgICBtYXhfc3RlcHM9bWF4X3N0ZXBzLAogICAgICAgICAgICB2aWRlb19wYXRoPXZpZGVvX3BhdGgsCiAgICAgICAgKQogICAgICAgIHJlc3VsdHMuYXBwZW5kKChpbml0X2luZGV4LCByZXN1bHQpKQogICAgICAgIHZlcmRpY3QgPSAiU1VDQ0VTUyIgaWYgcmVzdWx0WyJzdWNjZXNzIl0gZWxzZSAiRkFJTCAgICIKICAgICAgICBwcmludCgKICAgICAgICAgICAgZiJbaW5pdCB7aW5pdF9pbmRleH1dIHt2ZXJkaWN0fSAgc3RlcHM9e3Jlc3VsdFsnc3RlcHMnXX0gICIKICAgICAgICAgICAgZiIoe3Jlc3VsdFsnc2Vjb25kcyddfXMpXG4iLAogICAgICAgICAgICBmbHVzaD1UcnVlLAogICAgICAgICkKCiAgICBuX3N1Y2Nlc3MgPSBzdW0oMSBmb3IgX2ksIHIgaW4gcmVzdWx0cyBpZiByWyJzdWNjZXNzIl0pCiAgICBwcmludCgiPT09IFNVTU1BUlkgPT09IikKICAgIGZvciBpbml0X2luZGV4LCByZXN1bHQgaW4gcmVzdWx0czoKICAgICAgICBwcmludChmIiAgaW5pdCB7aW5pdF9pbmRleH06IHN1Y2Nlc3M9e3Jlc3VsdFsnc3VjY2VzcyddfSBzdGVwcz17cmVzdWx0WydzdGVwcyddfSIpCiAgICBwcmludChmIiAge25fc3VjY2Vzc30ve2xlbihyZXN1bHRzKX0gc3VjY2VlZGVkIikKCgppZiBfX25hbWVfXyA9PSAiX19tYWluX18iOgogICAgbWFpbigpCg==">Download .py</a>
+    <button class="dl secondary" id="copy">Copy source</button>
+  </span>
+</div>
+<div id="source"><div class="hl"><table class="hltable"><tr><td class="linenos"><div class="linenodiv"><pre><span class="normal">  1</span>
+<span class="normal">  2</span>
+<span class="normal">  3</span>
+<span class="normal">  4</span>
+<span class="normal">  5</span>
+<span class="normal">  6</span>
+<span class="normal">  7</span>
+<span class="normal">  8</span>
+<span class="normal">  9</span>
+<span class="normal"> 10</span>
+<span class="normal"> 11</span>
+<span class="normal"> 12</span>
+<span class="normal"> 13</span>
+<span class="normal"> 14</span>
+<span class="normal"> 15</span>
+<span class="normal"> 16</span>
+<span class="normal"> 17</span>
+<span class="normal"> 18</span>
+<span class="normal"> 19</span>
+<span class="normal"> 20</span>
+<span class="normal"> 21</span>
+<span class="normal"> 22</span>
+<span class="normal"> 23</span>
+<span class="normal"> 24</span>
+<span class="normal"> 25</span>
+<span class="normal"> 26</span>
+<span class="normal"> 27</span>
+<span class="normal"> 28</span>
+<span class="normal"> 29</span>
+<span class="normal"> 30</span>
+<span class="normal"> 31</span>
+<span class="normal"> 32</span>
+<span class="normal"> 33</span>
+<span class="normal"> 34</span>
+<span class="normal"> 35</span>
+<span class="normal"> 36</span>
+<span class="normal"> 37</span>
+<span class="normal"> 38</span>
+<span class="normal"> 39</span>
+<span class="normal"> 40</span>
+<span class="normal"> 41</span>
+<span class="normal"> 42</span>
+<span class="normal"> 43</span>
+<span class="normal"> 44</span>
+<span class="normal"> 45</span>
+<span class="normal"> 46</span>
+<span class="normal"> 47</span>
+<span class="normal"> 48</span>
+<span class="normal"> 49</span>
+<span class="normal"> 50</span>
+<span class="normal"> 51</span>
+<span class="normal"> 52</span>
+<span class="normal"> 53</span>
+<span class="normal"> 54</span>
+<span class="normal"> 55</span>
+<span class="normal"> 56</span>
+<span class="normal"> 57</span>
+<span class="normal"> 58</span>
+<span class="normal"> 59</span>
+<span class="normal"> 60</span>
+<span class="normal"> 61</span>
+<span class="normal"> 62</span>
+<span class="normal"> 63</span>
+<span class="normal"> 64</span>
+<span class="normal"> 65</span>
+<span class="normal"> 66</span>
+<span class="normal"> 67</span>
+<span class="normal"> 68</span>
+<span class="normal"> 69</span>
+<span class="normal"> 70</span>
+<span class="normal"> 71</span>
+<span class="normal"> 72</span>
+<span class="normal"> 73</span>
+<span class="normal"> 74</span>
+<span class="normal"> 75</span>
+<span class="normal"> 76</span>
+<span class="normal"> 77</span>
+<span class="normal"> 78</span>
+<span class="normal"> 79</span>
+<span class="normal"> 80</span>
+<span class="normal"> 81</span>
+<span class="normal"> 82</span>
+<span class="normal"> 83</span>
+<span class="normal"> 84</span>
+<span class="normal"> 85</span>
+<span class="normal"> 86</span>
+<span class="normal"> 87</span>
+<span class="normal"> 88</span>
+<span class="normal"> 89</span>
+<span class="normal"> 90</span>
+<span class="normal"> 91</span>
+<span class="normal"> 92</span>
+<span class="normal"> 93</span>
+<span class="normal"> 94</span>
+<span class="normal"> 95</span>
+<span class="normal"> 96</span>
+<span class="normal"> 97</span>
+<span class="normal"> 98</span>
+<span class="normal"> 99</span>
+<span class="normal">100</span>
+<span class="normal">101</span>
+<span class="normal">102</span>
+<span class="normal">103</span>
+<span class="normal">104</span>
+<span class="normal">105</span>
+<span class="normal">106</span>
+<span class="normal">107</span>
+<span class="normal">108</span>
+<span class="normal">109</span>
+<span class="normal">110</span>
+<span class="normal">111</span>
+<span class="normal">112</span>
+<span class="normal">113</span>
+<span class="normal">114</span>
+<span class="normal">115</span>
+<span class="normal">116</span>
+<span class="normal">117</span>
+<span class="normal">118</span>
+<span class="normal">119</span>
+<span class="normal">120</span>
+<span class="normal">121</span>
+<span class="normal">122</span>
+<span class="normal">123</span>
+<span class="normal">124</span>
+<span class="normal">125</span>
+<span class="normal">126</span>
+<span class="normal">127</span>
+<span class="normal">128</span>
+<span class="normal">129</span>
+<span class="normal">130</span>
+<span class="normal">131</span>
+<span class="normal">132</span>
+<span class="normal">133</span>
+<span class="normal">134</span>
+<span class="normal">135</span>
+<span class="normal">136</span>
+<span class="normal">137</span>
+<span class="normal">138</span>
+<span class="normal">139</span>
+<span class="normal">140</span>
+<span class="normal">141</span>
+<span class="normal">142</span>
+<span class="normal">143</span>
+<span class="normal">144</span>
+<span class="normal">145</span>
+<span class="normal">146</span>
+<span class="normal">147</span>
+<span class="normal">148</span>
+<span class="normal">149</span>
+<span class="normal">150</span>
+<span class="normal">151</span>
+<span class="normal">152</span>
+<span class="normal">153</span>
+<span class="normal">154</span>
+<span class="normal">155</span>
+<span class="normal">156</span>
+<span class="normal">157</span>
+<span class="normal">158</span>
+<span class="normal">159</span>
+<span class="normal">160</span>
+<span class="normal">161</span>
+<span class="normal">162</span>
+<span class="normal">163</span>
+<span class="normal">164</span>
+<span class="normal">165</span>
+<span class="normal">166</span>
+<span class="normal">167</span>
+<span class="normal">168</span>
+<span class="normal">169</span>
+<span class="normal">170</span>
+<span class="normal">171</span>
+<span class="normal">172</span>
+<span class="normal">173</span>
+<span class="normal">174</span>
+<span class="normal">175</span>
+<span class="normal">176</span>
+<span class="normal">177</span>
+<span class="normal">178</span>
+<span class="normal">179</span>
+<span class="normal">180</span>
+<span class="normal">181</span>
+<span class="normal">182</span>
+<span class="normal">183</span>
+<span class="normal">184</span>
+<span class="normal">185</span>
+<span class="normal">186</span>
+<span class="normal">187</span>
+<span class="normal">188</span>
+<span class="normal">189</span>
+<span class="normal">190</span>
+<span class="normal">191</span>
+<span class="normal">192</span>
+<span class="normal">193</span>
+<span class="normal">194</span>
+<span class="normal">195</span>
+<span class="normal">196</span>
+<span class="normal">197</span>
+<span class="normal">198</span>
+<span class="normal">199</span>
+<span class="normal">200</span>
+<span class="normal">201</span>
+<span class="normal">202</span>
+<span class="normal">203</span>
+<span class="normal">204</span>
+<span class="normal">205</span>
+<span class="normal">206</span>
+<span class="normal">207</span>
+<span class="normal">208</span>
+<span class="normal">209</span>
+<span class="normal">210</span>
+<span class="normal">211</span>
+<span class="normal">212</span>
+<span class="normal">213</span>
+<span class="normal">214</span>
+<span class="normal">215</span>
+<span class="normal">216</span>
+<span class="normal">217</span>
+<span class="normal">218</span>
+<span class="normal">219</span>
+<span class="normal">220</span>
+<span class="normal">221</span>
+<span class="normal">222</span>
+<span class="normal">223</span>
+<span class="normal">224</span>
+<span class="normal">225</span>
+<span class="normal">226</span>
+<span class="normal">227</span>
+<span class="normal">228</span>
+<span class="normal">229</span>
+<span class="normal">230</span>
+<span class="normal">231</span>
+<span class="normal">232</span>
+<span class="normal">233</span>
+<span class="normal">234</span>
+<span class="normal">235</span>
+<span class="normal">236</span>
+<span class="normal">237</span>
+<span class="normal">238</span>
+<span class="normal">239</span>
+<span class="normal">240</span>
+<span class="normal">241</span>
+<span class="normal">242</span>
+<span class="normal">243</span>
+<span class="normal">244</span>
+<span class="normal">245</span>
+<span class="normal">246</span>
+<span class="normal">247</span>
+<span class="normal">248</span>
+<span class="normal">249</span>
+<span class="normal">250</span>
+<span class="normal">251</span>
+<span class="normal">252</span>
+<span class="normal">253</span>
+<span class="normal">254</span>
+<span class="normal">255</span>
+<span class="normal">256</span>
+<span class="normal">257</span>
+<span class="normal">258</span>
+<span class="normal">259</span>
+<span class="normal">260</span>
+<span class="normal">261</span>
+<span class="normal">262</span>
+<span class="normal">263</span>
+<span class="normal">264</span>
+<span class="normal">265</span>
+<span class="normal">266</span>
+<span class="normal">267</span>
+<span class="normal">268</span>
+<span class="normal">269</span>
+<span class="normal">270</span>
+<span class="normal">271</span>
+<span class="normal">272</span>
+<span class="normal">273</span>
+<span class="normal">274</span>
+<span class="normal">275</span>
+<span class="normal">276</span>
+<span class="normal">277</span>
+<span class="normal">278</span>
+<span class="normal">279</span>
+<span class="normal">280</span>
+<span class="normal">281</span>
+<span class="normal">282</span>
+<span class="normal">283</span>
+<span class="normal">284</span>
+<span class="normal">285</span>
+<span class="normal">286</span>
+<span class="normal">287</span>
+<span class="normal">288</span>
+<span class="normal">289</span>
+<span class="normal">290</span>
+<span class="normal">291</span>
+<span class="normal">292</span>
+<span class="normal">293</span>
+<span class="normal">294</span>
+<span class="normal">295</span>
+<span class="normal">296</span>
+<span class="normal">297</span>
+<span class="normal">298</span>
+<span class="normal">299</span>
+<span class="normal">300</span>
+<span class="normal">301</span>
+<span class="normal">302</span>
+<span class="normal">303</span>
+<span class="normal">304</span>
+<span class="normal">305</span>
+<span class="normal">306</span>
+<span class="normal">307</span>
+<span class="normal">308</span>
+<span class="normal">309</span>
+<span class="normal">310</span>
+<span class="normal">311</span>
+<span class="normal">312</span>
+<span class="normal">313</span>
+<span class="normal">314</span>
+<span class="normal">315</span>
+<span class="normal">316</span></pre></div></td><td class="code"><div><pre><span></span><span class="sd">&quot;&quot;&quot;Run OpenVLA-7B on a LIBERO task — CLEAN, no attack. Start here.</span>
+
+<span class="sd">This is the &quot;hello world&quot; of this project: it loads the OpenVLA policy, builds a LIBERO</span>
+<span class="sd">scene, and closes the perception-&gt;action loop until the task succeeds or the step cap is</span>
+<span class="sd">hit. There is **no injected prompt, no patch, no perturbation** — it is the baseline every</span>
+<span class="sd">attack result is measured against.</span>
+
+<span class="sd">What one control step looks like (this is the whole loop):</span>
+
+<span class="sd">    obs  --get_libero_image--&gt;  224x224 RGB  ┐</span>
+<span class="sd">    obs  --eef pos/quat/gripper--&gt;  8-d state ┤--&gt; OpenVLA(image, instruction) --&gt; 7-d action</span>
+<span class="sd">                                              ┘</span>
+<span class="sd">    action --normalize/invert gripper--&gt; env.step(action) --&gt; next obs, done</span>
+
+<span class="sd">`done` is LIBERO&#39;s own goal predicate for the task the *scene* was built from, so</span>
+<span class="sd">`done == True` means the commanded task genuinely succeeded.</span>
+
+<span class="sd">--------------------------------------------------------------------------------</span>
+<span class="sd">Usage</span>
+<span class="sd">--------------------------------------------------------------------------------</span>
+
+<span class="sd">You need a Python env with the OpenVLA + LIBERO stack. On this project&#39;s GPU host that</span>
+<span class="sd">is a reused venv, `~/vla-injection/.venv/bin/python` (third_party/README.md has the</span>
+<span class="sd">pinned commits and package versions). Substitute your own interpreter if it differs.</span>
+
+<span class="sd">`MUJOCO_GL=egl` selects headless off-screen rendering — without it MuJoCo tries to open</span>
+<span class="sd">a window and dies on a server. `CUDA_VISIBLE_DEVICES` picks the GPU: **on this host use</span>
+<span class="sd">GPU 1 only, GPU 0 is reserved for other people&#39;s jobs.**</span>
+
+<span class="sd">Run the user task on the first init state:</span>
+
+<span class="sd">    CUDA_VISIBLE_DEVICES=1 MUJOCO_GL=egl \</span>
+<span class="sd">      ~/vla-injection/.venv/bin/python experiments/clean_rollout.py \</span>
+<span class="sd">        --task &quot;pick up the alphabet soup and place it in the basket&quot;</span>
+
+<span class="sd">Run the &quot;teacher&quot;/attacker task instead — same suite, its own scene and predicate:</span>
+
+<span class="sd">    ... experiments/clean_rollout.py \</span>
+<span class="sd">        --task &quot;pick up the salad dressing and place it in the basket&quot;</span>
+
+<span class="sd">Several init states + save a video of each episode:</span>
+
+<span class="sd">    ... experiments/clean_rollout.py \</span>
+<span class="sd">        --task &quot;pick up the alphabet soup and place it in the basket&quot; \</span>
+<span class="sd">        --inits 0,1,2 --video-dir /tmp/clean_rollout</span>
+
+<span class="sd">If the openvla / LIBERO checkouts are not siblings of this repo or in $HOME, point at</span>
+<span class="sd">them explicitly (no PYTHONPATH needed — the script puts them on sys.path itself):</span>
+
+<span class="sd">    OPENVLA_ROOT=/data/openvla LIBERO_ROOT=/data/LIBERO ... experiments/clean_rollout.py</span>
+
+<span class="sd">Expected: the model loads (~30 s, ~16 GB VRAM), then ~1-3 steps/s. A good task/init</span>
+<span class="sd">succeeds around step 120-200. `alphabet_soup` at init 0 is a known-good sanity check.</span>
+
+<span class="sd">--------------------------------------------------------------------------------</span>
+<span class="sd">Where this sits in the project</span>
+<span class="sd">--------------------------------------------------------------------------------</span>
+<span class="sd">Search side, not the evaluator. It reuses the *fixed* evaluator&#39;s GPU seams</span>
+<span class="sd">(`OpenVLARolloutBackend._load_policy` / `._build_env`) so the physics, camera, and</span>
+<span class="sd">preprocessing are bit-identical to a scored run — but it writes no metrics, no ledger</span>
+<span class="sd">row, and no score. Nothing here can influence how an attack is graded, which is the one</span>
+<span class="sd">invariant this project protects (see CLAUDE.md).</span>
+
+<span class="sd">If you need an officially *scored* clean number, don&#39;t extend this file — run</span>
+<span class="sd">`experiments/run_candidate.py` with an off-camera (visibility ~0) carrier candidate so</span>
+<span class="sd">the result goes through the fixed evaluator and lands in the ledger.</span>
+<span class="sd">&quot;&quot;&quot;</span>
+
+<span class="kn">from</span><span class="w"> </span><span class="nn">__future__</span><span class="w"> </span><span class="kn">import</span> <span class="n">annotations</span>
+
+<span class="kn">import</span><span class="w"> </span><span class="nn">argparse</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">os</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">sys</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">time</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">pathlib</span><span class="w"> </span><span class="kn">import</span> <span class="n">Path</span>
+
+<span class="kn">import</span><span class="w"> </span><span class="nn">numpy</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">np</span>
+
+<span class="c1"># --- import bootstrap -------------------------------------------------------------</span>
+<span class="c1"># Three separate source trees have to be importable, and none is pip-installed:</span>
+<span class="c1">#   &lt;repo&gt;/src   -&gt; this project&#39;s `evaluator` package</span>
+<span class="c1">#   openvla      -&gt; `experiments.robot.*` helpers (get_action, image utils)</span>
+<span class="c1">#   LIBERO       -&gt; the `libero` package (the simulator, tasks, and init states)</span>
+<span class="c1">#</span>
+<span class="c1"># Nothing below is hardcoded to a particular machine: the repo is found relative to this</span>
+<span class="c1"># file, and the two external trees are found via $OPENVLA_ROOT / $LIBERO_ROOT, falling</span>
+<span class="c1"># back to siblings of the repo and then to $HOME. Override the env vars if yours live</span>
+<span class="c1"># somewhere else. `experiments` works as a namespace package across the repo and openvla</span>
+<span class="c1"># because neither has an __init__.py, so `experiments.robot` resolves into openvla.</span>
+<span class="n">REPO_ROOT</span> <span class="o">=</span> <span class="n">Path</span><span class="p">(</span><span class="vm">__file__</span><span class="p">)</span><span class="o">.</span><span class="n">resolve</span><span class="p">()</span><span class="o">.</span><span class="n">parents</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">_find_tree</span><span class="p">(</span><span class="n">name</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">env_var</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">marker</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Path</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Locate an external dependency tree, or exit with an actionable message.</span>
+
+<span class="sd">    An explicitly-set $env_var must be correct: if it is set but wrong we fail loudly</span>
+<span class="sd">    rather than quietly falling back, so a typo&#39;d path can never send you off debugging</span>
+<span class="sd">    the wrong checkout.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">override</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">environ</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">env_var</span><span class="p">)</span>
+    <span class="k">if</span> <span class="n">override</span><span class="p">:</span>
+        <span class="n">root</span> <span class="o">=</span> <span class="n">Path</span><span class="p">(</span><span class="n">override</span><span class="p">)</span><span class="o">.</span><span class="n">expanduser</span><span class="p">()</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="p">(</span><span class="n">root</span> <span class="o">/</span> <span class="n">marker</span><span class="p">)</span><span class="o">.</span><span class="n">exists</span><span class="p">():</span>
+            <span class="k">raise</span> <span class="ne">SystemExit</span><span class="p">(</span>
+                <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">env_var</span><span class="si">}</span><span class="s2">=</span><span class="si">{</span><span class="n">override</span><span class="si">}</span><span class="s2"> does not look like a </span><span class="si">{</span><span class="n">name</span><span class="si">}</span><span class="s2"> checkout &quot;</span>
+                <span class="sa">f</span><span class="s2">&quot;(missing </span><span class="si">{</span><span class="n">marker</span><span class="si">}</span><span class="s2">). Fix or unset it.&quot;</span>
+            <span class="p">)</span>
+        <span class="k">return</span> <span class="n">root</span>
+
+    <span class="n">candidates</span> <span class="o">=</span> <span class="p">[</span><span class="n">REPO_ROOT</span><span class="o">.</span><span class="n">parent</span> <span class="o">/</span> <span class="n">name</span><span class="p">,</span> <span class="n">Path</span><span class="o">.</span><span class="n">home</span><span class="p">()</span> <span class="o">/</span> <span class="n">name</span><span class="p">]</span>
+    <span class="k">for</span> <span class="n">candidate</span> <span class="ow">in</span> <span class="n">candidates</span><span class="p">:</span>
+        <span class="k">if</span> <span class="p">(</span><span class="n">candidate</span> <span class="o">/</span> <span class="n">marker</span><span class="p">)</span><span class="o">.</span><span class="n">exists</span><span class="p">():</span>
+            <span class="k">return</span> <span class="n">candidate</span>
+    <span class="n">searched</span> <span class="o">=</span> <span class="s2">&quot;</span><span class="se">\n</span><span class="s2">  &quot;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="nb">str</span><span class="p">(</span><span class="n">c</span><span class="p">)</span> <span class="k">for</span> <span class="n">c</span> <span class="ow">in</span> <span class="n">candidates</span><span class="p">)</span>
+    <span class="k">raise</span> <span class="ne">SystemExit</span><span class="p">(</span>
+        <span class="sa">f</span><span class="s2">&quot;Could not find the </span><span class="si">{</span><span class="n">name</span><span class="si">}</span><span class="s2"> source tree (looked for </span><span class="si">{</span><span class="n">name</span><span class="si">}</span><span class="s2">/</span><span class="si">{</span><span class="n">marker</span><span class="si">}</span><span class="s2">).</span><span class="se">\n</span><span class="s2">&quot;</span>
+        <span class="sa">f</span><span class="s2">&quot;Searched:</span><span class="se">\n</span><span class="s2">  </span><span class="si">{</span><span class="n">searched</span><span class="si">}</span><span class="se">\n</span><span class="s2">&quot;</span>
+        <span class="sa">f</span><span class="s2">&quot;Set </span><span class="si">{</span><span class="n">env_var</span><span class="si">}</span><span class="s2">=/path/to/</span><span class="si">{</span><span class="n">name</span><span class="si">}</span><span class="s2"> and re-run. &quot;</span>
+        <span class="sa">f</span><span class="s2">&quot;See third_party/README.md for the pinned commit this project expects.&quot;</span>
+    <span class="p">)</span>
+
+
+<span class="n">OPENVLA_ROOT</span> <span class="o">=</span> <span class="n">_find_tree</span><span class="p">(</span><span class="s2">&quot;openvla&quot;</span><span class="p">,</span> <span class="s2">&quot;OPENVLA_ROOT&quot;</span><span class="p">,</span> <span class="s2">&quot;experiments/robot/robot_utils.py&quot;</span><span class="p">)</span>
+<span class="n">LIBERO_ROOT</span> <span class="o">=</span> <span class="n">_find_tree</span><span class="p">(</span><span class="s2">&quot;LIBERO&quot;</span><span class="p">,</span> <span class="s2">&quot;LIBERO_ROOT&quot;</span><span class="p">,</span> <span class="s2">&quot;libero/libero/__init__.py&quot;</span><span class="p">)</span>
+<span class="k">for</span> <span class="n">_tree</span> <span class="ow">in</span> <span class="p">(</span><span class="n">REPO_ROOT</span> <span class="o">/</span> <span class="s2">&quot;src&quot;</span><span class="p">,</span> <span class="n">REPO_ROOT</span><span class="p">,</span> <span class="n">OPENVLA_ROOT</span><span class="p">,</span> <span class="n">LIBERO_ROOT</span><span class="p">):</span>
+    <span class="n">sys</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">insert</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="nb">str</span><span class="p">(</span><span class="n">_tree</span><span class="p">))</span>
+
+<span class="kn">from</span><span class="w"> </span><span class="nn">evaluator.libero_tasks</span><span class="w"> </span><span class="kn">import</span> <span class="n">resolve_task</span>  <span class="c1"># noqa: E402</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">evaluator.openvla_backend</span><span class="w"> </span><span class="kn">import</span> <span class="n">OpenVLARolloutBackend</span>  <span class="c1"># noqa: E402</span>
+
+<span class="c1"># LIBERO episode caps used by the fixed evaluator — keep these if you want your numbers</span>
+<span class="c1"># comparable to the recorded runs.</span>
+<span class="n">DEFAULT_MAX_STEPS</span> <span class="o">=</span> <span class="p">{</span><span class="s2">&quot;libero_object&quot;</span><span class="p">:</span> <span class="mi">280</span><span class="p">,</span> <span class="s2">&quot;libero_spatial&quot;</span><span class="p">:</span> <span class="mi">220</span><span class="p">,</span> <span class="s2">&quot;libero_goal&quot;</span><span class="p">:</span> <span class="mi">300</span><span class="p">}</span>
+<span class="n">DEMO_RES</span> <span class="o">=</span> <span class="mi">384</span>  <span class="c1"># video frames are rendered larger than the 224 the policy sees</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">parse_args</span><span class="p">()</span> <span class="o">-&gt;</span> <span class="n">argparse</span><span class="o">.</span><span class="n">Namespace</span><span class="p">:</span>
+    <span class="n">parser</span> <span class="o">=</span> <span class="n">argparse</span><span class="o">.</span><span class="n">ArgumentParser</span><span class="p">(</span>
+        <span class="n">description</span><span class="o">=</span><span class="s2">&quot;Run a clean (un-attacked) OpenVLA rollout on a LIBERO task.&quot;</span><span class="p">,</span>
+        <span class="n">formatter_class</span><span class="o">=</span><span class="n">argparse</span><span class="o">.</span><span class="n">ArgumentDefaultsHelpFormatter</span><span class="p">,</span>
+    <span class="p">)</span>
+    <span class="n">parser</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span>
+        <span class="s2">&quot;--task&quot;</span><span class="p">,</span>
+        <span class="n">default</span><span class="o">=</span><span class="s2">&quot;pick up the alphabet soup and place it in the basket&quot;</span><span class="p">,</span>
+        <span class="n">help</span><span class="o">=</span><span class="s2">&quot;Task language string. Builds the scene AND is the instruction given to OpenVLA. &quot;</span>
+        <span class="s2">&quot;Must match a task in --suite exactly (up to case/punctuation).&quot;</span><span class="p">,</span>
+    <span class="p">)</span>
+    <span class="n">parser</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span>
+        <span class="s2">&quot;--instruction&quot;</span><span class="p">,</span>
+        <span class="n">default</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
+        <span class="n">help</span><span class="o">=</span><span class="s2">&quot;ADVANCED: command a different instruction inside --task&#39;s scene (the &#39;s0 &quot;</span>
+        <span class="s2">&quot;reachability&#39; probe). Success is still judged by --task&#39;s predicate, so a &quot;</span>
+        <span class="s2">&quot;success/failure here does NOT adjudicate the overridden instruction.&quot;</span><span class="p">,</span>
+    <span class="p">)</span>
+    <span class="n">parser</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span><span class="s2">&quot;--suite&quot;</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="s2">&quot;libero_object&quot;</span><span class="p">,</span> <span class="n">help</span><span class="o">=</span><span class="s2">&quot;LIBERO task suite.&quot;</span><span class="p">)</span>
+    <span class="n">parser</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span>
+        <span class="s2">&quot;--inits&quot;</span><span class="p">,</span>
+        <span class="n">default</span><span class="o">=</span><span class="s2">&quot;0&quot;</span><span class="p">,</span>
+        <span class="n">help</span><span class="o">=</span><span class="s2">&quot;Comma-separated init-state indices (LIBERO ships ~50 per task). &quot;</span>
+        <span class="s2">&quot;The scene layout differs per index; results vary with it.&quot;</span><span class="p">,</span>
+    <span class="p">)</span>
+    <span class="n">parser</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span>
+        <span class="s2">&quot;--max-steps&quot;</span><span class="p">,</span>
+        <span class="nb">type</span><span class="o">=</span><span class="nb">int</span><span class="p">,</span>
+        <span class="n">default</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
+        <span class="n">help</span><span class="o">=</span><span class="s2">&quot;Control-step cap per episode (default: the suite&#39;s standard cap).&quot;</span><span class="p">,</span>
+    <span class="p">)</span>
+    <span class="n">parser</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span>
+        <span class="s2">&quot;--video-dir&quot;</span><span class="p">,</span>
+        <span class="n">default</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
+        <span class="n">help</span><span class="o">=</span><span class="s2">&quot;If set, write &lt;suite&gt;_&lt;init&gt;.mp4 per episode here.&quot;</span><span class="p">,</span>
+    <span class="p">)</span>
+    <span class="k">return</span> <span class="n">parser</span><span class="o">.</span><span class="n">parse_args</span><span class="p">()</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">run_episode</span><span class="p">(</span>
+    <span class="o">*</span><span class="p">,</span>
+    <span class="n">backend</span><span class="p">:</span> <span class="n">OpenVLARolloutBackend</span><span class="p">,</span>
+    <span class="n">policy</span><span class="p">:</span> <span class="nb">tuple</span><span class="p">,</span>
+    <span class="n">resolved</span><span class="p">,</span>
+    <span class="n">init_index</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span>
+    <span class="n">instruction</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+    <span class="n">max_steps</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span>
+    <span class="n">video_path</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span><span class="p">,</span>
+<span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">dict</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Roll one clean episode. Returns {success, steps, seconds}.&quot;&quot;&quot;</span>
+    <span class="kn">from</span><span class="w"> </span><span class="nn">experiments.robot.libero.libero_utils</span><span class="w"> </span><span class="kn">import</span> <span class="n">get_libero_image</span><span class="p">,</span> <span class="n">quat2axisangle</span>
+    <span class="kn">from</span><span class="w"> </span><span class="nn">experiments.robot.robot_utils</span><span class="w"> </span><span class="kn">import</span> <span class="p">(</span>
+        <span class="n">get_action</span><span class="p">,</span>
+        <span class="n">invert_gripper_action</span><span class="p">,</span>
+        <span class="n">normalize_gripper_action</span><span class="p">,</span>
+    <span class="p">)</span>
+
+    <span class="n">model</span><span class="p">,</span> <span class="n">processor</span><span class="p">,</span> <span class="n">cfg</span><span class="p">,</span> <span class="n">resize_size</span> <span class="o">=</span> <span class="n">policy</span>
+
+    <span class="c1"># Seed every RNG from the init index so the episode is reproducible.</span>
+    <span class="n">backend</span><span class="o">.</span><span class="n">_seed_everything</span><span class="p">(</span><span class="n">init_index</span><span class="p">)</span>
+
+    <span class="c1"># Build the scene, then jump to the chosen init state. LIBERO needs no explicit</span>
+    <span class="c1"># reset() here — set_init_state does it.</span>
+    <span class="n">env</span><span class="p">,</span> <span class="n">init_states</span><span class="p">,</span> <span class="n">task_description</span><span class="p">,</span> <span class="n">obj_of_interest</span> <span class="o">=</span> <span class="n">backend</span><span class="o">.</span><span class="n">_build_env</span><span class="p">(</span><span class="n">resolved</span><span class="p">)</span>
+    <span class="n">obs</span> <span class="o">=</span> <span class="n">env</span><span class="o">.</span><span class="n">set_init_state</span><span class="p">(</span><span class="n">init_states</span><span class="p">[</span><span class="n">init_index</span> <span class="o">%</span> <span class="nb">len</span><span class="p">(</span><span class="n">init_states</span><span class="p">)])</span>
+
+    <span class="c1"># The scene drops objects in; a few no-op steps let physics settle before the policy</span>
+    <span class="c1"># sees anything. Skipping this makes the first observations unrepresentative.</span>
+    <span class="n">dummy</span> <span class="o">=</span> <span class="n">backend</span><span class="o">.</span><span class="n">_dummy_action</span><span class="p">(</span><span class="n">cfg</span><span class="p">)</span>
+    <span class="k">for</span> <span class="n">_</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">backend</span><span class="o">.</span><span class="n">num_steps_wait</span><span class="p">):</span>
+        <span class="n">obs</span><span class="p">,</span> <span class="n">_reward</span><span class="p">,</span> <span class="n">_done</span><span class="p">,</span> <span class="n">_info</span> <span class="o">=</span> <span class="n">env</span><span class="o">.</span><span class="n">step</span><span class="p">(</span><span class="n">dummy</span><span class="p">)</span>
+
+    <span class="n">frames</span><span class="p">:</span> <span class="nb">list</span> <span class="o">=</span> <span class="p">[]</span>
+    <span class="n">success</span> <span class="o">=</span> <span class="kc">False</span>
+    <span class="n">started</span> <span class="o">=</span> <span class="n">time</span><span class="o">.</span><span class="n">time</span><span class="p">()</span>
+    <span class="n">step</span> <span class="o">=</span> <span class="mi">0</span>
+    <span class="k">try</span><span class="p">:</span>
+        <span class="k">for</span> <span class="n">step</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">max_steps</span><span class="p">):</span>
+            <span class="k">if</span> <span class="n">video_path</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+                <span class="n">frames</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">get_libero_image</span><span class="p">(</span><span class="n">obs</span><span class="p">,</span> <span class="n">DEMO_RES</span><span class="p">))</span>
+
+            <span class="c1"># --- what the policy actually consumes -------------------------------</span>
+            <span class="n">image</span> <span class="o">=</span> <span class="n">get_libero_image</span><span class="p">(</span><span class="n">obs</span><span class="p">,</span> <span class="n">resize_size</span><span class="p">)</span>  <span class="c1"># uint8 [224, 224, 3]</span>
+            <span class="n">observation</span> <span class="o">=</span> <span class="p">{</span>
+                <span class="s2">&quot;full_image&quot;</span><span class="p">:</span> <span class="n">image</span><span class="p">,</span>
+                <span class="s2">&quot;state&quot;</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">concatenate</span><span class="p">(</span>
+                    <span class="p">(</span>
+                        <span class="n">obs</span><span class="p">[</span><span class="s2">&quot;robot0_eef_pos&quot;</span><span class="p">],</span>
+                        <span class="n">quat2axisangle</span><span class="p">(</span><span class="n">obs</span><span class="p">[</span><span class="s2">&quot;robot0_eef_quat&quot;</span><span class="p">]),</span>
+                        <span class="n">obs</span><span class="p">[</span><span class="s2">&quot;robot0_gripper_qpos&quot;</span><span class="p">],</span>
+                    <span class="p">)</span>
+                <span class="p">),</span>
+            <span class="p">}</span>
+            <span class="n">action</span> <span class="o">=</span> <span class="n">get_action</span><span class="p">(</span><span class="n">cfg</span><span class="p">,</span> <span class="n">model</span><span class="p">,</span> <span class="n">observation</span><span class="p">,</span> <span class="n">instruction</span><span class="p">,</span> <span class="n">processor</span><span class="o">=</span><span class="n">processor</span><span class="p">)</span>
+
+            <span class="c1"># OpenVLA&#39;s gripper convention differs from LIBERO&#39;s: binarize, then flip.</span>
+            <span class="c1"># Get this wrong and the robot approaches correctly but never grasps.</span>
+            <span class="n">action</span> <span class="o">=</span> <span class="n">invert_gripper_action</span><span class="p">(</span><span class="n">normalize_gripper_action</span><span class="p">(</span><span class="n">action</span><span class="p">,</span> <span class="n">binarize</span><span class="o">=</span><span class="kc">True</span><span class="p">))</span>
+
+            <span class="n">obs</span><span class="p">,</span> <span class="n">_reward</span><span class="p">,</span> <span class="n">done</span><span class="p">,</span> <span class="n">_info</span> <span class="o">=</span> <span class="n">env</span><span class="o">.</span><span class="n">step</span><span class="p">(</span>
+                <span class="n">action</span><span class="o">.</span><span class="n">tolist</span><span class="p">()</span> <span class="k">if</span> <span class="nb">hasattr</span><span class="p">(</span><span class="n">action</span><span class="p">,</span> <span class="s2">&quot;tolist&quot;</span><span class="p">)</span> <span class="k">else</span> <span class="n">action</span>
+            <span class="p">)</span>
+            <span class="k">if</span> <span class="n">step</span> <span class="o">%</span> <span class="mi">20</span> <span class="o">==</span> <span class="mi">0</span><span class="p">:</span>
+                <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;    step </span><span class="si">{</span><span class="n">step</span><span class="si">:</span><span class="s2">3d</span><span class="si">}</span><span class="s2">/</span><span class="si">{</span><span class="n">max_steps</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">flush</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+            <span class="k">if</span> <span class="n">done</span><span class="p">:</span>  <span class="c1"># LIBERO&#39;s own goal predicate for this task</span>
+                <span class="n">success</span> <span class="o">=</span> <span class="kc">True</span>
+                <span class="k">break</span>
+    <span class="k">finally</span><span class="p">:</span>
+        <span class="n">env</span><span class="o">.</span><span class="n">close</span><span class="p">()</span>
+
+    <span class="k">if</span> <span class="n">video_path</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="ow">and</span> <span class="n">frames</span><span class="p">:</span>
+        <span class="kn">import</span><span class="w"> </span><span class="nn">imageio.v2</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">imageio</span>
+
+        <span class="n">imageio</span><span class="o">.</span><span class="n">mimwrite</span><span class="p">(</span><span class="n">video_path</span><span class="p">,</span> <span class="n">frames</span><span class="p">,</span> <span class="n">fps</span><span class="o">=</span><span class="mi">20</span><span class="p">)</span>
+        <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;    video -&gt; </span><span class="si">{</span><span class="n">video_path</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">flush</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+
+    <span class="k">return</span> <span class="p">{</span><span class="s2">&quot;success&quot;</span><span class="p">:</span> <span class="n">success</span><span class="p">,</span> <span class="s2">&quot;steps&quot;</span><span class="p">:</span> <span class="n">step</span> <span class="o">+</span> <span class="mi">1</span><span class="p">,</span> <span class="s2">&quot;seconds&quot;</span><span class="p">:</span> <span class="nb">round</span><span class="p">(</span><span class="n">time</span><span class="o">.</span><span class="n">time</span><span class="p">()</span> <span class="o">-</span> <span class="n">started</span><span class="p">,</span> <span class="mi">1</span><span class="p">)}</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">main</span><span class="p">()</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+    <span class="n">args</span> <span class="o">=</span> <span class="n">parse_args</span><span class="p">()</span>
+    <span class="n">inits</span> <span class="o">=</span> <span class="p">[</span><span class="nb">int</span><span class="p">(</span><span class="n">x</span><span class="p">)</span> <span class="k">for</span> <span class="n">x</span> <span class="ow">in</span> <span class="n">args</span><span class="o">.</span><span class="n">inits</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s2">&quot;,&quot;</span><span class="p">)</span> <span class="k">if</span> <span class="n">x</span><span class="o">.</span><span class="n">strip</span><span class="p">()]</span>
+    <span class="n">max_steps</span> <span class="o">=</span> <span class="n">args</span><span class="o">.</span><span class="n">max_steps</span> <span class="ow">or</span> <span class="n">DEFAULT_MAX_STEPS</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">args</span><span class="o">.</span><span class="n">suite</span><span class="p">,</span> <span class="mi">280</span><span class="p">)</span>
+
+    <span class="c1"># Fail fast on a typo&#39;d task string, BEFORE spending 30 s loading a 7B model.</span>
+    <span class="n">resolved</span> <span class="o">=</span> <span class="n">resolve_task</span><span class="p">(</span><span class="n">args</span><span class="o">.</span><span class="n">task</span><span class="p">,</span> <span class="n">suite</span><span class="o">=</span><span class="n">args</span><span class="o">.</span><span class="n">suite</span><span class="p">)</span>
+    <span class="n">instruction</span> <span class="o">=</span> <span class="n">args</span><span class="o">.</span><span class="n">instruction</span> <span class="ow">or</span> <span class="n">resolved</span><span class="o">.</span><span class="n">language</span>
+
+    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;suite       : </span><span class="si">{</span><span class="n">args</span><span class="o">.</span><span class="n">suite</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;scene task  : </span><span class="si">{</span><span class="n">resolved</span><span class="o">.</span><span class="n">language</span><span class="si">!r}</span><span class="s2"> (task_id=</span><span class="si">{</span><span class="n">resolved</span><span class="o">.</span><span class="n">task_id</span><span class="si">}</span><span class="s2">)&quot;</span><span class="p">)</span>
+    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;instruction : </span><span class="si">{</span><span class="n">instruction</span><span class="si">!r}</span><span class="s2">&quot;</span><span class="p">)</span>
+    <span class="k">if</span> <span class="n">args</span><span class="o">.</span><span class="n">instruction</span><span class="p">:</span>
+        <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;  ^ OVERRIDDEN: &#39;success&#39; below still means the SCENE task&#39;s predicate fired.&quot;</span><span class="p">)</span>
+    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;inits       : </span><span class="si">{</span><span class="n">inits</span><span class="si">}</span><span class="s2">   max_steps: </span><span class="si">{</span><span class="n">max_steps</span><span class="si">}</span><span class="se">\n</span><span class="s2">&quot;</span><span class="p">)</span>
+
+    <span class="k">if</span> <span class="n">args</span><span class="o">.</span><span class="n">video_dir</span><span class="p">:</span>
+        <span class="n">os</span><span class="o">.</span><span class="n">makedirs</span><span class="p">(</span><span class="n">args</span><span class="o">.</span><span class="n">video_dir</span><span class="p">,</span> <span class="n">exist_ok</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+
+    <span class="c1"># One backend, one model load, reused across episodes. Re-loading per episode without</span>
+    <span class="c1"># freeing the old model exhausts VRAM — that bug cost us a whole pilot run.</span>
+    <span class="n">backend</span> <span class="o">=</span> <span class="n">OpenVLARolloutBackend</span><span class="p">(</span><span class="n">task_suite</span><span class="o">=</span><span class="n">args</span><span class="o">.</span><span class="n">suite</span><span class="p">,</span> <span class="n">max_steps</span><span class="o">=</span><span class="n">max_steps</span><span class="p">)</span>
+    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;loading OpenVLA-7B (~30 s, ~16 GB VRAM) ...&quot;</span><span class="p">,</span> <span class="n">flush</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+    <span class="n">policy</span> <span class="o">=</span> <span class="n">backend</span><span class="o">.</span><span class="n">_load_policy</span><span class="p">()</span>
+    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;loaded.</span><span class="se">\n</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">flush</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+
+    <span class="n">results</span> <span class="o">=</span> <span class="p">[]</span>
+    <span class="k">for</span> <span class="n">init_index</span> <span class="ow">in</span> <span class="n">inits</span><span class="p">:</span>
+        <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;[init </span><span class="si">{</span><span class="n">init_index</span><span class="si">}</span><span class="s2">] rolling out ...&quot;</span><span class="p">,</span> <span class="n">flush</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+        <span class="n">video_path</span> <span class="o">=</span> <span class="p">(</span>
+            <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">args</span><span class="o">.</span><span class="n">video_dir</span><span class="p">,</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">args</span><span class="o">.</span><span class="n">suite</span><span class="si">}</span><span class="s2">_init</span><span class="si">{</span><span class="n">init_index</span><span class="si">}</span><span class="s2">.mp4&quot;</span><span class="p">)</span>
+            <span class="k">if</span> <span class="n">args</span><span class="o">.</span><span class="n">video_dir</span>
+            <span class="k">else</span> <span class="kc">None</span>
+        <span class="p">)</span>
+        <span class="n">result</span> <span class="o">=</span> <span class="n">run_episode</span><span class="p">(</span>
+            <span class="n">backend</span><span class="o">=</span><span class="n">backend</span><span class="p">,</span>
+            <span class="n">policy</span><span class="o">=</span><span class="n">policy</span><span class="p">,</span>
+            <span class="n">resolved</span><span class="o">=</span><span class="n">resolved</span><span class="p">,</span>
+            <span class="n">init_index</span><span class="o">=</span><span class="n">init_index</span><span class="p">,</span>
+            <span class="n">instruction</span><span class="o">=</span><span class="n">instruction</span><span class="p">,</span>
+            <span class="n">max_steps</span><span class="o">=</span><span class="n">max_steps</span><span class="p">,</span>
+            <span class="n">video_path</span><span class="o">=</span><span class="n">video_path</span><span class="p">,</span>
+        <span class="p">)</span>
+        <span class="n">results</span><span class="o">.</span><span class="n">append</span><span class="p">((</span><span class="n">init_index</span><span class="p">,</span> <span class="n">result</span><span class="p">))</span>
+        <span class="n">verdict</span> <span class="o">=</span> <span class="s2">&quot;SUCCESS&quot;</span> <span class="k">if</span> <span class="n">result</span><span class="p">[</span><span class="s2">&quot;success&quot;</span><span class="p">]</span> <span class="k">else</span> <span class="s2">&quot;FAIL   &quot;</span>
+        <span class="nb">print</span><span class="p">(</span>
+            <span class="sa">f</span><span class="s2">&quot;[init </span><span class="si">{</span><span class="n">init_index</span><span class="si">}</span><span class="s2">] </span><span class="si">{</span><span class="n">verdict</span><span class="si">}</span><span class="s2">  steps=</span><span class="si">{</span><span class="n">result</span><span class="p">[</span><span class="s1">&#39;steps&#39;</span><span class="p">]</span><span class="si">}</span><span class="s2">  &quot;</span>
+            <span class="sa">f</span><span class="s2">&quot;(</span><span class="si">{</span><span class="n">result</span><span class="p">[</span><span class="s1">&#39;seconds&#39;</span><span class="p">]</span><span class="si">}</span><span class="s2">s)</span><span class="se">\n</span><span class="s2">&quot;</span><span class="p">,</span>
+            <span class="n">flush</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
+        <span class="p">)</span>
+
+    <span class="n">n_success</span> <span class="o">=</span> <span class="nb">sum</span><span class="p">(</span><span class="mi">1</span> <span class="k">for</span> <span class="n">_i</span><span class="p">,</span> <span class="n">r</span> <span class="ow">in</span> <span class="n">results</span> <span class="k">if</span> <span class="n">r</span><span class="p">[</span><span class="s2">&quot;success&quot;</span><span class="p">])</span>
+    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;=== SUMMARY ===&quot;</span><span class="p">)</span>
+    <span class="k">for</span> <span class="n">init_index</span><span class="p">,</span> <span class="n">result</span> <span class="ow">in</span> <span class="n">results</span><span class="p">:</span>
+        <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;  init </span><span class="si">{</span><span class="n">init_index</span><span class="si">}</span><span class="s2">: success=</span><span class="si">{</span><span class="n">result</span><span class="p">[</span><span class="s1">&#39;success&#39;</span><span class="p">]</span><span class="si">}</span><span class="s2"> steps=</span><span class="si">{</span><span class="n">result</span><span class="p">[</span><span class="s1">&#39;steps&#39;</span><span class="p">]</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;  </span><span class="si">{</span><span class="n">n_success</span><span class="si">}</span><span class="s2">/</span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">results</span><span class="p">)</span><span class="si">}</span><span class="s2"> succeeded&quot;</span><span class="p">)</span>
+
+
+<span class="k">if</span> <span class="vm">__name__</span> <span class="o">==</span> <span class="s2">&quot;__main__&quot;</span><span class="p">:</span>
+    <span class="n">main</span><span class="p">()</span>
+</pre></div></td></tr></table></div>
+</div>
+
+<footer>
+<p><strong>Status.</strong> Import bootstrap, CLI, task resolution, and the fail-fast error paths
+are verified. The rollout loop is ported verbatim from this project's already-GPU-verified
+<code>record_baseline.py</code> and the evaluator's own episode runner, but this particular file
+has not yet been run end-to-end on the GPU — do that first and report anything that surprises you.</p>
+<p>Generated from <code>experiments/clean_rollout.py</code> in the AutoPPIA-VLA repository.
+Simulation only.</p>
+</footer>
+
+</div>
+<script>
+document.getElementById('copy').addEventListener('click', async function () {
+  var text = atob("IiIiUnVuIE9wZW5WTEEtN0Igb24gYSBMSUJFUk8gdGFzayDigJQgQ0xFQU4sIG5vIGF0dGFjay4gU3RhcnQgaGVyZS4KClRoaXMgaXMgdGhlICJoZWxsbyB3b3JsZCIgb2YgdGhpcyBwcm9qZWN0OiBpdCBsb2FkcyB0aGUgT3BlblZMQSBwb2xpY3ksIGJ1aWxkcyBhIExJQkVSTwpzY2VuZSwgYW5kIGNsb3NlcyB0aGUgcGVyY2VwdGlvbi0+YWN0aW9uIGxvb3AgdW50aWwgdGhlIHRhc2sgc3VjY2VlZHMgb3IgdGhlIHN0ZXAgY2FwIGlzCmhpdC4gVGhlcmUgaXMgKipubyBpbmplY3RlZCBwcm9tcHQsIG5vIHBhdGNoLCBubyBwZXJ0dXJiYXRpb24qKiDigJQgaXQgaXMgdGhlIGJhc2VsaW5lIGV2ZXJ5CmF0dGFjayByZXN1bHQgaXMgbWVhc3VyZWQgYWdhaW5zdC4KCldoYXQgb25lIGNvbnRyb2wgc3RlcCBsb29rcyBsaWtlICh0aGlzIGlzIHRoZSB3aG9sZSBsb29wKToKCiAgICBvYnMgIC0tZ2V0X2xpYmVyb19pbWFnZS0tPiAgMjI0eDIyNCBSR0IgIOKUkAogICAgb2JzICAtLWVlZiBwb3MvcXVhdC9ncmlwcGVyLS0+ICA4LWQgc3RhdGUg4pSkLS0+IE9wZW5WTEEoaW1hZ2UsIGluc3RydWN0aW9uKSAtLT4gNy1kIGFjdGlvbgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAg4pSYCiAgICBhY3Rpb24gLS1ub3JtYWxpemUvaW52ZXJ0IGdyaXBwZXItLT4gZW52LnN0ZXAoYWN0aW9uKSAtLT4gbmV4dCBvYnMsIGRvbmUKCmBkb25lYCBpcyBMSUJFUk8ncyBvd24gZ29hbCBwcmVkaWNhdGUgZm9yIHRoZSB0YXNrIHRoZSAqc2NlbmUqIHdhcyBidWlsdCBmcm9tLCBzbwpgZG9uZSA9PSBUcnVlYCBtZWFucyB0aGUgY29tbWFuZGVkIHRhc2sgZ2VudWluZWx5IHN1Y2NlZWRlZC4KCi0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tClVzYWdlCi0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tCgpZb3UgbmVlZCBhIFB5dGhvbiBlbnYgd2l0aCB0aGUgT3BlblZMQSArIExJQkVSTyBzdGFjay4gT24gdGhpcyBwcm9qZWN0J3MgR1BVIGhvc3QgdGhhdAppcyBhIHJldXNlZCB2ZW52LCBgfi92bGEtaW5qZWN0aW9uLy52ZW52L2Jpbi9weXRob25gICh0aGlyZF9wYXJ0eS9SRUFETUUubWQgaGFzIHRoZQpwaW5uZWQgY29tbWl0cyBhbmQgcGFja2FnZSB2ZXJzaW9ucykuIFN1YnN0aXR1dGUgeW91ciBvd24gaW50ZXJwcmV0ZXIgaWYgaXQgZGlmZmVycy4KCmBNVUpPQ09fR0w9ZWdsYCBzZWxlY3RzIGhlYWRsZXNzIG9mZi1zY3JlZW4gcmVuZGVyaW5nIOKAlCB3aXRob3V0IGl0IE11Sm9DbyB0cmllcyB0byBvcGVuCmEgd2luZG93IGFuZCBkaWVzIG9uIGEgc2VydmVyLiBgQ1VEQV9WSVNJQkxFX0RFVklDRVNgIHBpY2tzIHRoZSBHUFU6ICoqb24gdGhpcyBob3N0IHVzZQpHUFUgMSBvbmx5LCBHUFUgMCBpcyByZXNlcnZlZCBmb3Igb3RoZXIgcGVvcGxlJ3Mgam9icy4qKgoKUnVuIHRoZSB1c2VyIHRhc2sgb24gdGhlIGZpcnN0IGluaXQgc3RhdGU6CgogICAgQ1VEQV9WSVNJQkxFX0RFVklDRVM9MSBNVUpPQ09fR0w9ZWdsIFwKICAgICAgfi92bGEtaW5qZWN0aW9uLy52ZW52L2Jpbi9weXRob24gZXhwZXJpbWVudHMvY2xlYW5fcm9sbG91dC5weSBcCiAgICAgICAgLS10YXNrICJwaWNrIHVwIHRoZSBhbHBoYWJldCBzb3VwIGFuZCBwbGFjZSBpdCBpbiB0aGUgYmFza2V0IgoKUnVuIHRoZSAidGVhY2hlciIvYXR0YWNrZXIgdGFzayBpbnN0ZWFkIOKAlCBzYW1lIHN1aXRlLCBpdHMgb3duIHNjZW5lIGFuZCBwcmVkaWNhdGU6CgogICAgLi4uIGV4cGVyaW1lbnRzL2NsZWFuX3JvbGxvdXQucHkgXAogICAgICAgIC0tdGFzayAicGljayB1cCB0aGUgc2FsYWQgZHJlc3NpbmcgYW5kIHBsYWNlIGl0IGluIHRoZSBiYXNrZXQiCgpTZXZlcmFsIGluaXQgc3RhdGVzICsgc2F2ZSBhIHZpZGVvIG9mIGVhY2ggZXBpc29kZToKCiAgICAuLi4gZXhwZXJpbWVudHMvY2xlYW5fcm9sbG91dC5weSBcCiAgICAgICAgLS10YXNrICJwaWNrIHVwIHRoZSBhbHBoYWJldCBzb3VwIGFuZCBwbGFjZSBpdCBpbiB0aGUgYmFza2V0IiBcCiAgICAgICAgLS1pbml0cyAwLDEsMiAtLXZpZGVvLWRpciAvdG1wL2NsZWFuX3JvbGxvdXQKCklmIHRoZSBvcGVudmxhIC8gTElCRVJPIGNoZWNrb3V0cyBhcmUgbm90IHNpYmxpbmdzIG9mIHRoaXMgcmVwbyBvciBpbiAkSE9NRSwgcG9pbnQgYXQKdGhlbSBleHBsaWNpdGx5IChubyBQWVRIT05QQVRIIG5lZWRlZCDigJQgdGhlIHNjcmlwdCBwdXRzIHRoZW0gb24gc3lzLnBhdGggaXRzZWxmKToKCiAgICBPUEVOVkxBX1JPT1Q9L2RhdGEvb3BlbnZsYSBMSUJFUk9fUk9PVD0vZGF0YS9MSUJFUk8gLi4uIGV4cGVyaW1lbnRzL2NsZWFuX3JvbGxvdXQucHkKCkV4cGVjdGVkOiB0aGUgbW9kZWwgbG9hZHMgKH4zMCBzLCB+MTYgR0IgVlJBTSksIHRoZW4gfjEtMyBzdGVwcy9zLiBBIGdvb2QgdGFzay9pbml0CnN1Y2NlZWRzIGFyb3VuZCBzdGVwIDEyMC0yMDAuIGBhbHBoYWJldF9zb3VwYCBhdCBpbml0IDAgaXMgYSBrbm93bi1nb29kIHNhbml0eSBjaGVjay4KCi0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tCldoZXJlIHRoaXMgc2l0cyBpbiB0aGUgcHJvamVjdAotLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLQpTZWFyY2ggc2lkZSwgbm90IHRoZSBldmFsdWF0b3IuIEl0IHJldXNlcyB0aGUgKmZpeGVkKiBldmFsdWF0b3IncyBHUFUgc2VhbXMKKGBPcGVuVkxBUm9sbG91dEJhY2tlbmQuX2xvYWRfcG9saWN5YCAvIGAuX2J1aWxkX2VudmApIHNvIHRoZSBwaHlzaWNzLCBjYW1lcmEsIGFuZApwcmVwcm9jZXNzaW5nIGFyZSBiaXQtaWRlbnRpY2FsIHRvIGEgc2NvcmVkIHJ1biDigJQgYnV0IGl0IHdyaXRlcyBubyBtZXRyaWNzLCBubyBsZWRnZXIKcm93LCBhbmQgbm8gc2NvcmUuIE5vdGhpbmcgaGVyZSBjYW4gaW5mbHVlbmNlIGhvdyBhbiBhdHRhY2sgaXMgZ3JhZGVkLCB3aGljaCBpcyB0aGUgb25lCmludmFyaWFudCB0aGlzIHByb2plY3QgcHJvdGVjdHMgKHNlZSBDTEFVREUubWQpLgoKSWYgeW91IG5lZWQgYW4gb2ZmaWNpYWxseSAqc2NvcmVkKiBjbGVhbiBudW1iZXIsIGRvbid0IGV4dGVuZCB0aGlzIGZpbGUg4oCUIHJ1bgpgZXhwZXJpbWVudHMvcnVuX2NhbmRpZGF0ZS5weWAgd2l0aCBhbiBvZmYtY2FtZXJhICh2aXNpYmlsaXR5IH4wKSBjYXJyaWVyIGNhbmRpZGF0ZSBzbwp0aGUgcmVzdWx0IGdvZXMgdGhyb3VnaCB0aGUgZml4ZWQgZXZhbHVhdG9yIGFuZCBsYW5kcyBpbiB0aGUgbGVkZ2VyLgoiIiIKCmZyb20gX19mdXR1cmVfXyBpbXBvcnQgYW5ub3RhdGlvbnMKCmltcG9ydCBhcmdwYXJzZQppbXBvcnQgb3MKaW1wb3J0IHN5cwppbXBvcnQgdGltZQpmcm9tIHBhdGhsaWIgaW1wb3J0IFBhdGgKCmltcG9ydCBudW1weSBhcyBucAoKIyAtLS0gaW1wb3J0IGJvb3RzdHJhcCAtLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tCiMgVGhyZWUgc2VwYXJhdGUgc291cmNlIHRyZWVzIGhhdmUgdG8gYmUgaW1wb3J0YWJsZSwgYW5kIG5vbmUgaXMgcGlwLWluc3RhbGxlZDoKIyAgIDxyZXBvPi9zcmMgICAtPiB0aGlzIHByb2plY3QncyBgZXZhbHVhdG9yYCBwYWNrYWdlCiMgICBvcGVudmxhICAgICAgLT4gYGV4cGVyaW1lbnRzLnJvYm90LipgIGhlbHBlcnMgKGdldF9hY3Rpb24sIGltYWdlIHV0aWxzKQojICAgTElCRVJPICAgICAgIC0+IHRoZSBgbGliZXJvYCBwYWNrYWdlICh0aGUgc2ltdWxhdG9yLCB0YXNrcywgYW5kIGluaXQgc3RhdGVzKQojCiMgTm90aGluZyBiZWxvdyBpcyBoYXJkY29kZWQgdG8gYSBwYXJ0aWN1bGFyIG1hY2hpbmU6IHRoZSByZXBvIGlzIGZvdW5kIHJlbGF0aXZlIHRvIHRoaXMKIyBmaWxlLCBhbmQgdGhlIHR3byBleHRlcm5hbCB0cmVlcyBhcmUgZm91bmQgdmlhICRPUEVOVkxBX1JPT1QgLyAkTElCRVJPX1JPT1QsIGZhbGxpbmcKIyBiYWNrIHRvIHNpYmxpbmdzIG9mIHRoZSByZXBvIGFuZCB0aGVuIHRvICRIT01FLiBPdmVycmlkZSB0aGUgZW52IHZhcnMgaWYgeW91cnMgbGl2ZQojIHNvbWV3aGVyZSBlbHNlLiBgZXhwZXJpbWVudHNgIHdvcmtzIGFzIGEgbmFtZXNwYWNlIHBhY2thZ2UgYWNyb3NzIHRoZSByZXBvIGFuZCBvcGVudmxhCiMgYmVjYXVzZSBuZWl0aGVyIGhhcyBhbiBfX2luaXRfXy5weSwgc28gYGV4cGVyaW1lbnRzLnJvYm90YCByZXNvbHZlcyBpbnRvIG9wZW52bGEuClJFUE9fUk9PVCA9IFBhdGgoX19maWxlX18pLnJlc29sdmUoKS5wYXJlbnRzWzFdCgoKZGVmIF9maW5kX3RyZWUobmFtZTogc3RyLCBlbnZfdmFyOiBzdHIsIG1hcmtlcjogc3RyKSAtPiBQYXRoOgogICAgIiIiTG9jYXRlIGFuIGV4dGVybmFsIGRlcGVuZGVuY3kgdHJlZSwgb3IgZXhpdCB3aXRoIGFuIGFjdGlvbmFibGUgbWVzc2FnZS4KCiAgICBBbiBleHBsaWNpdGx5LXNldCAkZW52X3ZhciBtdXN0IGJlIGNvcnJlY3Q6IGlmIGl0IGlzIHNldCBidXQgd3Jvbmcgd2UgZmFpbCBsb3VkbHkKICAgIHJhdGhlciB0aGFuIHF1aWV0bHkgZmFsbGluZyBiYWNrLCBzbyBhIHR5cG8nZCBwYXRoIGNhbiBuZXZlciBzZW5kIHlvdSBvZmYgZGVidWdnaW5nCiAgICB0aGUgd3JvbmcgY2hlY2tvdXQuCiAgICAiIiIKICAgIG92ZXJyaWRlID0gb3MuZW52aXJvbi5nZXQoZW52X3ZhcikKICAgIGlmIG92ZXJyaWRlOgogICAgICAgIHJvb3QgPSBQYXRoKG92ZXJyaWRlKS5leHBhbmR1c2VyKCkKICAgICAgICBpZiBub3QgKHJvb3QgLyBtYXJrZXIpLmV4aXN0cygpOgogICAgICAgICAgICByYWlzZSBTeXN0ZW1FeGl0KAogICAgICAgICAgICAgICAgZiJ7ZW52X3Zhcn09e292ZXJyaWRlfSBkb2VzIG5vdCBsb29rIGxpa2UgYSB7bmFtZX0gY2hlY2tvdXQgIgogICAgICAgICAgICAgICAgZiIobWlzc2luZyB7bWFya2VyfSkuIEZpeCBvciB1bnNldCBpdC4iCiAgICAgICAgICAgICkKICAgICAgICByZXR1cm4gcm9vdAoKICAgIGNhbmRpZGF0ZXMgPSBbUkVQT19ST09ULnBhcmVudCAvIG5hbWUsIFBhdGguaG9tZSgpIC8gbmFtZV0KICAgIGZvciBjYW5kaWRhdGUgaW4gY2FuZGlkYXRlczoKICAgICAgICBpZiAoY2FuZGlkYXRlIC8gbWFya2VyKS5leGlzdHMoKToKICAgICAgICAgICAgcmV0dXJuIGNhbmRpZGF0ZQogICAgc2VhcmNoZWQgPSAiXG4gICIuam9pbihzdHIoYykgZm9yIGMgaW4gY2FuZGlkYXRlcykKICAgIHJhaXNlIFN5c3RlbUV4aXQoCiAgICAgICAgZiJDb3VsZCBub3QgZmluZCB0aGUge25hbWV9IHNvdXJjZSB0cmVlIChsb29rZWQgZm9yIHtuYW1lfS97bWFya2VyfSkuXG4iCiAgICAgICAgZiJTZWFyY2hlZDpcbiAge3NlYXJjaGVkfVxuIgogICAgICAgIGYiU2V0IHtlbnZfdmFyfT0vcGF0aC90by97bmFtZX0gYW5kIHJlLXJ1bi4gIgogICAgICAgIGYiU2VlIHRoaXJkX3BhcnR5L1JFQURNRS5tZCBmb3IgdGhlIHBpbm5lZCBjb21taXQgdGhpcyBwcm9qZWN0IGV4cGVjdHMuIgogICAgKQoKCk9QRU5WTEFfUk9PVCA9IF9maW5kX3RyZWUoIm9wZW52bGEiLCAiT1BFTlZMQV9ST09UIiwgImV4cGVyaW1lbnRzL3JvYm90L3JvYm90X3V0aWxzLnB5IikKTElCRVJPX1JPT1QgPSBfZmluZF90cmVlKCJMSUJFUk8iLCAiTElCRVJPX1JPT1QiLCAibGliZXJvL2xpYmVyby9fX2luaXRfXy5weSIpCmZvciBfdHJlZSBpbiAoUkVQT19ST09UIC8gInNyYyIsIFJFUE9fUk9PVCwgT1BFTlZMQV9ST09ULCBMSUJFUk9fUk9PVCk6CiAgICBzeXMucGF0aC5pbnNlcnQoMCwgc3RyKF90cmVlKSkKCmZyb20gZXZhbHVhdG9yLmxpYmVyb190YXNrcyBpbXBvcnQgcmVzb2x2ZV90YXNrICAjIG5vcWE6IEU0MDIKZnJvbSBldmFsdWF0b3Iub3BlbnZsYV9iYWNrZW5kIGltcG9ydCBPcGVuVkxBUm9sbG91dEJhY2tlbmQgICMgbm9xYTogRTQwMgoKIyBMSUJFUk8gZXBpc29kZSBjYXBzIHVzZWQgYnkgdGhlIGZpeGVkIGV2YWx1YXRvciDigJQga2VlcCB0aGVzZSBpZiB5b3Ugd2FudCB5b3VyIG51bWJlcnMKIyBjb21wYXJhYmxlIHRvIHRoZSByZWNvcmRlZCBydW5zLgpERUZBVUxUX01BWF9TVEVQUyA9IHsibGliZXJvX29iamVjdCI6IDI4MCwgImxpYmVyb19zcGF0aWFsIjogMjIwLCAibGliZXJvX2dvYWwiOiAzMDB9CkRFTU9fUkVTID0gMzg0ICAjIHZpZGVvIGZyYW1lcyBhcmUgcmVuZGVyZWQgbGFyZ2VyIHRoYW4gdGhlIDIyNCB0aGUgcG9saWN5IHNlZXMKCgpkZWYgcGFyc2VfYXJncygpIC0+IGFyZ3BhcnNlLk5hbWVzcGFjZToKICAgIHBhcnNlciA9IGFyZ3BhcnNlLkFyZ3VtZW50UGFyc2VyKAogICAgICAgIGRlc2NyaXB0aW9uPSJSdW4gYSBjbGVhbiAodW4tYXR0YWNrZWQpIE9wZW5WTEEgcm9sbG91dCBvbiBhIExJQkVSTyB0YXNrLiIsCiAgICAgICAgZm9ybWF0dGVyX2NsYXNzPWFyZ3BhcnNlLkFyZ3VtZW50RGVmYXVsdHNIZWxwRm9ybWF0dGVyLAogICAgKQogICAgcGFyc2VyLmFkZF9hcmd1bWVudCgKICAgICAgICAiLS10YXNrIiwKICAgICAgICBkZWZhdWx0PSJwaWNrIHVwIHRoZSBhbHBoYWJldCBzb3VwIGFuZCBwbGFjZSBpdCBpbiB0aGUgYmFza2V0IiwKICAgICAgICBoZWxwPSJUYXNrIGxhbmd1YWdlIHN0cmluZy4gQnVpbGRzIHRoZSBzY2VuZSBBTkQgaXMgdGhlIGluc3RydWN0aW9uIGdpdmVuIHRvIE9wZW5WTEEuICIKICAgICAgICAiTXVzdCBtYXRjaCBhIHRhc2sgaW4gLS1zdWl0ZSBleGFjdGx5ICh1cCB0byBjYXNlL3B1bmN0dWF0aW9uKS4iLAogICAgKQogICAgcGFyc2VyLmFkZF9hcmd1bWVudCgKICAgICAgICAiLS1pbnN0cnVjdGlvbiIsCiAgICAgICAgZGVmYXVsdD1Ob25lLAogICAgICAgIGhlbHA9IkFEVkFOQ0VEOiBjb21tYW5kIGEgZGlmZmVyZW50IGluc3RydWN0aW9uIGluc2lkZSAtLXRhc2sncyBzY2VuZSAodGhlICdzMCAiCiAgICAgICAgInJlYWNoYWJpbGl0eScgcHJvYmUpLiBTdWNjZXNzIGlzIHN0aWxsIGp1ZGdlZCBieSAtLXRhc2sncyBwcmVkaWNhdGUsIHNvIGEgIgogICAgICAgICJzdWNjZXNzL2ZhaWx1cmUgaGVyZSBkb2VzIE5PVCBhZGp1ZGljYXRlIHRoZSBvdmVycmlkZGVuIGluc3RydWN0aW9uLiIsCiAgICApCiAgICBwYXJzZXIuYWRkX2FyZ3VtZW50KCItLXN1aXRlIiwgZGVmYXVsdD0ibGliZXJvX29iamVjdCIsIGhlbHA9IkxJQkVSTyB0YXNrIHN1aXRlLiIpCiAgICBwYXJzZXIuYWRkX2FyZ3VtZW50KAogICAgICAgICItLWluaXRzIiwKICAgICAgICBkZWZhdWx0PSIwIiwKICAgICAgICBoZWxwPSJDb21tYS1zZXBhcmF0ZWQgaW5pdC1zdGF0ZSBpbmRpY2VzIChMSUJFUk8gc2hpcHMgfjUwIHBlciB0YXNrKS4gIgogICAgICAgICJUaGUgc2NlbmUgbGF5b3V0IGRpZmZlcnMgcGVyIGluZGV4OyByZXN1bHRzIHZhcnkgd2l0aCBpdC4iLAogICAgKQogICAgcGFyc2VyLmFkZF9hcmd1bWVudCgKICAgICAgICAiLS1tYXgtc3RlcHMiLAogICAgICAgIHR5cGU9aW50LAogICAgICAgIGRlZmF1bHQ9Tm9uZSwKICAgICAgICBoZWxwPSJDb250cm9sLXN0ZXAgY2FwIHBlciBlcGlzb2RlIChkZWZhdWx0OiB0aGUgc3VpdGUncyBzdGFuZGFyZCBjYXApLiIsCiAgICApCiAgICBwYXJzZXIuYWRkX2FyZ3VtZW50KAogICAgICAgICItLXZpZGVvLWRpciIsCiAgICAgICAgZGVmYXVsdD1Ob25lLAogICAgICAgIGhlbHA9IklmIHNldCwgd3JpdGUgPHN1aXRlPl88aW5pdD4ubXA0IHBlciBlcGlzb2RlIGhlcmUuIiwKICAgICkKICAgIHJldHVybiBwYXJzZXIucGFyc2VfYXJncygpCgoKZGVmIHJ1bl9lcGlzb2RlKAogICAgKiwKICAgIGJhY2tlbmQ6IE9wZW5WTEFSb2xsb3V0QmFja2VuZCwKICAgIHBvbGljeTogdHVwbGUsCiAgICByZXNvbHZlZCwKICAgIGluaXRfaW5kZXg6IGludCwKICAgIGluc3RydWN0aW9uOiBzdHIsCiAgICBtYXhfc3RlcHM6IGludCwKICAgIHZpZGVvX3BhdGg6IHN0ciB8IE5vbmUsCikgLT4gZGljdDoKICAgICIiIlJvbGwgb25lIGNsZWFuIGVwaXNvZGUuIFJldHVybnMge3N1Y2Nlc3MsIHN0ZXBzLCBzZWNvbmRzfS4iIiIKICAgIGZyb20gZXhwZXJpbWVudHMucm9ib3QubGliZXJvLmxpYmVyb191dGlscyBpbXBvcnQgZ2V0X2xpYmVyb19pbWFnZSwgcXVhdDJheGlzYW5nbGUKICAgIGZyb20gZXhwZXJpbWVudHMucm9ib3Qucm9ib3RfdXRpbHMgaW1wb3J0ICgKICAgICAgICBnZXRfYWN0aW9uLAogICAgICAgIGludmVydF9ncmlwcGVyX2FjdGlvbiwKICAgICAgICBub3JtYWxpemVfZ3JpcHBlcl9hY3Rpb24sCiAgICApCgogICAgbW9kZWwsIHByb2Nlc3NvciwgY2ZnLCByZXNpemVfc2l6ZSA9IHBvbGljeQoKICAgICMgU2VlZCBldmVyeSBSTkcgZnJvbSB0aGUgaW5pdCBpbmRleCBzbyB0aGUgZXBpc29kZSBpcyByZXByb2R1Y2libGUuCiAgICBiYWNrZW5kLl9zZWVkX2V2ZXJ5dGhpbmcoaW5pdF9pbmRleCkKCiAgICAjIEJ1aWxkIHRoZSBzY2VuZSwgdGhlbiBqdW1wIHRvIHRoZSBjaG9zZW4gaW5pdCBzdGF0ZS4gTElCRVJPIG5lZWRzIG5vIGV4cGxpY2l0CiAgICAjIHJlc2V0KCkgaGVyZSDigJQgc2V0X2luaXRfc3RhdGUgZG9lcyBpdC4KICAgIGVudiwgaW5pdF9zdGF0ZXMsIHRhc2tfZGVzY3JpcHRpb24sIG9ial9vZl9pbnRlcmVzdCA9IGJhY2tlbmQuX2J1aWxkX2VudihyZXNvbHZlZCkKICAgIG9icyA9IGVudi5zZXRfaW5pdF9zdGF0ZShpbml0X3N0YXRlc1tpbml0X2luZGV4ICUgbGVuKGluaXRfc3RhdGVzKV0pCgogICAgIyBUaGUgc2NlbmUgZHJvcHMgb2JqZWN0cyBpbjsgYSBmZXcgbm8tb3Agc3RlcHMgbGV0IHBoeXNpY3Mgc2V0dGxlIGJlZm9yZSB0aGUgcG9saWN5CiAgICAjIHNlZXMgYW55dGhpbmcuIFNraXBwaW5nIHRoaXMgbWFrZXMgdGhlIGZpcnN0IG9ic2VydmF0aW9ucyB1bnJlcHJlc2VudGF0aXZlLgogICAgZHVtbXkgPSBiYWNrZW5kLl9kdW1teV9hY3Rpb24oY2ZnKQogICAgZm9yIF8gaW4gcmFuZ2UoYmFja2VuZC5udW1fc3RlcHNfd2FpdCk6CiAgICAgICAgb2JzLCBfcmV3YXJkLCBfZG9uZSwgX2luZm8gPSBlbnYuc3RlcChkdW1teSkKCiAgICBmcmFtZXM6IGxpc3QgPSBbXQogICAgc3VjY2VzcyA9IEZhbHNlCiAgICBzdGFydGVkID0gdGltZS50aW1lKCkKICAgIHN0ZXAgPSAwCiAgICB0cnk6CiAgICAgICAgZm9yIHN0ZXAgaW4gcmFuZ2UobWF4X3N0ZXBzKToKICAgICAgICAgICAgaWYgdmlkZW9fcGF0aCBpcyBub3QgTm9uZToKICAgICAgICAgICAgICAgIGZyYW1lcy5hcHBlbmQoZ2V0X2xpYmVyb19pbWFnZShvYnMsIERFTU9fUkVTKSkKCiAgICAgICAgICAgICMgLS0tIHdoYXQgdGhlIHBvbGljeSBhY3R1YWxseSBjb25zdW1lcyAtLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tCiAgICAgICAgICAgIGltYWdlID0gZ2V0X2xpYmVyb19pbWFnZShvYnMsIHJlc2l6ZV9zaXplKSAgIyB1aW50OCBbMjI0LCAyMjQsIDNdCiAgICAgICAgICAgIG9ic2VydmF0aW9uID0gewogICAgICAgICAgICAgICAgImZ1bGxfaW1hZ2UiOiBpbWFnZSwKICAgICAgICAgICAgICAgICJzdGF0ZSI6IG5wLmNvbmNhdGVuYXRlKAogICAgICAgICAgICAgICAgICAgICgKICAgICAgICAgICAgICAgICAgICAgICAgb2JzWyJyb2JvdDBfZWVmX3BvcyJdLAogICAgICAgICAgICAgICAgICAgICAgICBxdWF0MmF4aXNhbmdsZShvYnNbInJvYm90MF9lZWZfcXVhdCJdKSwKICAgICAgICAgICAgICAgICAgICAgICAgb2JzWyJyb2JvdDBfZ3JpcHBlcl9xcG9zIl0sCiAgICAgICAgICAgICAgICAgICAgKQogICAgICAgICAgICAgICAgKSwKICAgICAgICAgICAgfQogICAgICAgICAgICBhY3Rpb24gPSBnZXRfYWN0aW9uKGNmZywgbW9kZWwsIG9ic2VydmF0aW9uLCBpbnN0cnVjdGlvbiwgcHJvY2Vzc29yPXByb2Nlc3NvcikKCiAgICAgICAgICAgICMgT3BlblZMQSdzIGdyaXBwZXIgY29udmVudGlvbiBkaWZmZXJzIGZyb20gTElCRVJPJ3M6IGJpbmFyaXplLCB0aGVuIGZsaXAuCiAgICAgICAgICAgICMgR2V0IHRoaXMgd3JvbmcgYW5kIHRoZSByb2JvdCBhcHByb2FjaGVzIGNvcnJlY3RseSBidXQgbmV2ZXIgZ3Jhc3BzLgogICAgICAgICAgICBhY3Rpb24gPSBpbnZlcnRfZ3JpcHBlcl9hY3Rpb24obm9ybWFsaXplX2dyaXBwZXJfYWN0aW9uKGFjdGlvbiwgYmluYXJpemU9VHJ1ZSkpCgogICAgICAgICAgICBvYnMsIF9yZXdhcmQsIGRvbmUsIF9pbmZvID0gZW52LnN0ZXAoCiAgICAgICAgICAgICAgICBhY3Rpb24udG9saXN0KCkgaWYgaGFzYXR0cihhY3Rpb24sICJ0b2xpc3QiKSBlbHNlIGFjdGlvbgogICAgICAgICAgICApCiAgICAgICAgICAgIGlmIHN0ZXAgJSAyMCA9PSAwOgogICAgICAgICAgICAgICAgcHJpbnQoZiIgICAgc3RlcCB7c3RlcDozZH0ve21heF9zdGVwc30iLCBmbHVzaD1UcnVlKQogICAgICAgICAgICBpZiBkb25lOiAgIyBMSUJFUk8ncyBvd24gZ29hbCBwcmVkaWNhdGUgZm9yIHRoaXMgdGFzawogICAgICAgICAgICAgICAgc3VjY2VzcyA9IFRydWUKICAgICAgICAgICAgICAgIGJyZWFrCiAgICBmaW5hbGx5OgogICAgICAgIGVudi5jbG9zZSgpCgogICAgaWYgdmlkZW9fcGF0aCBpcyBub3QgTm9uZSBhbmQgZnJhbWVzOgogICAgICAgIGltcG9ydCBpbWFnZWlvLnYyIGFzIGltYWdlaW8KCiAgICAgICAgaW1hZ2Vpby5taW13cml0ZSh2aWRlb19wYXRoLCBmcmFtZXMsIGZwcz0yMCkKICAgICAgICBwcmludChmIiAgICB2aWRlbyAtPiB7dmlkZW9fcGF0aH0iLCBmbHVzaD1UcnVlKQoKICAgIHJldHVybiB7InN1Y2Nlc3MiOiBzdWNjZXNzLCAic3RlcHMiOiBzdGVwICsgMSwgInNlY29uZHMiOiByb3VuZCh0aW1lLnRpbWUoKSAtIHN0YXJ0ZWQsIDEpfQoKCmRlZiBtYWluKCkgLT4gTm9uZToKICAgIGFyZ3MgPSBwYXJzZV9hcmdzKCkKICAgIGluaXRzID0gW2ludCh4KSBmb3IgeCBpbiBhcmdzLmluaXRzLnNwbGl0KCIsIikgaWYgeC5zdHJpcCgpXQogICAgbWF4X3N0ZXBzID0gYXJncy5tYXhfc3RlcHMgb3IgREVGQVVMVF9NQVhfU1RFUFMuZ2V0KGFyZ3Muc3VpdGUsIDI4MCkKCiAgICAjIEZhaWwgZmFzdCBvbiBhIHR5cG8nZCB0YXNrIHN0cmluZywgQkVGT1JFIHNwZW5kaW5nIDMwIHMgbG9hZGluZyBhIDdCIG1vZGVsLgogICAgcmVzb2x2ZWQgPSByZXNvbHZlX3Rhc2soYXJncy50YXNrLCBzdWl0ZT1hcmdzLnN1aXRlKQogICAgaW5zdHJ1Y3Rpb24gPSBhcmdzLmluc3RydWN0aW9uIG9yIHJlc29sdmVkLmxhbmd1YWdlCgogICAgcHJpbnQoZiJzdWl0ZSAgICAgICA6IHthcmdzLnN1aXRlfSIpCiAgICBwcmludChmInNjZW5lIHRhc2sgIDoge3Jlc29sdmVkLmxhbmd1YWdlIXJ9ICh0YXNrX2lkPXtyZXNvbHZlZC50YXNrX2lkfSkiKQogICAgcHJpbnQoZiJpbnN0cnVjdGlvbiA6IHtpbnN0cnVjdGlvbiFyfSIpCiAgICBpZiBhcmdzLmluc3RydWN0aW9uOgogICAgICAgIHByaW50KCIgIF4gT1ZFUlJJRERFTjogJ3N1Y2Nlc3MnIGJlbG93IHN0aWxsIG1lYW5zIHRoZSBTQ0VORSB0YXNrJ3MgcHJlZGljYXRlIGZpcmVkLiIpCiAgICBwcmludChmImluaXRzICAgICAgIDoge2luaXRzfSAgIG1heF9zdGVwczoge21heF9zdGVwc31cbiIpCgogICAgaWYgYXJncy52aWRlb19kaXI6CiAgICAgICAgb3MubWFrZWRpcnMoYXJncy52aWRlb19kaXIsIGV4aXN0X29rPVRydWUpCgogICAgIyBPbmUgYmFja2VuZCwgb25lIG1vZGVsIGxvYWQsIHJldXNlZCBhY3Jvc3MgZXBpc29kZXMuIFJlLWxvYWRpbmcgcGVyIGVwaXNvZGUgd2l0aG91dAogICAgIyBmcmVlaW5nIHRoZSBvbGQgbW9kZWwgZXhoYXVzdHMgVlJBTSDigJQgdGhhdCBidWcgY29zdCB1cyBhIHdob2xlIHBpbG90IHJ1bi4KICAgIGJhY2tlbmQgPSBPcGVuVkxBUm9sbG91dEJhY2tlbmQodGFza19zdWl0ZT1hcmdzLnN1aXRlLCBtYXhfc3RlcHM9bWF4X3N0ZXBzKQogICAgcHJpbnQoImxvYWRpbmcgT3BlblZMQS03QiAofjMwIHMsIH4xNiBHQiBWUkFNKSAuLi4iLCBmbHVzaD1UcnVlKQogICAgcG9saWN5ID0gYmFja2VuZC5fbG9hZF9wb2xpY3koKQogICAgcHJpbnQoImxvYWRlZC5cbiIsIGZsdXNoPVRydWUpCgogICAgcmVzdWx0cyA9IFtdCiAgICBmb3IgaW5pdF9pbmRleCBpbiBpbml0czoKICAgICAgICBwcmludChmIltpbml0IHtpbml0X2luZGV4fV0gcm9sbGluZyBvdXQgLi4uIiwgZmx1c2g9VHJ1ZSkKICAgICAgICB2aWRlb19wYXRoID0gKAogICAgICAgICAgICBvcy5wYXRoLmpvaW4oYXJncy52aWRlb19kaXIsIGYie2FyZ3Muc3VpdGV9X2luaXR7aW5pdF9pbmRleH0ubXA0IikKICAgICAgICAgICAgaWYgYXJncy52aWRlb19kaXIKICAgICAgICAgICAgZWxzZSBOb25lCiAgICAgICAgKQogICAgICAgIHJlc3VsdCA9IHJ1bl9lcGlzb2RlKAogICAgICAgICAgICBiYWNrZW5kPWJhY2tlbmQsCiAgICAgICAgICAgIHBvbGljeT1wb2xpY3ksCiAgICAgICAgICAgIHJlc29sdmVkPXJlc29sdmVkLAogICAgICAgICAgICBpbml0X2luZGV4PWluaXRfaW5kZXgsCiAgICAgICAgICAgIGluc3RydWN0aW9uPWluc3RydWN0aW9uLAogICAgICAgICAgICBtYXhfc3RlcHM9bWF4X3N0ZXBzLAogICAgICAgICAgICB2aWRlb19wYXRoPXZpZGVvX3BhdGgsCiAgICAgICAgKQogICAgICAgIHJlc3VsdHMuYXBwZW5kKChpbml0X2luZGV4LCByZXN1bHQpKQogICAgICAgIHZlcmRpY3QgPSAiU1VDQ0VTUyIgaWYgcmVzdWx0WyJzdWNjZXNzIl0gZWxzZSAiRkFJTCAgICIKICAgICAgICBwcmludCgKICAgICAgICAgICAgZiJbaW5pdCB7aW5pdF9pbmRleH1dIHt2ZXJkaWN0fSAgc3RlcHM9e3Jlc3VsdFsnc3RlcHMnXX0gICIKICAgICAgICAgICAgZiIoe3Jlc3VsdFsnc2Vjb25kcyddfXMpXG4iLAogICAgICAgICAgICBmbHVzaD1UcnVlLAogICAgICAgICkKCiAgICBuX3N1Y2Nlc3MgPSBzdW0oMSBmb3IgX2ksIHIgaW4gcmVzdWx0cyBpZiByWyJzdWNjZXNzIl0pCiAgICBwcmludCgiPT09IFNVTU1BUlkgPT09IikKICAgIGZvciBpbml0X2luZGV4LCByZXN1bHQgaW4gcmVzdWx0czoKICAgICAgICBwcmludChmIiAgaW5pdCB7aW5pdF9pbmRleH06IHN1Y2Nlc3M9e3Jlc3VsdFsnc3VjY2VzcyddfSBzdGVwcz17cmVzdWx0WydzdGVwcyddfSIpCiAgICBwcmludChmIiAge25fc3VjY2Vzc30ve2xlbihyZXN1bHRzKX0gc3VjY2VlZGVkIikKCgppZiBfX25hbWVfXyA9PSAiX19tYWluX18iOgogICAgbWFpbigpCg==");
+  try {
+    await navigator.clipboard.writeText(text);
+    this.textContent = 'Copied';
+  } catch (e) {
+    var ta = document.createElement('textarea');
+    ta.value = text; document.body.appendChild(ta); ta.select();
+    document.execCommand('copy'); document.body.removeChild(ta);
+    this.textContent = 'Copied';
+  }
+  setTimeout(function () { document.getElementById('copy').textContent = 'Copy source'; }, 1800);
+});
+</script>
+</body>
+</html>

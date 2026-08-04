@@ -95,7 +95,7 @@ L(ε) = CE( f(P_M(o,ε), c⊕w), aᵀ )  +  λ · CE( f(P_M(o,ε), c), aᵁ )
 - **clean teacher** `aᵁ(o) = argmax f(o, c_user)` — what the unperturbed policy would do.
 
 Both teachers come from the same frozen model, and both were already being computed for
-decisive-dim classification (`monitor_patch_attack.py:280,285`), so the gate added no new teacher
+decisive-dim classification (`ce_monitor_patch_attack.py:280,285`), so the gate added no new teacher
 machinery. λ = 1 — Stage A cleared every threshold with no headroom worth chasing, so the λ frontier
 moved to E2.2d characterization.
 
@@ -139,7 +139,7 @@ trusted side was touched. See CLAUDE.md §"The one invariant".
 | `gate_metrics.py` | Derived metrics: `gate_report` → `gate_margin`, `armed_forcing_fraction`, `false_fire_rate` + raw counts. Targeted **and** DoS `Effect`. | Consumes the **fixed** `evaluator.metrics.summarize_rollouts` — derives, never re-judges. |
 | `word_gate_probe.py` | Phase-0 open-loop probe over `frames/train/`: gate diagram + gradient diagnostic. Pure core (`forced_fraction`, `aggregate_gate_diagram`, `gradient_gate_signal`) tested; `probe_frame` is the GPU seam. | `--effect dos` currently defers (see §10). |
 | `word_gated_attack.py` | Closed-loop drivers. `run_perframe_targeted_gate` (E2.1) loops inits × {armed, dormant}, appends each finished episode to `rows.jsonl`, skips it on restart, and turns a crash into an **errored** outcome kept out of the rates. `run_static_dos_gate` (E1.1) only *scores* a patch handed to it. | `episode_fn` injects the GPU boundary so pairing/resume/mapping is CPU-tested. |
-| `monitor_patch_attack.py` | The episode runner. `run_confined_episode` gained four **additive** kwargs: `gate_word`, `word_index`, `dormancy_weight`, `deploy_word`. | **`gate_word=None` ⇒ bit-identical to the ungated path**, so no prior corner/stealth result is re-scored. |
+| `ce_monitor_patch_attack.py` | The episode runner. `run_confined_episode` gained four **additive** kwargs: `gate_word`, `word_index`, `dormancy_weight`, `deploy_word`. | **`gate_word=None` ⇒ bit-identical to the ungated path**, so no prior corner/stealth result is re-scored. |
 
 Reused unchanged: `shared_inits.py` (the 5/3/12 precommitted split), `occlusion_probe.py` (the
 measured-clear BL 64×64 rect), `ceiling_screen.py` frame buffers, `hijack_backend.py` /

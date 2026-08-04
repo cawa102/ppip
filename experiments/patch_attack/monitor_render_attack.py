@@ -1,6 +1,6 @@
 """Experiment 2 -- PHYSICALLY-REALIZABLE confined monitor-video hijack (through the render).
 
-Unlike Experiment 1 (``monitor_patch_attack.py``, a camera-space replacement patch = an
+Unlike Experiment 1 (``ce_monitor_patch_attack.py``, a camera-space replacement patch = an
 idealised upper bound), here the attack is realised ENTIRELY through an in-scene *monitor*
 geom whose texture is re-uploaded every control step and re-rendered by MuJoCo -- the camera
 image buffer is NEVER written (``MonitorHijackBackend`` enforces that invariant). This is the

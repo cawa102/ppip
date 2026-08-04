@@ -8,7 +8,7 @@ objective the word-gate optimizer minimizes:
 
 — force the target ``aᵀ`` when the magic word is present, reproduce the clean action
 ``aᵁ`` when it is absent. It mirrors the existing per-frame CE
-(``monitor_patch_attack.py:244``): ``F.cross_entropy(logits.reshape(7,-1), teacher.reshape(7))``.
+(``ce_monitor_patch_attack.py:244``): ``F.cross_entropy(logits.reshape(7,-1), teacher.reshape(7))``.
 This is the *method* objective, never a reported score (the evaluator judges rollouts).
 """
 from __future__ import annotations
@@ -80,7 +80,7 @@ class TestLambdaWeighting:
 class TestShapeRobustness:
     def test_accepts_batched_logits_and_teacher_shapes(self) -> None:
         # The real optimize loop hands [1,7,V] logits and a [1,7] teacher
-        # (monitor_patch_attack.py:201,243); both must reduce to the flat per-token loss.
+        # (ce_monitor_patch_attack.py:201,243); both must reduce to the flat per-token loss.
         armed_flat = _peaked_logits(TARGET)
         dormant_flat = torch.zeros(ACTION_DIM, 16)
         flat = two_branch_loss(armed_flat, TARGET, dormant_flat, CLEAN, lam=1.0)

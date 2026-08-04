@@ -1,7 +1,7 @@
 """Full closed-loop CORNER-confined monitor-patch hijack (alphabet_soup -> salad_dressing).
 
 Reuses the PROVEN per-step optimisation loop (``run_confined_episode`` in
-``monitor_patch_attack``) but constrains the patch to a *corner* rectangle that provably does
+``ce_monitor_patch_attack``) but constrains the patch to a *corner* rectangle that provably does
 NOT cover the graspable objects (asserts non-overlap with the object keep-out box). This is
 the literal researcher ask: hijack with the optimised region in one of the 4 corners, not on
 the object.
@@ -25,8 +25,12 @@ HOME = os.path.expanduser("~")
 for _p in ("autoresearch/src", "autoresearch", "openvla", "autoresearch/experiments/patch_attack"):
     sys.path.insert(0, os.path.join(HOME, _p))
 
+import forcing_loss as SP_FL  # noqa: E402
+import stealth_patch as SP  # noqa: E402
+import torch  # noqa: E402
 from hijack_backend import HijackBackend  # noqa: E402
-from monitor_patch_attack import run_confined_episode  # noqa: E402
+from make_logo import build_base  # noqa: E402
+from ce_monitor_patch_attack import run_confined_episode  # noqa: E402
 
 KEEPOUT = (95, 170, 100, 218)  # (r0,r1,c0,c1) graspable soup+salad_dressing box, seed-0 init
 RUN_DIR = os.environ.get("MC_RUN_DIR", os.path.join(HOME, "autoresearch/runs/monitor-corner"))
@@ -79,6 +83,13 @@ def main() -> None:
     warm_start = os.environ.get("MC_WARM", "0") == "1"
     decisive_boost = int(os.environ.get("MC_DEC_BOOST", "1"))
     suffix = os.environ.get("MC_TAG_SUFFIX", "")
+    # Stealth carrier (default off -> the free-range patch every prior corner run used).
+    stealth_name = os.environ.get("MC_STEALTH_BASE", "")
+    stealth_eps = float(os.environ["MC_STEALTH_EPS"]) if stealth_name else None
+    # Objective (default 'ce' -> the all-7 cross-entropy every prior corner result used).
+    objective = os.environ.get("MC_OBJECTIVE", "ce")
+    kappa = float(os.environ.get("MC_KAPPA", SP_FL.DEFAULT_KAPPA))
+    anchor = float(os.environ.get("MC_ANCHOR", "0.0"))
 
     for corner, s in specs:
         assert_no_object_overlap(corner_rect(corner, s))
@@ -89,17 +100,30 @@ def main() -> None:
     summary = []
     for corner, s in specs:
         rect = corner_rect(corner, s)
+        # The carrier is drawn into the rect of a full frame; the mid-grey outside is never
+        # shown (the mask discards it) and exists only to satisfy the full-frame shape.
+        stealth_base = None if not stealth_name else SP.composite(
+            torch.full((1, 3, 224, 224), 0.5, device="cuda"),
+            SP.from_hwc(torch.from_numpy(build_base(stealth_name, s)), device="cuda"),
+            rect,
+        )
         tag = f"corner_{corner}_{s}_seed{SEED}{suffix}"
         rec = os.path.join(RUN_DIR, f"rec_{corner}_{s}{suffix}") if record else ""
         print(f"\n===== CORNER {corner} size {s} rect={rect} "
               f"({s * s / (224 * 224):.1%} of frame) mode={mode} "
               f"k={k} maxtries={maxtries} restarts={restarts} warm={warm_start} "
-              f"dec_boost={decisive_boost} =====", flush=True)
+              f"dec_boost={decisive_boost} "
+              f"stealth={stealth_name or 'off'}"
+              f"{'' if stealth_eps is None else f'@eps={stealth_eps}'} "
+              f"obj={objective}{f'@kappa={kappa:g}' if objective == 'hinge' else ''} =====",
+              flush=True)
         result = run_confined_episode(
             backend, rect=rect, seed=SEED, max_steps=MAX_STEPS, chunk=MAX_STEPS + 10,
             k=k, lr=lr, maxtries=maxtries, trial=trial, run_dir=RUN_DIR, tag=tag, record_dir=rec,
             patch_mode=mode, restarts=restarts, warm_start=warm_start,
             decisive_boost=decisive_boost,
+            stealth_base=stealth_base, stealth_eps=stealth_eps,
+            objective=objective, kappa=kappa, anchor=anchor,
         )
         result["corner"] = corner
         summary.append(result)

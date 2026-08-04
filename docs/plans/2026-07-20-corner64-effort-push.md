@@ -38,7 +38,7 @@ why it may be pushable.
 
 **The 64×64 run was never given extra effort.** It reused the 95×95 defaults: `MC_K=10` inner steps,
 `MC_MAXTRIES=6` escalation tries, `MC_LR=3e-2` (`corner_attack.py:72-74`). The per-frame loop already
-escalates lr ×1.5 → 0.3 and early-breaks at 7/7 (`monitor_patch_attack.py:176-192`), so raising K and
+escalates lr ×1.5 → 0.3 and early-breaks at 7/7 (`ce_monitor_patch_attack.py:176-192`), so raising K and
 MAXTRIES is the untried, directly-available headroom.
 
 ---
@@ -61,7 +61,7 @@ there. The concept already exists as `MR_DECISIVE` in `monitor_render_attack.py`
 ## 3. Work plan
 
 ### Task A — instrument the in-between (mandatory, cheap, do first)
-`run_confined_episode` (`monitor_patch_attack.py`) currently records only the targeted predicate.
+`run_confined_episode` (`ce_monitor_patch_attack.py`) currently records only the targeted predicate.
 Add, search-side only:
 
 1. **`commanded_success`.** Line 200 already binds the env `done` flag, and the env is built from
@@ -99,7 +99,7 @@ hypothesis cleanly.
    free win when consecutive frames are similar; new search-side knob);
 3. spend budget **where it matters**: detect decisive frames online and give them 3–5× the inner
    steps, leaving agreeing frames cheap;
-4. repeat trials `MC_TRIAL=0,1,2` — `trial` seeds the EoT jitter (`monitor_patch_attack.py:79-85`),
+4. repeat trials `MC_TRIAL=0,1,2` — `trial` seeds the EoT jitter (`ce_monitor_patch_attack.py:79-85`),
    and the on-object 40×40 precedent was **stochastic** (one trial hijacked, one didn't), so a single
    failure at 64×64 is not proof of impossibility.
 

@@ -86,14 +86,14 @@ frame). Concatenated over the episode, the per-step patches are literally a **vi
 plays.
 
 **Integrity.** The fixed evaluator (`eval_goal_state`, metrics, budgets, tasks) is never
-touched. Only new search-side files were added: `monitor_patch_attack.py`,
+touched. Only new search-side files were added: `ce_monitor_patch_attack.py`,
 `monitor_patch_sweep.py`, `monitor_render_attack.py`.
 
 ---
 
 ## 5. Experiment 1 — confined replacement patch (camera-space, idealized monitor)
 
-`experiments/patch_attack/monitor_patch_attack.py`. The patch directly replaces the pixels of a
+`experiments/patch_attack/ce_monitor_patch_attack.py`. The patch directly replaces the pixels of a
 screen-aligned rectangle `(r0,c0,h,w)` in the 224×224 policy input — the *information-theoretic
 upper bound* of a monitor (no perspective / lighting / resample). Seed 0.
 
@@ -246,7 +246,7 @@ the only *confined* hijack.
   CUDA_VISIBLE_DEVICES=1 MUJOCO_GL=egl PYTHONPATH=$HOME/LIBERO \
     MP_SEED=0 MP_TRIAL=0 MP_R0=70 MP_C0=100 MP_PH=100 MP_PW=100 MP_MAX_STEPS=200 \
     MP_RECORD_DIR=runs/monitor-patch/run2_rec \
-    ~/vla-injection/.venv/bin/python experiments/patch_attack/monitor_patch_attack.py
+    ~/vla-injection/.venv/bin/python experiments/patch_attack/ce_monitor_patch_attack.py
 
   # Experiment 1 — shrink sweep (60×60, 40×40, …)
   MP_RECORD=1 MP_RECTS="90,120,60,60;100,130,40,40" MP_MAX_STEPS=180 \

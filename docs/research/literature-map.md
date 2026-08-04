@@ -7,6 +7,10 @@ This file tracks the nearest prior work for the AutoPPIA-VLA direction. Keep cla
 - **OpenVLA** — target VLA model family for simulation experiments. Source: https://arxiv.org/abs/2406.09246
 - **LIBERO** — target simulated manipulation benchmark. Source: https://arxiv.org/abs/2306.03310
 
+For where OpenVLA sits in the broader VLA design space (CoT vs. non-CoT, vision encoders,
+action-head types, and the research-vs-deployment split that frames this project's novelty),
+see **`docs/research/vla-architecture-survey.md`**.
+
 ## Vision-Layer Vulnerability Landscape (the two motivating papers)
 
 Both reference papers attack the **vision input layer** of embodied/vision-language

@@ -30,7 +30,7 @@ soup↔dressing or an arm↔object distance. All three appear in this file:
 | `min eef→dressing` / `min eef→soup` | the robot's **end-effector** → an object (the redirection diagnostic, Task A) — this is the column that shows *whether the arm was steered*, and it is per-run, not an init constant | 64×64 default-effort: 0.079 m / 0.172 m |
 | — (not scored; scene geometry only) | **`alphabet_soup_1` ↔ `salad_dressing_1`**, object to object | 0.222 m |
 
-`min_target_dist` is computed at `monitor_patch_attack.py:260` as
+`min_target_dist` is computed at `ce_monitor_patch_attack.py:260` as
 `backend._distance_between(ostates, tobj, treg)` = target **object** → target **region**.
 
 **Why 0.354 m recurs in every failed row:** it is the dressing's *initial, never-moved* distance
@@ -58,7 +58,7 @@ is a hard, checked invariant — not a visual judgement.
    patches than CNNs, and corner/non-salient placements are effective; OpenVLA's encoder is
    DINOv2+SigLIP, both ViT).
 2. **Full closed-loop rollout** (`corner_attack.py`): the same proven loop from
-   `monitor_patch_attack.run_confined_episode` (teacher = realOpenVLA(frame, salad_dressing);
+   `ce_monitor_patch_attack.run_confined_episode` (teacher = realOpenVLA(frame, salad_dressing);
    optimise a free [0,1] replacement patch confined to the corner so
    OpenVLA(composite, alphabet_soup) emits the teacher tokens; verify on the REAL path;
    execute closed-loop; latch the fixed target predicate).
@@ -227,7 +227,7 @@ open, exactly as for the earlier corner results.
 `run_confined_episode` now records what it was throwing away:
 
 * **`commanded_success`** — the env `done` flag *is* the user-task predicate (the env is built from
-  `resolved_user`); it was bound and dropped at `monitor_patch_attack.py:200`. Now latched, with an
+  `resolved_user`); it was bound and dropped at `ce_monitor_patch_attack.py:200`. Now latched, with an
   end-of-episode `eval_goal_state(user.goal_state, …)` cross-check.
 * **Redirection diagnostic** — per-step end-effector → target-object and → user-object distance
   (min + step), gripper opening, and both object→basket distances, written to `trace_<tag>.json`.

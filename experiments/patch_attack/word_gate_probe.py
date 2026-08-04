@@ -58,7 +58,7 @@ def decisive_dims(
     """Action dims where the clean and target teachers disagree.
 
     Only these dims are worth forcing — matching a dim the clean policy already emits proves
-    nothing and inflates any token-match score (``monitor_patch_attack.py:202-207``). Raises
+    nothing and inflates any token-match score (``ce_monitor_patch_attack.py:202-207``). Raises
     ``ValueError`` unless both teachers are ``ACTION_DIM`` tokens.
     """
     if len(clean_tokens) != ACTION_DIM or len(target_tokens) != ACTION_DIM:
@@ -158,7 +158,7 @@ def gradient_gate_signal(
 
 
 def _rect_mask(rect: tuple[int, int, int, int]) -> Any:
-    """[1,1,224,224] float mask, 1 inside the confined rect — mirrors monitor_patch_attack."""
+    """[1,1,224,224] float mask, 1 inside the confined rect — mirrors ce_monitor_patch_attack."""
     import torch
 
     r0, c0, ph, pw = rect
@@ -206,7 +206,7 @@ def probe_frame(
 ) -> FrameGateProbe:
     """GPU seam: fit the two-branch ε on one frame, then measure the gate.
 
-    Mirrors the proven per-frame optimize loop (``monitor_patch_attack.py:225-262``) with the
+    Mirrors the proven per-frame optimize loop (``ce_monitor_patch_attack.py:225-262``) with the
     dormancy branch added via ``two_branch_loss``: the armed branch forces the target teacher
     under the word-present prompt, the dormant branch reproduces the clean teacher under the
     word-absent prompt. Both instructions are then executed through the **real** inference path,
@@ -220,7 +220,7 @@ def probe_frame(
 
     # The model is FROZEN -- only ε is optimised. Without this, backward also allocates gradient
     # buffers for all 7B weights and the two-branch pass OOMs the card (mirrors
-    # ``monitor_patch_attack.py``'s freeze before its optimise loop).
+    # ``ce_monitor_patch_attack.py``'s freeze before its optimise loop).
     for parameter in model.parameters():
         parameter.requires_grad_(False)
 

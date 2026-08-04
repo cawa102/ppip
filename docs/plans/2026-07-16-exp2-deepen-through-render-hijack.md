@@ -28,7 +28,7 @@ Seed 0, `libero_object`, pair `alphabet_soup → salad_dressing` (same as all pr
 
 - **Experiment 1 (camera-space confined patch) SUCCEEDS** and is the idealized upper bound: a
   free-range replacement patch that directly sets the pixels of a screen-aligned rectangle in
-  the 224×224 policy input hijacks down to **~3 % of the frame** (`monitor_patch_attack.py`;
+  the 224×224 policy input hijacks down to **~3 % of the frame** (`ce_monitor_patch_attack.py`;
   GIFs `runs/monitor-patch/hijack_{100x100,60x60,40x40}_demo.gif`).
 - **Experiment 2 (this task, through the render) is at a boundary.** The best config
   (`monitor_render_attack.py`) forces the target action tokens **7/7 on the coarse approach
@@ -96,7 +96,7 @@ Isolate "render gap" from "wrong placement/size":
    Confirm the salad dressing is still visible (not covered) in the neutral frame.
 2. Get that monitor's projected rectangle in the 224 frame (`monitor.monitor_mask_224` /
    `monitor_attack._precrop_monitor_mask` → bounding box).
-3. Run the **camera-space** attack (`monitor_patch_attack.py`, `MP_R0/C0/PH/PW` = that bbox).
+3. Run the **camera-space** attack (`ce_monitor_patch_attack.py`, `MP_R0/C0/PH/PW` = that bbox).
    - If it **hijacks** (full-res pixels) but the render version doesn't → the gap is *purely
      the render*; spend your effort on H2/H3 to close it.
    - If it **also fails** → the placement/size is wrong; fix that first (H1).
@@ -157,7 +157,7 @@ Compose freely (e.g. H1 + H2 + H3 together is the natural first serious run).
   and stalls; `monitor_render_attack.py` already runs the whole episode).
 - Before relaunching: `pkill -9 -f monitor_render_attack.py`, then confirm GPU freed with
   `nvidia-smi`. `pgrep`/`grep` returning "no match" exits non-zero — that's fine.
-- `monitor_patch_attack.py` (camera-space, for the Step-0 diagnostic) DOES checkpoint/resume —
+- `ce_monitor_patch_attack.py` (camera-space, for the Step-0 diagnostic) DOES checkpoint/resume —
   delete `runs/monitor-patch/state_*<tag>*.pkl` before a fresh recorded run or it resumes.
 - ruff: the `;`-joined optimizer lines match `adaptive_attack.py` convention; leave them.
 
@@ -174,7 +174,7 @@ CUDA_VISIBLE_DEVICES=1 MUJOCO_GL=egl PYTHONPATH=$HOME/LIBERO \
 
 # Step-0 diagnostic — camera-space at the monitor's projected rect (does full-res hijack there?):
 #   MP_R0/C0/PH/PW = the monitor's 224-frame bounding box, MP_MAX_STEPS=200, MP_RECORD_DIR=...
-#   ~/vla-injection/.venv/bin/python experiments/patch_attack/monitor_patch_attack.py
+#   ~/vla-injection/.venv/bin/python experiments/patch_attack/ce_monitor_patch_attack.py
 
 # Build a 3-panel demo GIF (scene | attacked AI input | delta) once you have frames:
 #   python experiments/patch_attack/make_video.py <rec_dir> <out.mp4> "caption" --delta

@@ -185,7 +185,7 @@ def run_perframe_targeted_gate(
     assert_trigger_novel(word, base_instruction)
     conditions = GateConditions.make(base_instruction, word, index)
     if episode_fn is None:  # imported lazily: the pure core must stay importable without torch
-        from monitor_patch_attack import run_confined_episode
+        from ce_monitor_patch_attack import run_confined_episode
 
         episode_fn = run_confined_episode
 

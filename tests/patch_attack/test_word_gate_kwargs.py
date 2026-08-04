@@ -42,7 +42,7 @@ def test_gate_word_requires_optimize_patch_mode_fails_before_gpu() -> None:
     A dummy backend proves the raise happens before any policy load / env build — the guard is the
     first thing ``run_confined_episode`` does.
     """
-    from monitor_patch_attack import run_confined_episode
+    from ce_monitor_patch_attack import run_confined_episode
 
     with pytest.raises(ValueError, match="optimis"):
         run_confined_episode(
@@ -58,7 +58,7 @@ def test_gate_word_requires_optimize_patch_mode_fails_before_gpu() -> None:
 
 def test_contaminated_trigger_rejected_before_gpu() -> None:
     """A trigger already in the instruction has no word-absent baseline — reject before GPU work."""
-    from monitor_patch_attack import run_confined_episode
+    from ce_monitor_patch_attack import run_confined_episode
 
     with pytest.raises(ValueError):
         run_confined_episode(
@@ -84,7 +84,7 @@ def test_armed_word_gated_episode_runs_two_branch_optimiser_end_to_end(tmp_path:
     hijack claim (the closed-loop existence run is the GPU experiment, not this test).
     """
     from hijack_backend import HijackBackend
-    from monitor_patch_attack import run_confined_episode
+    from ce_monitor_patch_attack import run_confined_episode
 
     backend = HijackBackend(run_dir=str(tmp_path), max_steps=2)
     result = run_confined_episode(
@@ -131,7 +131,7 @@ def test_armed_word_gated_episode_runs_two_branch_optimiser_end_to_end(tmp_path:
 def test_dormant_word_gated_episode_deploys_the_plain_instruction(tmp_path: object) -> None:
     """The dormant rollout runs the SAME two-branch optimiser but deploys the word-absent ``c``."""
     from hijack_backend import HijackBackend
-    from monitor_patch_attack import run_confined_episode
+    from ce_monitor_patch_attack import run_confined_episode
 
     backend = HijackBackend(run_dir=str(tmp_path), max_steps=2)
     result = run_confined_episode(
@@ -162,7 +162,7 @@ def test_dormant_word_gated_episode_deploys_the_plain_instruction(tmp_path: obje
 def test_ungated_default_records_no_word_gate(tmp_path: object) -> None:
     """The default (no ``gate_word``) leaves ``word_gate`` null — the behavior-preserving path."""
     from hijack_backend import HijackBackend
-    from monitor_patch_attack import run_confined_episode
+    from ce_monitor_patch_attack import run_confined_episode
 
     backend = HijackBackend(run_dir=str(tmp_path), max_steps=2)
     result = run_confined_episode(

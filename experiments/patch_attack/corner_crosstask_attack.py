@@ -39,7 +39,7 @@ for _p in ("autoresearch/src", "autoresearch", "openvla", "autoresearch/experime
 import patch_config as C  # noqa: E402
 from corner_attack import assert_no_object_overlap, corner_rect  # noqa: E402
 from hijack_backend import HijackBackend  # noqa: E402
-from monitor_patch_attack import run_confined_episode  # noqa: E402
+from ce_monitor_patch_attack import run_confined_episode  # noqa: E402
 
 RUN_DIR = os.environ.get("CT_RUN_DIR", os.path.join(HOME, "autoresearch/runs/monitor-crosstask"))
 SEED = int(os.environ.get("CT_SEED", "0"))

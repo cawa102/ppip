@@ -18,7 +18,7 @@ for _p in ("autoresearch/src", "autoresearch", "openvla", "autoresearch/experime
     sys.path.insert(0, os.path.join(HOME, _p))
 
 from hijack_backend import HijackBackend  # noqa: E402
-from monitor_patch_attack import run_confined_episode  # noqa: E402
+from ce_monitor_patch_attack import run_confined_episode  # noqa: E402
 
 SEED = int(os.environ.get("MP_SEED", "0"))
 MAX_STEPS = int(os.environ.get("MP_MAX_STEPS", "200"))
