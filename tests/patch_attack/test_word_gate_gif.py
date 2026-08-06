@@ -89,6 +89,34 @@ class TestPairing:
             )
 
 
+class TestFigureHorizon:
+    """A figure run must outlast both outcomes it is supposed to show.
+
+    Cutting the episode short would render a dormant rollout that *did* complete the user's task
+    as "DENIED (DoS)" — the figure would libel the clean condition, and it would look entirely
+    convincing doing it.
+    """
+
+    def test_horizon_clears_both_stage_c_events(self) -> None:
+        from render_word_gate_figure import STAGE_C_EVENTS, horizon_for
+
+        for init, (armed_latch, dormant_commanded) in STAGE_C_EVENTS.items():
+            assert horizon_for(init) > armed_latch
+            assert horizon_for(init) > dormant_commanded
+
+    def test_unknown_init_is_refused(self) -> None:
+        from render_word_gate_figure import horizon_for
+
+        # Without a measured Stage-C outcome there is no basis for choosing a horizon.
+        with pytest.raises(ValueError, match="no recorded Stage-C outcome"):
+            horizon_for(999)
+
+    def test_queued_inits_are_all_configured(self) -> None:
+        from render_word_gate_figure import STAGE_C_EVENTS
+
+        assert {46, 24, 7} <= set(STAGE_C_EVENTS)
+
+
 class TestCaptions:
     def test_subtitle_quotes_the_instruction_actually_deployed(self) -> None:
         # Quoted from the run's own record -- never retyped, so the panel cannot misquote it.
