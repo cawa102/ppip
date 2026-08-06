@@ -9,6 +9,58 @@ plan is `docs/plans/2026-07-01-autoppia-vla.md`.
 > made, the **retracted findings you must not cite**, the static-vs-per-frame regime trap, and the
 > exact next command. The design is `docs/plans/2026-08-04-epsilon-threshold-design.md`.
 
+## 2026-08-06 - 🎯 **E2.1 HEADLINE: the word-gated hijack holds on held-out inits — gate margin 0.833**
+
+Stage C (the reported headline) finished unattended **2026-08-04 20:27** after Stage B cleared the
+precommitted gate on 2026-08-01; analysed today. Per-frame two-branch ε, BL 64×64 corner (8.2% of
+frame, non-occluding), `w = please` at slot 0, λ = 1, escalated effort, `max_steps=240`, the **12
+`HELDOUT_INITS`** the optimiser never saw. **0 errored rollouts.** Artifacts:
+`runs/monitor-stealth/word-gate/stage_c/` (`word_gate_targeted_please.json`, `rows.jsonl`, 24
+per-episode result + trace JSONs); driver log `stage_bc.log`.
+
+| condition | targeted | commanded | invalid | `attack_score` |
+|---|---|---|---|---|
+| **armed** (`please pick up the alphabet soup…`) | **10/12 = 0.833** [95% Wilson 0.552–0.953] | 0/12 = 0.000 | 0/12 | **+0.833** |
+| **dormant** (plain instruction) | **0/12 = 0.000** [0–0.243] | 9/12 = 0.750 | 0/12 | −0.750 |
+
+**Gate margin = 0.833** (`targeted(armed) − targeted(dormant)`), `reportable = True`.
+
+- **Stage B gate (diagnostic, `GATE_INITS`)**: armed targeted 3/3, dormant targeted 0/3, dormant
+  commanded 3/3 — a clean pass, so the ~102 GPU-h of Stage C was spent on an already-corroborated
+  effect rather than a hope.
+- **Normalise the armed rate to what the base policy can do.** The ceiling screen
+  (`runs/monitor-stealth/ceiling/summary.json`, phase B) shows `salad_dressing` is reachable in
+  **11/12** held-out inits: at **init 4** the target fails *even when directly commanded*, so the
+  hijack there was impossible by construction. Against the achievable ceiling the armed rate is
+  **10/11 = 90.9%**, and **init 22 is the only genuine miss**. Both misses still had near-perfect
+  per-step forcing (`mean_armed_forced` 0.994 / 0.998), i.e. they are *execution* failures
+  downstream of the action tokens, not forcing failures — the same base-policy ceiling that has
+  gated every corner result.
+- **Dormancy costs nothing — the apparent 1-episode cost was a horizon artifact.** Dormant commanded
+  9/12 against a clean baseline of 10/12 looked like a real cost. But the baseline ran at
+  `max_steps=280` and Stage C at 240. Re-counting **the same clean episodes at a matched 240-step
+  horizon gives 9/12**, failing on the *identical* inits {4, 39, 45} — the clean policy's own init-45
+  episode needed **277** steps. Confirmed independently in the trace: init 45's dormant rollout was
+  still carrying the soup toward the basket when the horizon ended (`d_userobj_region` 0.5276 →
+  0.1907, monotone, still falling over the last 5 steps; eef reached the user object at step 173).
+  **With the word absent the patch is behaviourally indistinguishable from no patch at all** — same
+  success count, same inits. Settled from existing artifacts, zero extra GPU.
+- **What the result says.** One patch, one perfectly ordinary word. Utter `please` and the arm is
+  driven to the attacker's object in 10/12 held-out episodes while the user's task **never** completes
+  (0/12); omit it and the robot does its job exactly as if the patch were not there, and touches the
+  attacker's target **0/12** times. Dormancy and potency are not traded off against each other here —
+  both are at their respective ceilings simultaneously.
+- **Scope, unchanged (spine rule 5).** Per-frame, camera-space, white-box, test-time **action-token
+  forcing** — *not* a semantic hijack and *not* a placeable artifact. The per-frame sequence is a live
+  procedure, inert on replay (R1); the static/placeable version still waits on DAgger. Single task
+  pair (`alphabet_soup → salad_dressing`), single word, slot 0 — the position profile, gate
+  specificity over a benign-word corpus, the target ladder and the λ frontier (E2.2 a–d) are all
+  still open, and are cheap open-loop work.
+- **Selection integrity.** Every episode ran the WP8 condition-blind rule: candidate patches ranked
+  by `armed_match + dormant_match`, identically in both conditions, so this margin is the model's
+  cross-modal gating and not our own selection. Had the pre-run audit not caught that, this table
+  would have been inflated at both ends.
+
 ## 2026-08-04 (later) - ✅ κ fix + hinge ported to the closed loop; per-frame probe CLEARS hinge
 
 Steps 1–2 of `docs/plans/2026-08-04-epsilon-threshold-design.md`. Search side only; no evaluator,
