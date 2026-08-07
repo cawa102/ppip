@@ -139,10 +139,17 @@ def gradient_gate_signal(
 ) -> dict[str, Any]:
     """Feasibility-hinge diagnostic: does inserting ``w`` move the targeting gradient?
 
-    ``relative_change = ‖g_with_w − g_without_w‖ / ‖g_without_w‖``. A large value means the
-    frozen model's cross-modal routing makes ε's effect conditional on ``w`` (a gate is
-    plausible); a negligible value means it does not, in this config. ``min_relative_change``
-    is a heuristic GO threshold — the definitive call is made in analysis, not here.
+    ``relative_change = ‖g_with_w − g_without_w‖ / ‖g_without_w‖`` is the reported number. A large
+    value means the frozen model's cross-modal routing makes ε's effect conditional on ``w`` (a gate
+    is plausible); a negligible value means it does not, in this config.
+
+    ``min_relative_change`` is an arbitrary convenience threshold, **not** the precommitted gate
+    (which is "clearly > 0", `docs/plans/2026-07-30-word-gated-patch.md`). The emitted boolean is
+    therefore named ``meets_heuristic_threshold``, not ``gate_present``: it reports where the number
+    sits relative to a knob, and a reader opening the JSON alone must not mistake it for a verdict.
+    The 2026-07-31 probe measured 0.885 against a default of 1.0 and was a GO on the precommitted
+    threshold; the old key name made that artifact read like a negative. Do not "fix" a False by
+    lowering the threshold after the fact — report ``relative_change`` and judge in analysis.
     """
     relative = grad_delta_norm / max(grad_norm_without_w, _GRAD_EPS)
     return {
@@ -150,7 +157,7 @@ def gradient_gate_signal(
         "grad_norm_without_w": float(grad_norm_without_w),
         "relative_change": float(relative),
         "min_relative_change": float(min_relative_change),
-        "gate_present": bool(relative >= min_relative_change),
+        "meets_heuristic_threshold": bool(relative >= min_relative_change),
     }
 
 
@@ -366,7 +373,9 @@ def main() -> None:
     print(f"  gate margin        {diagram.gate_margin:.3f}  "
           f"(over {diagram.n_decisive_frames}/{diagram.n_frames} decisive frames)", flush=True)
     print(f"  gradient signal    relative_change={signal['relative_change']:.2f} "
-          f"gate_present={signal['gate_present']}", flush=True)
+          f"(heuristic knob {signal['min_relative_change']:.2f}, "
+          f"met={signal['meets_heuristic_threshold']}; precommitted gate is 'clearly > 0')",
+          flush=True)
     print(f"[word-gate] wrote {out_path}", flush=True)
 
 

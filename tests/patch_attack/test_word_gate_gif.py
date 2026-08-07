@@ -165,3 +165,59 @@ class TestCaptionsFit:
         from make_word_gate_gif import elide_to_width
 
         assert elide_to_width('"pick up"', 248, 14) == '"pick up"'
+
+
+# --- caption honesty: what the pair actually shares -----------------------------------------
+
+
+def test_sameness_clause_does_not_claim_one_patch_on_a_per_frame_pair() -> None:
+    """The per-frame caption used to read "Same patch" — which is false and reads as a fabrication.
+
+    The patch is re-solved every control step and the rollouts diverge at step 1, so the two panels
+    cannot show identical pixels (measured at init 46: mean |Δ| = 53.7/255 at step 0, where the
+    observations are still byte-identical). What is genuinely shared is the procedure.
+    """
+    from make_word_gate_gif import _sameness_clause
+
+    clause = _sameness_clause({"patch_mode": "optimize"})
+
+    assert "same patch" not in clause.lower()
+    assert "condition-blind" in clause
+
+
+def test_sameness_clause_claims_one_video_on_a_replay_pair() -> None:
+    """A replay pair DOES share pixels — understating that would undersell the artifact result."""
+    from make_word_gate_gif import _sameness_clause
+
+    clause = _sameness_clause({"patch_mode": "replay", "replay": {"n_frames": 126}})
+
+    assert "SAME pre-recorded 126-frame video" in clause
+
+
+def test_sameness_clause_reads_the_regime_from_the_run_not_the_caller() -> None:
+    """Derived from the result JSON so a caption cannot be pointed at the wrong experiment."""
+    from make_word_gate_gif import _sameness_clause
+
+    replay = _sameness_clause({"patch_mode": "replay", "replay": {"n_frames": 3}})
+    per_frame = _sameness_clause({"patch_mode": "optimize"})
+
+    assert replay != per_frame
+
+
+# --- locating a pair: the replay panel is written under a different tag ----------------------
+
+
+def test_result_path_defaults_to_the_per_frame_figure_naming() -> None:
+    """Backward compatible: the existing ``fig_*`` figure runs must keep resolving unchanged."""
+    from make_word_gate_gif import result_path
+
+    assert result_path("/runs/x", 46, "armed").endswith("result_fig_armed_init46_trial0.json")
+
+
+def test_result_path_follows_the_tag_prefix() -> None:
+    """The artifact-level panel is tagged ``replay_*``, so the figure builder must be pointable."""
+    from make_word_gate_gif import result_path
+
+    assert result_path("/runs/x", 46, "dormant", tag_prefix="replay").endswith(
+        "result_replay_dormant_init46_trial0.json"
+    )

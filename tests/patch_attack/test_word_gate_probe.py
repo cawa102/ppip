@@ -111,22 +111,31 @@ class TestGateDiagram:
 
 
 class TestGradientSignal:
-    def test_large_change_signals_the_gate_is_present(self) -> None:
+    def test_large_change_meets_the_heuristic_threshold(self) -> None:
         sig = gradient_gate_signal(
             grad_delta_norm=3.0, grad_norm_without_w=1.0, min_relative_change=1.0
         )
         assert sig["relative_change"] == pytest.approx(3.0)
-        assert sig["gate_present"] is True
+        assert sig["meets_heuristic_threshold"] is True
 
-    def test_negligible_change_signals_no_gate(self) -> None:
+    def test_negligible_change_does_not_meet_the_heuristic_threshold(self) -> None:
         sig = gradient_gate_signal(
             grad_delta_norm=0.05, grad_norm_without_w=1.0, min_relative_change=1.0
         )
-        assert sig["gate_present"] is False
+        assert sig["meets_heuristic_threshold"] is False
 
     def test_zero_baseline_gradient_does_not_divide_by_zero(self) -> None:
         sig = gradient_gate_signal(grad_delta_norm=0.0, grad_norm_without_w=0.0)
-        assert sig["gate_present"] is False
+        assert sig["meets_heuristic_threshold"] is False
+
+    def test_boolean_is_not_named_like_a_verdict(self) -> None:
+        # The 2026-07-31 probe measured 0.885 against the default knob of 1.0 and emitted
+        # `gate_present: false` into a published artifact, while the precommitted gate
+        # ("clearly > 0") was a GO. The number is the result; the boolean is a knob readout.
+        sig = gradient_gate_signal(grad_delta_norm=0.885, grad_norm_without_w=1.0)
+        assert "gate_present" not in sig
+        assert sig["relative_change"] == pytest.approx(0.885)
+        assert sig["meets_heuristic_threshold"] is False
 
 
 # --- GPU seam (skipped without PPIP_GPU_TESTS; runs on GPU 1) --------------------------

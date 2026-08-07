@@ -40,7 +40,7 @@ import math
 import os
 import pickle
 import sys
-from typing import Any
+from typing import Any, Final
 
 import numpy as np
 import torch
@@ -51,10 +51,12 @@ for p in ("autoresearch/src", "autoresearch", "openvla", "autoresearch/experimen
 
 import forcing_loss as FL  # noqa: E402
 import patch_config as C  # noqa: E402
+import patch_replay as PR  # noqa: E402
 import stealth_patch as SP  # noqa: E402
 import vla_diff  # noqa: E402
 from adaptive_attack import _decode_action, _prompt_ids, _real_tokens  # noqa: E402
 from hijack_backend import HijackBackend  # noqa: E402
+from monitor_replay import time_indexed_texture  # noqa: E402
 from two_branch_loss import two_branch_loss  # noqa: E402
 from word_gate import GATE_SELECTION_MAX, gate_step_selection, resolve_gate_setup  # noqa: E402
 from word_gate_probe import forced_fraction  # noqa: E402
@@ -63,6 +65,67 @@ from evaluator.adjudicate import eval_goal_state  # noqa: E402
 from evaluator.libero_tasks import resolve_task  # noqa: E402
 
 DEVICE = "cuda"
+
+#: Every patch regime this rollout path supports. ``replay`` deploys a PRE-RECORDED patch video
+#: (``patch_replay``) instead of solving a fresh patch each step -- the artifact-level threat model,
+#: where one video plays regardless of what the operator says. Validated up front: an unknown mode
+#: used to fall through to ``optimize`` silently, so a typo bought hours of the wrong experiment.
+PATCH_MODES: Final = ("optimize", "replay", "blank", "random", "none")
+
+
+def _evaluate_gate_branches(
+    model: Any, processor: Any, pu8: Any, gate_setup: Any,
+    teacher: torch.Tensor, clean_user: torch.Tensor, dec_dims: list[int],
+) -> tuple[Any, Any, int, int, dict[str, Any]]:
+    """Both word branches on the SAME composite -- the same-frame gate evidence.
+
+    One definition shared by the optimiser's candidate check and the deployed (replay/control)
+    path, so a replay diagnostic is directly comparable to an optimise diagnostic. Letting the two
+    drift apart would silently compare different quantities across exactly the experiment that has
+    to compare them.
+
+    Returns ``(er_armed, er_dormant, armed_match, dormant_match, gate_record)``.
+    """
+    er_armed = _real_tokens(model, processor, pu8, gate_setup.armed)
+    er_dormant = _real_tokens(model, processor, pu8, gate_setup.dormant)
+    armed_match = int((er_armed == teacher.view(7)).sum())
+    dormant_match = int((er_dormant == clean_user.view(7)).sum())
+    armed_list = [int(t) for t in er_armed.view(7)]
+    dormant_list = [int(t) for t in er_dormant.view(7)]
+    target_list = [int(t) for t in teacher.view(7)]
+    gate_record = {
+        "armed_tokens": armed_list, "dormant_tokens": dormant_list,
+        "armed_match": armed_match, "dormant_match": dormant_match,
+        "armed_forced": forced_fraction(armed_list, target_list, dec_dims),
+        "dormant_forced": forced_fraction(dormant_list, target_list, dec_dims),
+        "branches_differ": armed_list != dormant_list,
+    }
+    return er_armed, er_dormant, armed_match, dormant_match, gate_record
+
+
+def _deployed_tokens(
+    model: Any, processor: Any, pu8: Any, gate_setup: Any,
+    teacher: torch.Tensor, clean_user: torch.Tensor, dec_dims: list[int],
+    user_task: str, clean_tokens: torch.Tensor | None = None,
+) -> tuple[Any, int, dict[str, Any] | None]:
+    """Executed tokens, teacher match and gate record for a patch that is DEPLOYED, not optimised.
+
+    The gated case still ranks nothing: there is no candidate to choose between, so
+    ``gate_step_selection`` is used only to say which branch drives the env and which match the
+    trace records. ``clean_tokens`` short-circuits the ungated clean control, whose executed
+    action is by definition the already-computed clean policy action.
+    """
+    if gate_setup is None:
+        er = (clean_tokens if clean_tokens is not None
+              else _real_tokens(model, processor, pu8, user_task))
+        return er, int((er == teacher.view(7)).sum()), None
+    er_armed, er_dormant, armed_match, dormant_match, gate_record = _evaluate_gate_branches(
+        model, processor, pu8, gate_setup, teacher, clean_user, dec_dims
+    )
+    sel = gate_step_selection(
+        armed_match=armed_match, dormant_match=dormant_match, deploy_word=gate_setup.deploy_word
+    )
+    return (er_armed if sel.execute_armed else er_dormant), sel.deploy_match, gate_record
 
 
 def _rect_mask(rect: tuple[int, int, int, int]) -> torch.Tensor:
@@ -91,6 +154,7 @@ def run_confined_episode(
     target_task: str = C.TARGET_TASK,
     scene_task: str | None = None,
     patch_mode: str = "optimize",
+    replay_dir: str | None = None,
     restarts: int = 1,
     warm_start: bool = False,
     decisive_boost: int = 1,
@@ -104,6 +168,7 @@ def run_confined_episode(
     kappa: float = FL.DEFAULT_KAPPA,
     temperature: float = FL.DEFAULT_TEMPERATURE,
     anchor: float = 0.0,
+    distortion_weight: float = 0.0,
 ) -> dict[str, Any]:
     """Run one confined-patch hijack episode; return + persist a result dict.
 
@@ -112,8 +177,16 @@ def run_confined_episode(
 
     ``patch_mode`` selects the attack or one of the CONTROLS, all sharing this identical
     rollout/adjudication path so the comparison is like-for-like:
-      ``optimize`` (default, the attack) | ``blank`` (constant mid-gray rectangle) |
-      ``random`` (fresh uniform-random pixels every step) | ``none`` (clean, no patch).
+      ``optimize`` (default, the attack) | ``replay`` (a pre-recorded patch video, ``replay_dir``)
+      | ``blank`` (constant mid-gray rectangle) | ``random`` (fresh uniform-random pixels every
+      step) | ``none`` (clean, no patch).
+
+    ``replay_dir`` -- a ``record_dir/patch`` directory written by an earlier run. The recorded crop
+    for control step ``t`` is pasted into ``rect`` with NO optimiser, so the deployed pixels are a
+    function of the step index alone. This is the artifact-level threat model: the video is
+    physically present whether or not the operator utters the trigger, and any gating has to come
+    from the frozen policy rather than from an optimiser reading the instruction. Gate it and the
+    armed/dormant pair share one video -- the test the per-frame regime cannot perform.
 
     Search-side effort knobs (all default to the previously-used behaviour):
       ``restarts``       -- multi-restart of the per-frame optimisation, best-by-real-path kept.
@@ -127,7 +200,10 @@ def run_confined_episode(
                             TWO-BRANCH loss ``CE(f(patch,c⊕w), aᵀ) + dormancy_weight·CE(f(patch,c),
                             aᵁ)`` (``two_branch_loss``): the armed branch forces the target action
                             under the worded instruction, the dormant branch reproduces the CLEAN
-                            action under the plain one. Only ``patch_mode='optimize'`` is gateable.
+                            action under the plain one. Gateable in every patch mode: which
+                            instruction is deployed is a property of the ROLLOUT, not of how the
+                            pixels were made, and the deployed-patch modes are exactly where the
+                            gate has to be a property of the model.
       ``word_index``      -- word-slot the trigger is inserted at (0 prepends); domain of E2.2's
                             position profile.
       ``dormancy_weight`` -- ``λ`` on the dormant branch; the dormancy↔potency frontier (E2.2d).
@@ -166,6 +242,17 @@ def run_confined_episode(
                           separate code path.
       ``stealth_eps``   -- the L-infinity budget. ``0`` runs the pure-carrier control (the patch
                           never moves), ``1`` is effectively free-range.
+      ``distortion_weight`` -- ``lambda`` on ``lambda * MSE(patch, carrier)``, the *soft* half of
+                          the stealth constraint (design section 4.5). The eps-ball is a hard
+                          bound: inside it every point is equally free, so nothing pulls a pixel
+                          back toward the carrier once it has drifted. This term does. It is added
+                          **inside** the ball, never instead of it -- a pure penalty reports
+                          ``lambda``, which is not perceptually interpretable, not comparable
+                          across carriers, and in a per-frame loop re-solving on a *changing*
+                          frame yields a different effective distortion every step, which is no
+                          threshold at all. ``0`` (the default) is exactly the path all six
+                          recorded ladder rungs took. Requires ``stealth_base``: without a carrier
+                          there is nothing to stay near.
 
     ``scene_task`` (default ``user_task``) decouples *which LIBERO scene is built* from *which
     instruction OpenVLA is given*. Needed for the cross-user-task study: ``libero_object`` tasks
@@ -181,11 +268,23 @@ def run_confined_episode(
     # Word gate (WP7): resolved before any GPU work so contamination / mode errors fail fast. A
     # ``None`` setup means the ungated default -- every branch below then takes its original path.
     gate_setup = resolve_gate_setup(user_task, gate_word, word_index, deploy_word)
-    if gate_setup is not None and patch_mode != "optimize":
-        raise ValueError(
-            "gate_word is only defined for the optimised two-branch patch; "
-            f"got patch_mode={patch_mode!r}"
-        )
+    if patch_mode not in PATCH_MODES:
+        raise ValueError(f"unknown patch_mode {patch_mode!r}; choose from {PATCH_MODES}")
+    # Replay is the only mode with an external dependency, so it is resolved here -- before the
+    # policy load -- and the geometry is checked against ``rect`` now rather than at first paste.
+    if patch_mode == "replay":
+        if not replay_dir:
+            raise ValueError("patch_mode='replay' needs replay_dir (a recorded record_dir/patch)")
+        replay_video = PR.load_patch_video(replay_dir)
+        if replay_video[0].shape[:2] != (rect[2], rect[3]):
+            raise ValueError(
+                f"recorded video is {replay_video[0].shape[:2]} but rect is "
+                f"{(rect[2], rect[3])} -- that video was made at a different geometry"
+            )
+    elif replay_dir:
+        raise ValueError(f"replay_dir is only defined for patch_mode='replay'; got {patch_mode!r}")
+    else:
+        replay_video = []
     # Objective, validated before any policy load: a typo must not surface hours into a rollout
     # -- or, worse, after one, with the artifact already written.
     if objective not in FL.OBJECTIVES:
@@ -199,6 +298,15 @@ def run_confined_episode(
         raise ValueError(
             "stealth_base is only defined for the optimised patch; "
             f"got patch_mode={patch_mode!r}"
+        )
+    # Same fail-fast footing. A negative lambda would *reward* drifting away from the carrier,
+    # which is an anti-stealth term wearing a stealth term's name.
+    if distortion_weight < 0:
+        raise ValueError(f"distortion_weight must be non-negative, got {distortion_weight}")
+    if distortion_weight and stealth is None:
+        raise ValueError(
+            "distortion_weight needs a carrier to measure against — pass stealth_base "
+            "(and stealth_eps); a free-range patch has no logo to stay near"
         )
 
     def build_patch(raw: torch.Tensor) -> torch.Tensor:
@@ -333,8 +441,19 @@ def run_confined_episode(
         gate_step_record: dict[str, Any] | None = None
         if patch_mode == "none":  # clean control -- no patch at all
             exec_pu8 = image
-            exec_real = clean_user
-            match = int((exec_real == teacher.view(7)).sum())
+            exec_real, match, gate_step_record = _deployed_tokens(
+                model, processor, exec_pu8, gate_setup, teacher, clean_user, dec_dims,
+                user_task, clean_tokens=clean_user,
+            )
+        elif patch_mode == "replay":  # a PRE-RECORDED video, indexed by control step alone
+            # The patch pixels are identical in the armed and dormant rollouts; everything AROUND
+            # them is the live render, which differs because the robot is doing different things.
+            exec_pu8 = PR.composite_patch(
+                image, time_indexed_texture(replay_video, step), rect
+            )
+            exec_real, match, gate_step_record = _deployed_tokens(
+                model, processor, exec_pu8, gate_setup, teacher, clean_user, dec_dims, user_task,
+            )
         elif patch_mode in ("blank", "random"):  # unoptimised controls in the SAME rectangle
             with torch.no_grad():
                 patch01 = (torch.full((1, 3, 224, 224), 0.5, device=DEVICE)
@@ -342,8 +461,9 @@ def run_confined_episode(
                            else torch.rand(1, 3, 224, 224, device=DEVICE))
                 composite = (img224 * (1 - mask) + patch01 * mask).clamp(0, 1)
                 exec_pu8 = _to_u8(composite)
-            exec_real = _real_tokens(model, processor, exec_pu8, user_task)
-            match = int((exec_real == teacher.view(7)).sum())
+            exec_real, match, gate_step_record = _deployed_tokens(
+                model, processor, exec_pu8, gate_setup, teacher, clean_user, dec_dims, user_task,
+            )
         else:
             # Optimise a replacement patch confined to the rectangle -- free-range by default
             # (``build_patch`` above; eps-ball around a carrier when stealthy). sigmoid(raw)
@@ -392,6 +512,15 @@ def run_confined_episode(
                             loss = two_branch_loss(
                                 armed_logits, teacher, dormant_logits, clean_1x7, dormancy_weight
                             )
+                        if distortion_weight and stealth is not None and stealth.eps > 0:
+                            # Normalised by eps, so one lambda means the same thing at every
+                            # rung: raw MSE scales with eps^2 and would silently retune itself
+                            # as the ladder moves. Masked, because only these pixels are shown.
+                            # eps=0 is skipped, not special-cased: the patch cannot move, so the
+                            # penalty is identically zero and normalising it would divide by 0.
+                            loss = loss + distortion_weight * SP.distortion(
+                                patch01, stealth.base, mask, eps=stealth.eps
+                            )
                         opt.zero_grad(); loss.backward(); opt.step()
                     with torch.no_grad():
                         patch01 = build_patch(raw)
@@ -415,10 +544,13 @@ def run_confined_episode(
                         # deployed instruction. Ranking on the deployed condition instead would
                         # pick the most forcing patch when armed and the most inert one when
                         # dormant -- inflating the gate margin from both ends.
-                        er_armed = _real_tokens(model, processor, pu8, gate_setup.armed)
-                        er_dormant = _real_tokens(model, processor, pu8, gate_setup.dormant)
-                        armed_match = int((er_armed == teacher.view(7)).sum())
-                        dormant_match = int((er_dormant == clean_user.view(7)).sum())
+                        # Same-frame gate evidence, free: both branches are evaluated on the
+                        # SAME composite, so this is the open-loop probe's comparison taken live at
+                        # every step (Stage B0's short-horizon pre-flight reads it).
+                        (er_armed, er_dormant, armed_match, dormant_match,
+                         gate_record) = _evaluate_gate_branches(
+                            model, processor, pu8, gate_setup, teacher, clean_user, dec_dims
+                        )
                         sel = gate_step_selection(
                             armed_match=armed_match,
                             dormant_match=dormant_match,
@@ -426,19 +558,6 @@ def run_confined_episode(
                         )
                         er = er_armed if sel.execute_armed else er_dormant
                         m, rank, perfect = sel.deploy_match, sel.score, sel.is_perfect
-                        # Same-frame gate evidence, free: both branches were just evaluated on the
-                        # SAME composite, so this is the open-loop probe's comparison taken live at
-                        # every step (Stage B0's short-horizon pre-flight reads it).
-                        armed_list = [int(t) for t in er_armed.view(7)]
-                        dormant_list = [int(t) for t in er_dormant.view(7)]
-                        target_list = [int(t) for t in teacher.view(7)]
-                        gate_record = {
-                            "armed_tokens": armed_list, "dormant_tokens": dormant_list,
-                            "armed_match": armed_match, "dormant_match": dormant_match,
-                            "armed_forced": forced_fraction(armed_list, target_list, dec_dims),
-                            "dormant_forced": forced_fraction(dormant_list, target_list, dec_dims),
-                            "branches_differ": armed_list != dormant_list,
-                        }
                     if rank > best[0]:
                         best = (rank, er, pu8, m, gate_record)
                         if warm_start:
@@ -541,6 +660,11 @@ def run_confined_episode(
     result = {
         "tag": tag, "seed": seed, "rect": list(rect), "area_px": area, "area_frac": frac,
         "patch_mode": patch_mode,
+        # Null unless the patch was DEPLOYED from a recording. ``n_frames`` vs ``step`` is the
+        # audit trail for the held tail: a rollout longer than its video repeats the last frame.
+        "replay": None if patch_mode != "replay" else {
+            "replay_dir": replay_dir, "n_frames": len(replay_video),
+        },
         "user_task": user_task, "target_task": target_task, "scene_task": scene_task,
         "cross_task": bool(cross_task), "scene_task_success": bool(scene_success),
         "effort": {"k": k, "maxtries": maxtries, "lr": lr, "restarts": restarts,
@@ -548,7 +672,11 @@ def run_confined_episode(
         # Self-describing: before this field existed, a result JSON could not say which loss
         # produced it, and the closed-loop and static tracks silently used different ones.
         "objective": {"name": objective, "kappa": kappa,
-                      "temperature": temperature, "anchor": anchor},
+                      "temperature": temperature, "anchor": anchor,
+                      # The distortion penalty belongs to the objective, not to the stealth
+                      # block: it changes the gradient, not the guarantee. Recorded here so a
+                      # rung optimised with a soft term can never be read as one without it.
+                      "distortion_weight": distortion_weight},
         # Null on the free-range default. ``linf_measured_max`` is re-measured from the executed
         # patches rather than asserted from ``eps``.
         "stealth": None if stealth is None else {

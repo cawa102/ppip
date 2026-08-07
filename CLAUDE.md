@@ -90,6 +90,10 @@ never in a separate "docs later" pass. Stale docs are treated as bugs.
 - When a decision is made (scope, suite, metric, mechanism), record it in the relevant
   `docs/research/*` file as part of the same commit.
 
+## Rule for the final presentation
+
+- During your experiments, save every result's demo as GIFs to show audience, so that helps them to easily understand what we've done right away. Without GIF, you will end up running such long-run experiments again which is genuinely waste of time.
+
 ## Authoritative references (read before non-trivial work)
 
 - `docs/research/research-log.md` — the living status + progress log (read first for *where things stand*).

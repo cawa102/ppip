@@ -120,3 +120,52 @@ def test_hinge_episode_runs_end_to_end_and_records_its_objective(tmp_path: objec
     assert result["objective"]["name"] == "hinge"
     assert result["objective"]["kappa"] == 6.0
     assert result["targeted"] in (True, False)
+
+
+# --- the distortion penalty (design section 4.5) --------------------------------------
+#
+# `lambda * MSE(patch, carrier)` is the soft half of the stealth constraint: the eps-ball is a
+# hard bound, so nothing ever pulls a drifted pixel back toward the logo. It is added INSIDE the
+# ball, never instead of it -- a pure penalty reports lambda, which is not perceptually
+# interpretable and gives a drifting effective distortion in a per-frame loop.
+
+
+def test_distortion_weight_defaults_to_zero_so_every_prior_rung_is_unchanged() -> None:
+    """Behaviour preservation: all six recorded ladder rungs ran with no distortion term."""
+    import inspect
+
+    from ce_monitor_patch_attack import run_confined_episode
+
+    params = inspect.signature(run_confined_episode).parameters
+
+    assert params["distortion_weight"].default == 0.0
+
+
+def test_negative_distortion_weight_is_rejected_before_any_gpu_work() -> None:
+    """A negative lambda would *reward* drifting away from the carrier -- an anti-stealth term."""
+    from ce_monitor_patch_attack import run_confined_episode
+
+    with pytest.raises(ValueError, match="distortion_weight"):
+        run_confined_episode(
+            object(),  # never used: validation raises first
+            rect=PROBE_RECT,
+            seed=0,
+            run_dir="/tmp/distortion-unused",
+            tag="distortion_negative",
+            distortion_weight=-0.1,
+        )
+
+
+def test_distortion_weight_requires_a_carrier_to_measure_against() -> None:
+    """Without `stealth_base` there is no logo to stay near, so the term has no meaning."""
+    from ce_monitor_patch_attack import run_confined_episode
+
+    with pytest.raises(ValueError, match="stealth_base"):
+        run_confined_episode(
+            object(),
+            rect=PROBE_RECT,
+            seed=0,
+            run_dir="/tmp/distortion-unused",
+            tag="distortion_free_range",
+            distortion_weight=1.0,
+        )

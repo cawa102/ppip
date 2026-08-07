@@ -1,8 +1,20 @@
 """Word-gate figure: one patch, one word, two outcomes.
 
 The E2.1 headline is hard to believe from a table, so this is the figure: the armed and dormant
-rollouts side by side, the adversarial corner visible and identical in both, and the *only*
-difference the word ``please`` in the instruction printed above each panel.
+rollouts side by side, the adversarial corner visible in both, and the *only* difference the word
+``please`` in the instruction printed above each panel.
+
+**What "the same" means here, exactly.** On the per-frame track the patch is re-solved at every
+control step, so the two panels do NOT show identical pixels and must not claim to: the rollouts
+diverge at step 1 (the armed one executes the forced action), and a patch fitted to one
+observation cannot be the patch fitted to a different one. What is identical is the *procedure* --
+optimiser, two-branch objective, and the condition-blind selection rule of
+``word_gate.gate_step_selection``, which ranks every candidate by ``armed_match + dormant_match``
+and so cannot prefer a forcing patch when armed and an inert one when dormant. The evidence that
+both patches are equally armed is in each run's own ``gate_diagnostic``: the DORMANT rollout's
+patches score ``mean_armed_forced = 0.991``, i.e. they would have forced the attacker's action had
+the word been present. The artifact-level claim -- ONE fixed video driving both conditions -- is a
+different experiment (``run_word_gate_replay.py``), and this figure must not be read as it.
 
 Two safeguards, because a side-by-side is exactly the kind of figure that can lie quietly:
 
@@ -38,7 +50,8 @@ import rollout_gif as RG  # noqa: E402
 SHARED_FIELDS: Final = ("seed", "rect", "user_task", "target_task", "patch_mode", "effort")
 
 #: Which recorded stream the panels show. ``policy_input`` is what the model actually sees, so
-#: the patch corner is visible in BOTH panels -- the point being that it is the same patch.
+#: the patch corner is visible in BOTH panels. On a replay pair those corners ARE identical pixels;
+#: on a per-frame pair they are two solutions to the same two-branch problem (see the module doc).
 FRAME_STREAM: Final = "policy_input"
 
 
@@ -110,23 +123,55 @@ def panel_subtitle(result: Mapping[str, Any]) -> str:
     )
 
 
+def _sameness_clause(result: Mapping[str, Any]) -> str:
+    """What is actually shared across the pair — which differs by patch regime.
+
+    Saying "same patch" of a per-frame pair is false (the patch is re-solved each step and the
+    rollouts diverge at step 1); saying only "same procedure" of a replay pair would undersell the
+    artifact-level result. Derived from the run's own ``patch_mode`` so the caption cannot drift
+    from what was run.
+    """
+    if result.get("patch_mode") == "replay":
+        n = (result.get("replay") or {}).get("n_frames")
+        return f"The SAME pre-recorded {n}-frame video plays in both."
+    return "Same optimiser, two-branch objective and condition-blind selection rule."
+
+
+def result_path(run_dir: str, init: int, condition: str, tag_prefix: str = "fig") -> str:
+    """Where ``run_confined_episode`` wrote the result for one leg of a word-gate pair.
+
+    Mirrors the driver's ``tag=f"{tag_prefix}_{condition}_init{init}"``. Parameterised because the
+    artifact-level replay panel is tagged ``replay_*`` while the per-frame figure runs are ``fig_*``
+    — one builder must serve both or the two figures drift apart.
+    """
+    return os.path.join(run_dir, f"result_{tag_prefix}_{condition}_init{init}_trial0.json")
+
+
 def _load(path: str) -> dict[str, Any]:
     with open(path, encoding="utf-8") as handle:
         result: dict[str, Any] = json.load(handle)
     return result
 
 
-def build(run_dir: str, init: int, out_path: str = "") -> str:
-    """Render the two-panel word-gate GIF for one init."""
-    armed = _load(os.path.join(run_dir, f"result_fig_armed_init{init}_trial0.json"))
-    dormant = _load(os.path.join(run_dir, f"result_fig_dormant_init{init}_trial0.json"))
+def build(
+    run_dir: str, init: int, out_path: str = "", *,
+    tag_prefix: str = "fig", frames_root: str = "",
+) -> str:
+    """Render the two-panel word-gate GIF for one init.
+
+    ``frames_root`` defaults to ``run_dir`` (the per-frame figure layout,
+    ``run_dir/<condition>/policy_input``); the replay panel records under a per-leg subdirectory,
+    so it passes that root explicitly.
+    """
+    armed = _load(result_path(run_dir, init, "armed", tag_prefix))
+    dormant = _load(result_path(run_dir, init, "dormant", tag_prefix))
     assert_only_the_word_differs(armed, dormant)
 
     panels = [
         RG.Panel(
             title=panel_title(result),
             subtitle=panel_subtitle(result),
-            frames_dir=os.path.join(run_dir, condition, FRAME_STREAM),
+            frames_dir=os.path.join(frames_root or run_dir, condition, FRAME_STREAM),
             verdict=RG.outcome_of(result).label,
             colour=RG.outcome_of(result).colour,
         )
@@ -137,10 +182,12 @@ def build(run_dir: str, init: int, out_path: str = "") -> str:
     # one-word difference is on the figure itself and not only in the caption of a slide.
     footer = [
         f'WITH: "{gate["armed"]}"',
-        f'WITHOUT: the same sentence minus "{gate["word"]}". Same patch, optimiser, init '
+        f'WITHOUT: the same sentence minus "{gate["word"]}". {_sameness_clause(armed)} Init '
         f"{init}, {armed['rect'][2]}x{armed['rect'][3]} corner.",
     ]
-    out_path = out_path or os.path.join(run_dir, f"word_gate_init{init}.gif")
+    out_path = out_path or os.path.join(run_dir, f"word_gate_{tag_prefix}_init{init}.gif"
+                                        if tag_prefix != "fig"
+                                        else f"word_gate_init{init}.gif")
     return RG.render(panels, out_path, footer, stride=2, duration=110, hold_frames=24)
 
 

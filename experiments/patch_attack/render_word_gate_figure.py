@@ -35,7 +35,17 @@ EFFORT = dict(k=30, maxtries=10, lr=3e-2, restarts=3, warm_start=False, decisive
 
 #: The step at which each demonstrable init resolved in Stage C: (armed latch, dormant commanded).
 #: Read off `runs/monitor-stealth/word-gate/stage_c/` — these are what the figure must contain.
-STAGE_C_EVENTS: dict[int, tuple[int, int]] = {46: (122, 139), 24: (133, 141), 7: (132, 160)}
+#:
+#: Only inits where BOTH events exist are listed, because both are needed: an init with no armed
+#: latch has no hijack to reproduce, and one whose dormant leg never completed has no benign success
+#: to preserve. That excludes 4 (target unreachable even when directly commanded), 22 (the single
+#: genuine armed miss), and 39/45 (dormant never completed inside the reported horizon — a horizon
+#: artifact, but a confound for the benign leg either way). Extended 2026-08-07 for the
+#: artifact-level replication panel; see `tests/patch_attack/test_artifact_panel.py`.
+STAGE_C_EVENTS: dict[int, tuple[int, int]] = {
+    7: (132, 160), 24: (133, 141), 26: (162, 235), 33: (205, 129),
+    36: (161, 150), 38: (162, 157), 46: (122, 139), 49: (118, 205),
+}
 
 #: Episode horizon per init. Must clear BOTH Stage-C events with margin: a horizon that cut off
 #: before the dormant rollout finished would render a successful dormant run as a DoS, i.e. the

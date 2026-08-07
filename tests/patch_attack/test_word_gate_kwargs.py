@@ -3,8 +3,8 @@
 The surgical two-branch change lives deep inside the GPU optimise loop, so it is split like the
 other patch-track seams: the CPU-testable *decision* logic is the pure ``resolve_gate_setup``
 (tested in ``test_word_gate.py``), and the live two-branch rollout is a ``@requires_gpu`` smoke
-seam here. One guard — ``gate_word`` requires ``patch_mode='optimize'`` — is validated before any
-GPU work, so it is exercised on CPU with a dummy backend. See
+seam here. The mode/replay guards are validated before any
+GPU work, so they are exercised on CPU with a dummy backend. See
 ``docs/plans/2026-07-30-word-gated-patch.md`` (WP7).
 """
 from __future__ import annotations
@@ -36,24 +36,50 @@ def _trace_rows(run_dir: object) -> list[dict[str, Any]]:
     return rows
 
 
-def test_gate_word_requires_optimize_patch_mode_fails_before_gpu() -> None:
-    """The mode guard resolves the gate then rejects a non-optimise mode before touching the GPU.
-
-    A dummy backend proves the raise happens before any policy load / env build — the guard is the
-    first thing ``run_confined_episode`` does.
-    """
+def _guarded_call(**kwargs: Any) -> None:
+    """Invoke ``run_confined_episode`` with a dummy backend — every guard must raise before GPU."""
     from ce_monitor_patch_attack import run_confined_episode
 
-    with pytest.raises(ValueError, match="optimis"):
-        run_confined_episode(
-            object(),  # never used: the guard raises first
-            rect=PROBE_RECT,
-            seed=0,
-            run_dir="/tmp/wp7-unused",
-            tag="wg_guard",
-            patch_mode="blank",
-            gate_word="please",
-        )
+    run_confined_episode(
+        object(),  # never used: the guards raise first
+        rect=PROBE_RECT,
+        seed=0,
+        run_dir="/tmp/wp7-unused",
+        tag="wg_guard",
+        **kwargs,
+    )
+
+
+def test_unknown_patch_mode_rejected_before_gpu() -> None:
+    """An unknown mode used to fall through to ``optimize`` — a typo bought the wrong experiment."""
+    with pytest.raises(ValueError, match="unknown patch_mode"):
+        _guarded_call(patch_mode="optimise")  # British spelling: a plausible typo
+
+
+def test_replay_mode_requires_a_recorded_video_before_gpu() -> None:
+    """``replay`` with no ``replay_dir`` would run as an unpatched control under a replay label."""
+    with pytest.raises(ValueError, match="needs replay_dir"):
+        _guarded_call(patch_mode="replay", gate_word="please")
+
+
+def test_replay_dir_rejected_for_non_replay_modes_before_gpu() -> None:
+    """Passing a video to the optimiser would record a provenance the run does not have."""
+    with pytest.raises(ValueError, match="only defined for patch_mode='replay'"):
+        _guarded_call(patch_mode="optimize", replay_dir="/tmp/some-video")
+
+
+def test_gate_word_is_allowed_with_a_deployed_patch_mode() -> None:
+    """Gating a DEPLOYED patch is the artifact-level threat model, not a misuse.
+
+    Which instruction drives the rollout is a property of the rollout, not of how the pixels were
+    made — and a deployed patch is exactly where the gating has to come from the frozen policy
+    rather than from an optimiser that can read the instruction. The old guard forbade this pairing,
+    which made the artifact-level test inexpressible. It must now get PAST the guards (and fail
+    later, on the dummy backend, once it reaches real work).
+    """
+    with pytest.raises(Exception) as excinfo:  # noqa: PT011 -- any non-guard failure will do
+        _guarded_call(patch_mode="blank", gate_word="please")
+    assert not isinstance(excinfo.value, ValueError) or "patch_mode" not in str(excinfo.value)
 
 
 def test_contaminated_trigger_rejected_before_gpu() -> None:
