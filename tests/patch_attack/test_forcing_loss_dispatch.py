@@ -109,6 +109,81 @@ def test_default_kappa_is_six_not_three() -> None:
     assert FL.DEFAULT_KAPPA == 6.0
 
 
+def test_ce_saturating_matches_ce_decisive_while_no_decisive_dim_is_won() -> None:
+    """The controlled edge of the shape-by-saturation grid.
+
+    `ce` vs `hinge` changes the penalty's shape *and* whether it saturates, so a gap between
+    them cannot be attributed to either. `ce_saturating` is `ce_decisive` plus saturation and
+    nothing else — while nothing is won they must be the same number.
+    """
+    logits = _logits(favouring=USER, strength=50.0)  # the teacher is losing on both dims
+
+    saturating = FL.action_loss(
+        logits, TEACHER, USER, DECISIVE, objective="ce_saturating", kappa=6.0
+    )
+    plain = FL.action_loss(logits, TEACHER, USER, DECISIVE, objective="ce_decisive")
+
+    assert saturating.item() == pytest.approx(plain.item(), rel=1e-6)
+
+
+def test_ce_saturating_is_zero_once_every_decisive_dim_is_won() -> None:
+    logits = _logits(favouring=TEACHER, strength=50.0)
+
+    got = FL.action_loss(logits, TEACHER, USER, DECISIVE, objective="ce_saturating", kappa=6.0)
+
+    assert got.item() == 0.0
+    assert got.requires_grad  # a detached zero would break the batch backward
+
+
+def test_ce_saturating_diverges_from_ce_decisive_exactly_when_a_dim_is_won() -> None:
+    """Same inputs, same kappa — the only thing that changed is that a dim cleared the margin.
+
+    Strength 8 (not 50) for the same reason the anchor test uses it: 8 > kappa=6 so the release
+    fires, but the lead is shallow enough that cross-entropy is still measurably positive. At a
+    huge lead CE underflows to 0.0 and the two objectives would agree for the wrong reason.
+    """
+    logits = _logits(favouring=TEACHER, strength=8.0)
+
+    saturating = FL.action_loss(
+        logits, TEACHER, USER, DECISIVE, objective="ce_saturating", kappa=6.0
+    )
+    plain = FL.action_loss(logits, TEACHER, USER, DECISIVE, objective="ce_decisive")
+
+    assert saturating.item() == 0.0
+    assert plain.item() > 0.0
+
+
+def test_ce_saturating_honours_kappa_like_the_hinge_does() -> None:
+    """A 4-logit lead clears kappa=3 but not kappa=6 — the same release rule as `margin_hinge`."""
+    logits = torch.zeros(ACTION_DIM, VOCAB)
+    logits[torch.arange(ACTION_DIM), TEACHER] = 4.0
+    logits = logits.requires_grad_(True)
+
+    shallow = FL.action_loss(
+        logits, TEACHER, USER, DECISIVE, objective="ce_saturating", kappa=3.0
+    )
+    deep = FL.action_loss(logits, TEACHER, USER, DECISIVE, objective="ce_saturating", kappa=6.0)
+
+    assert shallow.item() == 0.0
+    assert deep.item() > 0.0
+
+
+def test_anchor_applies_to_ce_saturating_as_to_the_other_saturating_objectives() -> None:
+    # Anchor exists because a saturated objective goes flat; `ce_saturating` goes flat too, so
+    # excluding it here would make the anchor sweep silently non-comparable across objectives.
+    logits = _logits(favouring=TEACHER, strength=8.0)
+
+    bare = FL.action_loss(
+        logits, TEACHER, USER, DECISIVE, objective="ce_saturating", kappa=6.0
+    )
+    anchored = FL.action_loss(
+        logits, TEACHER, USER, DECISIVE, objective="ce_saturating", kappa=6.0, anchor=0.1
+    )
+
+    assert bare.item() == 0.0
+    assert anchored.item() > 0.0
+
+
 def test_directional_scores_progress_toward_the_teacher() -> None:
     logits = _logits(favouring=USER, strength=50.0)
 
@@ -161,7 +236,9 @@ def test_objectives_tuple_is_the_dispatch_domain() -> None:
         FL.action_loss(logits, TEACHER, USER, DECISIVE, objective=name)
 
 
-@pytest.mark.parametrize("objective", ["ce", "ce_decisive", "hinge", "directional"])
+@pytest.mark.parametrize(
+    "objective", ["ce", "ce_decisive", "ce_saturating", "hinge", "directional"]
+)
 def test_every_objective_backpropagates_to_the_logits(objective: str) -> None:
     logits = _logits(favouring=USER, strength=8.0)
 

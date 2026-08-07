@@ -277,3 +277,72 @@ def test_gradients_reach_raw_through_the_masked_composite() -> None:
     # Gradient flows only where the mask is on -- the untouched band gets exactly zero.
     assert raw.grad[0, 0, 100, 100].item() == 0.0
     assert raw.grad[0, 0, 5, 5].abs().item() > 0
+
+
+# --- the distortion penalty (design 2026-08-04 eps-threshold, section 4.5) -------------
+
+
+def test_distortion_is_zero_for_the_pure_carrier() -> None:
+    from stealth_patch import distortion
+
+    base = _base()
+    patch = stealth_patch(torch.zeros_like(base), base, 0.06)  # raw=0 -> exactly the carrier
+
+    assert distortion(patch, base).item() == pytest.approx(0.0)
+
+
+def test_distortion_is_the_mean_squared_deviation() -> None:
+    from stealth_patch import distortion
+
+    base = torch.full((1, 3, 4, 4), 0.5)
+    patch = base + 0.1
+
+    assert distortion(patch, base).item() == pytest.approx(0.01)
+
+
+def test_distortion_averages_over_the_mask_only() -> None:
+    # Outside the mask the patch is never shown, so counting those pixels would make the
+    # penalty depend on frame size rather than on what the attacker actually placed.
+    from stealth_patch import distortion, rects_to_mask
+
+    base = torch.full((1, 3, 8, 8), 0.5)
+    patch = base.clone()
+    patch[:, :, :4, :] = 0.6  # deviation only in the top half
+    mask = rects_to_mask([(0, 0, 4, 8)], side=8)
+
+    assert distortion(patch, base, mask).item() == pytest.approx(0.01)
+    assert distortion(patch, base).item() == pytest.approx(0.005)  # unmasked dilutes it
+
+
+def test_distortion_can_be_normalised_by_the_budget() -> None:
+    # Raw MSE scales with eps^2, so one lambda would mean different things at different
+    # rungs. Normalising reports the squared ball occupancy, which is comparable across them.
+    from stealth_patch import distortion
+
+    base = torch.full((1, 3, 4, 4), 0.5)
+    patch = base + 0.03  # exactly half of an eps=0.06 budget
+
+    # rel= rather than the default: 0.03/0.06 is not exact in float32.
+    assert distortion(patch, base, eps=0.06).item() == pytest.approx(0.25, rel=1e-4)
+
+
+def test_normalised_distortion_rejects_a_zero_budget() -> None:
+    from stealth_patch import distortion
+
+    base = torch.full((1, 3, 4, 4), 0.5)
+
+    with pytest.raises(ValueError, match="eps"):
+        distortion(base, base, eps=0.0)
+
+
+def test_distortion_gradients_reach_raw() -> None:
+    from stealth_patch import distortion
+
+    base = torch.full((1, 3, 8, 8), 0.5)
+    raw = torch.full_like(base, 0.5).requires_grad_(True)
+
+    distortion(stealth_patch(raw, base, 0.06), base).backward()
+
+    assert raw.grad is not None
+    # It pulls back toward the carrier: reducing |raw| reduces the penalty.
+    assert raw.grad[0, 0, 0, 0].item() > 0

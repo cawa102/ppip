@@ -28,6 +28,27 @@ overshoot in the right direction, and does punish travelling the wrong way. That
 the redirection threat model written down as a loss — squared error would penalise a useful
 overshoot exactly as hard as a harmful reversal.
 
+**Two properties change at once between `ce` and `hinge`, so neither can be credited.** The
+margin loss differs from cross-entropy in the *shape* of its penalty (linear in the logit gap
+rather than log-loss) **and** in whether it *saturates*. A measured gap between them therefore
+attributes to nothing. `ce_saturating` is `ce_decisive` plus the won-dim release and nothing
+else, which completes the grid:
+
+    shape \\ saturation |  off             on
+    -------------------+---------------------------------
+    log-loss           |  ce_decisive     ce_saturating
+    linear margin      |  --              hinge
+
+`ce_decisive` -> `ce_saturating` isolates saturation at fixed shape; `ce_saturating` ->
+`hinge` isolates shape at fixed saturation. This matters because the per-frame probe of
+2026-08-04 found `ce`, `ce_decisive` and `hinge@k6` statistically indistinguishable (1 win, 7
+ties, 0 losses paired) — a tie between two objectives differing on two axes is not evidence
+that either axis is inert.
+
+Note what saturation costs: it needs a release threshold, and a threshold is a knob. Whatever
+simplicity cross-entropy has over the margin loss — no hyperparameter, nothing to silently
+mis-set, cf. `DEFAULT_KAPPA` — is spent the moment `ce_saturating` is chosen over `ce_decisive`.
+
 Everything here is pure torch on logits: no model, no simulator, CPU-testable.
 """
 
@@ -122,6 +143,70 @@ def margin_hinge(
     return F.relu(best_other - teacher_logit + kappa).mean()
 
 
+def won_dims(
+    logits: torch.Tensor,
+    teacher: torch.Tensor,
+    dims: Sequence[int],
+    kappa: float = DEFAULT_KAPPA,
+) -> tuple[int, ...]:
+    """The subset of `dims` whose teacher token already leads the field by `kappa`.
+
+    Deliberately the *same* predicate `margin_hinge` saturates on — `teacher_logit -
+    best_other >= kappa` is exactly where `relu(best_other - teacher_logit + kappa)` reaches
+    zero. Two saturating objectives that released dims at different points would be comparing
+    thresholds rather than penalty shapes, which is the confound this whole split exists to
+    remove.
+
+    Computed under `no_grad` and returned as plain ints: the mask is a hard gate, not a
+    differentiable weight. Backpropagating through the comparison would reward logits for
+    *looking* won (widening the gap that decides the mask) instead of for being won, which is
+    precisely the budget waste the saturation is meant to stop.
+    """
+    if not dims:
+        return ()
+    index = _dim_index(dims, logits.device)
+    with torch.no_grad():
+        selected, target = logits[index], teacher[index].unsqueeze(1)
+        teacher_logit = selected.gather(1, target).squeeze(1)
+        best_other = selected.scatter(1, target, float("-inf")).max(dim=1).values
+        satisfied = (teacher_logit - best_other) >= kappa
+    # strict: a length mismatch would silently drop dims from the won set, i.e. keep spending
+    # budget on a dim that is already decided — the exact failure this function exists to stop.
+    return tuple(dim for dim, ok in zip(dims, satisfied.tolist(), strict=True) if ok)
+
+
+def saturating_cross_entropy(
+    logits: torch.Tensor,
+    teacher: torch.Tensor,
+    dims: Sequence[int],
+    kappa: float = DEFAULT_KAPPA,
+) -> torch.Tensor:
+    """`masked_cross_entropy` over the decisive dims that are **not yet won by `kappa`**.
+
+    This is `ce_decisive` plus saturation and nothing else, and it exists to break a confound.
+    Comparing `ce` against `hinge` varies two properties at once — the *shape* of the penalty
+    (log-loss vs linear-in-logit-gap) and whether it *saturates* — so neither can be credited
+    for a difference between them. The grid this completes:
+
+        shape \\ saturation |  off             on
+        -------------------+---------------------------------
+        log-loss           |  ce_decisive     ce_saturating
+        linear margin      |  --              hinge
+
+    `ce_decisive` -> `ce_saturating` isolates saturation at fixed shape; `ce_saturating` ->
+    `hinge` isolates shape at fixed saturation. Run both edges at the same `kappa` or the
+    second comparison silently varies the release threshold too.
+
+    It is not free: saturation needs a threshold, and a threshold is a knob that can be
+    mis-set — see `DEFAULT_KAPPA`'s note on kappa=3 having silently capped every hinge run.
+    Whatever simplicity `ce_decisive` has over `hinge` is spent the moment this is used.
+    """
+    if not dims:
+        return _zero_like(logits)
+    won = set(won_dims(logits, teacher, dims, kappa))
+    return masked_cross_entropy(logits, teacher, tuple(d for d in dims if d not in won))
+
+
 def soft_bins(logits: torch.Tensor, temperature: float = DEFAULT_TEMPERATURE) -> torch.Tensor:
     """Differentiable expected action bin per dim, `[ACTION_DIM]`, in [1, N_BINS].
 
@@ -184,7 +269,9 @@ def cvar(values: torch.Tensor, q: float) -> torch.Tensor:
 #: The dispatch domain. `ce` is first because it is the behaviour-preserving default: it
 #: reproduces the `F.cross_entropy` over all 7 dims that every published closed-loop result was
 #: produced with, so an existing caller that names nothing keeps its exact gradient.
-OBJECTIVES: Final[tuple[str, ...]] = ("ce", "ce_decisive", "hinge", "directional")
+OBJECTIVES: Final[tuple[str, ...]] = (
+    "ce", "ce_decisive", "ce_saturating", "hinge", "directional"
+)
 
 
 def action_loss(
@@ -209,17 +296,20 @@ def action_loss(
     an artifact which loss had produced it. Selecting and *naming* the objective in one place is
     what fixes that.
 
-    `anchor` mixes a light decisive-dim cross-entropy into a saturating objective. Both
+    `anchor` mixes a light decisive-dim cross-entropy into a saturating objective. All three
     saturating losses go flat once satisfied, which is their purpose, but `directional` reads
     the head through a softmax whose gradient thins on a peaked distribution, so a small CE term
-    keeps a usable signal. Zero by default.
+    keeps a usable signal. Zero by default. It applies to `ce_saturating` on the same terms, so
+    an anchor sweep stays comparable across the whole saturating family.
     """
     if objective == "ce":
         # Deliberately unmasked and unsaturating: this is the historical path, kept exact.
         return F.cross_entropy(logits, teacher)
     if objective == "ce_decisive":
         return masked_cross_entropy(logits, teacher, dims)
-    if objective == "hinge":
+    if objective == "ce_saturating":
+        loss = saturating_cross_entropy(logits, teacher, dims, kappa)
+    elif objective == "hinge":
         loss = margin_hinge(logits, teacher, dims, kappa)
     elif objective == "directional":
         loss = directional_hinge(logits, teacher, clean_user, dims, temperature)

@@ -53,9 +53,13 @@ import forcing_loss as FL  # noqa: E402
 from ce_monitor_patch_attack import run_confined_episode as _run_confined_episode  # noqa: E402
 from hijack_backend import HijackBackend  # noqa: E402
 
-#: Objectives this entry point accepts -- the saturating family. ``ce``/``ce_decisive`` are
+#: Objectives this entry point accepts -- the margin family. The cross-entropy objectives are
 #: rejected rather than silently honoured, so a run launched from this module is always
-#: attributable to a saturating loss from its filename alone.
+#: attributable to its loss family from its filename alone.
+#:
+#: ``ce_saturating`` is excluded too, and NOT for want of saturation -- it saturates exactly as
+#: the hinge does. It is excluded because it is cross-entropy, and the filename guarantee is
+#: about family, not about which properties a loss happens to have.
 SATURATING: Final[tuple[str, ...]] = ("hinge", "directional")
 
 
@@ -74,8 +78,9 @@ def run_confined_episode(
     """
     if objective not in SATURATING:
         raise ValueError(
-            f"{objective!r} is not saturating; this entry point accepts {SATURATING}. "
-            "Run a cross-entropy episode from `ce_monitor_patch_attack` instead."
+            f"{objective!r} is not in the margin family; this entry point accepts {SATURATING}. "
+            "Run a cross-entropy episode -- including the saturating `ce_saturating` -- from "
+            "`ce_monitor_patch_attack` instead."
         )
     return _run_confined_episode(backend, objective=objective, kappa=kappa, **kwargs)
 

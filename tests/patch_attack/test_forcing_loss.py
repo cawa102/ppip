@@ -28,8 +28,10 @@ from forcing_loss import (
     directional_hinge,
     margin_hinge,
     masked_cross_entropy,
+    saturating_cross_entropy,
     soft_bins,
     token_to_bin,
+    won_dims,
 )
 
 VOCAB = 32064
@@ -89,6 +91,7 @@ def test_all_seven_dims_reproduces_plain_cross_entropy() -> None:
     [
         lambda lg, t, d: masked_cross_entropy(lg, t, d),
         lambda lg, t, d: margin_hinge(lg, t, d, kappa=1.0),
+        lambda lg, t, d: saturating_cross_entropy(lg, t, d, kappa=1.0),
     ],
 )
 def test_a_frame_with_no_decisive_dims_costs_nothing_but_stays_differentiable(loss_fn) -> None:
@@ -143,6 +146,137 @@ def test_the_hinge_gradient_vanishes_on_won_dims_and_survives_on_lost_ones() -> 
     assert logits.grad is not None
     assert logits.grad[0].abs().sum().item() == 0.0  # dim 0 already won
     assert logits.grad[2].abs().sum().item() > 0.0  # dim 2 still lost
+
+
+# --- 2b. saturation, isolated from the shape of the penalty ------------------------------
+#
+# `ce_saturating` exists because comparing `ce` against `hinge` changes two things at once —
+# the penalty's *shape* and whether it *saturates* — so a difference between them cannot be
+# attributed to either. It completes the grid:
+#
+#     shape \ saturation |  off             on
+#     -------------------+---------------------------------
+#     log-loss           |  ce_decisive     ce_saturating
+#     linear margin      |  --              hinge
+#
+# `ce_decisive` -> `ce_saturating` isolates saturation; `ce_saturating` -> `hinge` isolates
+# shape. The tests below pin both edges of that grid.
+
+
+def _mixed_logits(won_margin: float, lost_dim: int) -> tuple[torch.Tensor, torch.Tensor]:
+    """Logits where each dim leads by `won_margin`, except `lost_dim` whose lead is wrong."""
+    teacher = _tokens([10, 20, 30, 40, 50, 60, 70])
+    winners = [bin_to_token(b) for b in (10, 20, 30, 40, 50, 60, 70)]
+    winners[lost_dim] = bin_to_token(199)  # a token the teacher never asked for
+    return _logits(winners, margin=won_margin), teacher
+
+
+def test_won_dims_is_exactly_the_set_on_which_the_hinge_has_gone_flat() -> None:
+    """Both saturating objectives must agree on what counts as won.
+
+    If they disagreed, `ce_saturating` vs `hinge` would compare release *thresholds* rather
+    than penalty shapes, and the grid would answer a different question than the one asked.
+    """
+    logits, teacher = _mixed_logits(won_margin=8.0, lost_dim=2)
+
+    won = won_dims(logits, teacher, DIMS, kappa=6.0)
+
+    assert won == (0, 5)
+    for dim in won:
+        assert margin_hinge(logits, teacher, (dim,), kappa=6.0).item() == 0.0
+    assert margin_hinge(logits, teacher, (2,), kappa=6.0).item() > 0.0
+
+
+def test_saturating_cross_entropy_is_cross_entropy_over_only_the_unwon_dims() -> None:
+    logits, teacher = _mixed_logits(won_margin=8.0, lost_dim=2)
+
+    assert saturating_cross_entropy(logits, teacher, DIMS, kappa=6.0) == pytest.approx(
+        masked_cross_entropy(logits, teacher, (2,)).item()
+    )
+
+
+def test_saturating_cross_entropy_is_plain_decisive_ce_while_nothing_is_won_yet() -> None:
+    """With no dim past the margin the saturation never fires, so the two must coincide.
+
+    This is what makes the grid controlled: the only difference `ce_saturating` introduces
+    over `ce_decisive` is the release of won dims, never a change of scale or of support.
+    """
+    logits, teacher = _mixed_logits(won_margin=2.0, lost_dim=2)  # 2 < kappa: nothing won
+
+    assert saturating_cross_entropy(logits, teacher, DIMS, kappa=6.0) == pytest.approx(
+        masked_cross_entropy(logits, teacher, DIMS).item()
+    )
+
+
+def test_a_won_dim_stops_receiving_gradient_under_saturating_cross_entropy() -> None:
+    """The property `ce_decisive` lacks: budget a won dim would have spent goes to a lost one."""
+    logits, teacher = _mixed_logits(won_margin=8.0, lost_dim=2)
+    logits.requires_grad_(True)
+
+    saturating_cross_entropy(logits, teacher, DIMS, kappa=6.0).backward()
+
+    assert logits.grad is not None
+    assert logits.grad[0].abs().sum().item() == 0.0  # won -> released
+    assert logits.grad[5].abs().sum().item() == 0.0  # won -> released
+    assert logits.grad[2].abs().sum().item() > 0.0  # still lost -> still pushed
+
+
+def test_ce_decisive_by_contrast_keeps_paying_on_a_dim_it_has_already_won() -> None:
+    """The contrast that gives the previous test its meaning."""
+    logits, teacher = _mixed_logits(won_margin=8.0, lost_dim=2)
+    logits.requires_grad_(True)
+
+    masked_cross_entropy(logits, teacher, DIMS).backward()
+
+    assert logits.grad is not None
+    assert logits.grad[0].abs().sum().item() > 0.0
+
+
+def test_over_winning_is_free_under_saturating_ce_but_still_paid_under_ce_decisive() -> None:
+    teacher = _tokens([10, 20, 30, 40, 50, 60, 70])
+    winners = [bin_to_token(b) for b in (10, 20, 30, 40, 50, 60, 70)]
+    won = _logits(winners, margin=8.0)
+    won_harder = _logits(winners, margin=50.0)
+
+    assert saturating_cross_entropy(won, teacher, DIMS, kappa=6.0).item() == 0.0
+    assert saturating_cross_entropy(won_harder, teacher, DIMS, kappa=6.0).item() == 0.0
+    assert masked_cross_entropy(won_harder, teacher, DIMS) < masked_cross_entropy(
+        won, teacher, DIMS
+    )
+
+
+def test_the_two_saturating_objectives_release_the_same_dims_at_different_cost() -> None:
+    """The shape edge of the grid: identical saturation set, different penalty on the rest."""
+    logits, teacher = _mixed_logits(won_margin=8.0, lost_dim=2)
+
+    ce_like = saturating_cross_entropy(logits, teacher, DIMS, kappa=6.0)
+    hinge_like = margin_hinge(logits, teacher, DIMS, kappa=6.0)
+
+    assert ce_like.item() > 0.0
+    assert hinge_like.item() > 0.0
+    assert ce_like.item() != pytest.approx(hinge_like.item())
+
+
+def test_a_shallow_win_is_released_only_once_kappa_allows_it() -> None:
+    """Same kappa semantics as the hinge — won means leading *by kappa*, not merely leading.
+
+    This is the knob that saturation costs. `ce_decisive` has no such parameter and so cannot
+    be silently mis-set the way kappa=3 capped every hinge run before 2026-08-04.
+    """
+    logits, teacher = _mixed_logits(won_margin=4.0, lost_dim=2)
+
+    assert won_dims(logits, teacher, DIMS, kappa=3.0) == (0, 5)
+    assert won_dims(logits, teacher, DIMS, kappa=6.0) == ()
+
+
+def test_the_won_set_is_decided_without_leaking_gradient_through_the_comparison() -> None:
+    """A differentiable mask would push logits toward *looking* won instead of *being* won."""
+    logits, teacher = _mixed_logits(won_margin=8.0, lost_dim=2)
+    logits.requires_grad_(True)
+
+    won_dims(logits, teacher, DIMS, kappa=6.0)
+
+    assert logits.grad is None
 
 
 # --- 3. bins are ordered, and direction matters -----------------------------------------

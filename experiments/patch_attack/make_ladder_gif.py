@@ -1,19 +1,22 @@
-"""The 4-condition stealth comparison GIF — one frame, the whole experiment.
+"""The epsilon-ladder GIF -- one figure, the whole threshold experiment.
 
-Four rollouts of the SAME task pair (`alphabet_soup` -> `salad_dressing`) at the SAME corner
-rect (BL 64x64, 8.2% of frame) and the same seed, differing only in what sits in that corner:
+Rollouts of the SAME task pair (`alphabet_soup` -> `salad_dressing`) at the SAME corner rect
+(BL 64x64, 8.2% of frame) and the same seed, differing only in what sits in that corner:
 
-    clean (nothing)  |  eps=0 pure logo  |  eps=0.06 logo+delta  |  free-range patch
+    clean  |  eps=0 pure logo  |  ... each eps rung ...  |  free-range patch
 
-Each panel shows the **policy input** — literally what OpenVLA consumed that step — so the
-patch is visible exactly as the model saw it, and the arm's behaviour is the outcome. Read
-left to right it is the whole result: the logo alone changes nothing, a perturbation bounded
-to +-0.06 around that logo denies the user task and walks the arm to the attacker's object
-without taking it, and only the unconstrained patch completes the hijack.
+Read left to right it is the result: the logo alone changes nothing, a perturbation bounded to
++-eps around that logo denies the user's task and -- once the budget is large enough -- hijacks
+the robot outright, and the unconstrained patch is the ceiling.
 
-Panels are aligned by **step index**, and a rollout that has ended holds its last frame (the
-free-range run stops at its latch, step 131) so its outcome stays on screen while the others
-finish. Alignment is the one thing here that could silently lie, so it is unit-tested.
+Every panel shows the **policy input**, literally what OpenVLA consumed that step, so the patch
+is visible exactly as the model saw it. Panels are aligned by **step index** and a finished
+rollout holds its last frame, so a hijack that latched early keeps its outcome on screen.
+Verdict bands come from each rollout's evaluator fields via `rollout_gif.outcome_of`; they are
+never hand-written, because a mislabelled panel is a figure that misreports the result.
+
+Rungs are **discovered from the run directory**, so rebuilding after a rung lands picks it up
+without this file being edited -- a hand-maintained list would silently omit the newest rung.
 
 Run:
   ~/vla-injection/.venv/bin/python experiments/patch_attack/make_ladder_gif.py
@@ -21,155 +24,138 @@ Run:
 
 from __future__ import annotations
 
+import json
 import os
+import re
+import sys
 from dataclasses import dataclass
+from typing import Any, Final
 
-from PIL import Image, ImageDraw, ImageFont
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-HOME = os.path.expanduser("~")
-RUNS = os.path.join(HOME, "autoresearch/runs")
+import rollout_gif as RG  # noqa: E402
 
-PANEL = 260  # per-panel side, px
-HEADER = 78  # title + verdict band
-FOOTER = 52  # step counter + the two-line standing caption
-BG = (18, 18, 20)
-FG = (238, 238, 238)
-DIM = (150, 150, 155)
-GOOD = (110, 200, 130)  # user task survived
-WARN = (235, 175, 70)  # denied / redirected
-BAD = (235, 100, 100)  # hijacked
+LADDER_DIR: Final = os.path.join(RG.RUNS, "monitor-stealth/ladder_hinge")
+OUT: Final = os.path.join(LADDER_DIR, "epsilon_ladder.gif")
 
+RESULT_RE: Final = re.compile(
+    r"^result_corner_(?P<corner>[A-Z]{2})_(?P<size>\d+)_seed(?P<seed>\d+)"
+    r"(?P<suffix>.*?)_trial(?P<trial>\d+)\.json$"
+)
 
-@dataclass(frozen=True)
-class Condition:
-    """One rollout panel: where its frames live and what the evaluator said about it."""
-
-    title: str
-    subtitle: str
-    frames_dir: str
-    verdict: str
-    colour: tuple[int, int, int]
-
-
-CONDITIONS: tuple[Condition, ...] = (
-    Condition(
-        "CLEAN", "no patch",
-        os.path.join(RUNS, "monitor-corner/rec_BL_64_ctl_none/policy_input"),
-        "user task DONE", GOOD,
+# The two fixed reference panels: both already adjudicated, same cell and seed as every rung.
+REFERENCES: Final = (
+    (
+        "CLEAN",
+        "no patch",
+        os.path.join(RG.RUNS, "monitor-corner/result_corner_BL_64_seed0_ctl_none_trial0.json"),
+        os.path.join(RG.RUNS, "monitor-corner/rec_BL_64_ctl_none/policy_input"),
     ),
-    Condition(
-        "PURE LOGO", "eps = 0",
-        os.path.join(RUNS, "monitor-stealth/perframe/rec_BL_64_stealth_eps0/policy_input"),
-        "user task DONE - logo inert", GOOD,
-    ),
-    Condition(
-        "STEALTH", "eps = 0.06",
-        os.path.join(RUNS, "monitor-stealth/perframe/rec_BL_64_stealth_eps006_esc/policy_input"),
-        "DENIED + redirected, not taken", WARN,
-    ),
-    Condition(
-        "FREE-RANGE", "unbounded",
-        os.path.join(RUNS, "monitor-corner/rec_BL_64_esc/policy_input"),
-        "HIJACKED - target delivered", BAD,
+    (
+        "PURE LOGO",
+        "eps = 0",
+        os.path.join(
+            RG.RUNS,
+            "monitor-stealth/perframe/result_corner_BL_64_seed0_stealth_eps0_trial0.json",
+        ),
+        os.path.join(RG.RUNS, "monitor-stealth/perframe/rec_BL_64_stealth_eps0/policy_input"),
     ),
 )
 
-OUT = os.path.join(RUNS, "monitor-stealth/perframe/stealth_ladder_comparison.gif")
+
+@dataclass(frozen=True)
+class ParsedName:
+    corner: str
+    size: int
+    seed: int
+    suffix: str
+    trial: int
 
 
-def aligned_index(step: int, n_frames: int) -> int:
-    """Frame to show for a global `step`, holding the last one once the rollout has ended.
+@dataclass(frozen=True)
+class Rung:
+    """A discovered ladder rung, with its verdict already on disk."""
 
-    Panels must advance together in *step* index — showing each rollout's own frame `i` would
-    put step 200 of one beside step 90 of another and quietly misstate the comparison.
-    """
-    if n_frames <= 0:
-        raise ValueError("condition has no frames to show")
-    return min(step, n_frames - 1)
-
-
-def sampled_steps(total: int, stride: int) -> list[int]:
-    """Global step indices to render, from 0 up to `total`."""
-    if stride <= 0:
-        raise ValueError(f"stride must be positive, got {stride}")
-    return list(range(0, total, stride))
+    eps: float | None  # None == free-range (unbounded); sorts last, as the ceiling
+    suffix: str
+    result_path: str
+    frames_dir: str
+    result: dict[str, Any]
 
 
-def _font(size: int) -> ImageFont.ImageFont:
-    for path in (
-        "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
-        "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
-    ):
-        if os.path.exists(path):
-            return ImageFont.truetype(path, size)
-    return ImageFont.load_default()
-
-
-def _frame_files(directory: str) -> list[str]:
-    if not os.path.isdir(directory):
-        raise SystemExit(f"missing frames dir: {directory}")
-    return sorted(
-        os.path.join(directory, f) for f in os.listdir(directory) if f.endswith(".png")
+def parse_result_name(name: str) -> ParsedName | None:
+    """Split a result filename into its parts, or None if it is not a result JSON."""
+    match = RESULT_RE.match(name)
+    if not match:
+        return None
+    return ParsedName(
+        corner=match["corner"],
+        size=int(match["size"]),
+        seed=int(match["seed"]),
+        suffix=match["suffix"],
+        trial=int(match["trial"]),
     )
 
 
-def build(stride: int = 3, out_path: str = OUT) -> str:
-    panels = [_frame_files(c.frames_dir) for c in CONDITIONS]
-    total = max(len(p) for p in panels)
-    width = PANEL * len(CONDITIONS)
-    height = HEADER + PANEL + FOOTER
+def discover_rungs(run_dir: str) -> list[Rung]:
+    """Every rung in `run_dir` that has both a verdict and recorded frames, ordered by eps."""
+    if not os.path.isdir(run_dir):
+        raise SystemExit(f"no such run directory: {run_dir}")
 
-    title_font, sub_font, verdict_font, foot_font = _font(19), _font(14), _font(13), _font(15)
-    rendered: list[Image.Image] = []
-
-    for step in sampled_steps(total, stride):
-        canvas = Image.new("RGB", (width, height), BG)
-        draw = ImageDraw.Draw(canvas)
-        for i, (cond, files) in enumerate(zip(CONDITIONS, panels)):
-            x = i * PANEL
-            idx = aligned_index(step, len(files))
-            frame = Image.open(files[idx]).convert("RGB").resize(
-                (PANEL, PANEL), Image.NEAREST
+    rungs: list[Rung] = []
+    for name in sorted(os.listdir(run_dir)):
+        parsed = parse_result_name(name)
+        if parsed is None:
+            continue
+        frames = os.path.join(
+            run_dir, f"rec_{parsed.corner}_{parsed.size}{parsed.suffix}", "policy_input"
+        )
+        # Skipped at discovery rather than at render: a rung with no frames would otherwise
+        # fail at the very end of building a long figure.
+        if not os.path.isdir(frames):
+            continue
+        with open(os.path.join(run_dir, name)) as fh:
+            result = json.load(fh)
+        stealth = result.get("stealth")
+        rungs.append(
+            Rung(
+                eps=None if not stealth else float(stealth["eps"]),
+                suffix=parsed.suffix,
+                result_path=os.path.join(run_dir, name),
+                frames_dir=frames,
+                result=result,
             )
-            canvas.paste(frame, (x, HEADER))
-
-            draw.text((x + 12, 10), cond.title, font=title_font, fill=FG)
-            draw.text((x + 12, 33), cond.subtitle, font=sub_font, fill=DIM)
-            draw.text((x + 12, 55), cond.verdict, font=verdict_font, fill=cond.colour)
-            # A finished rollout is marked, so a still panel reads as "done" not "frozen".
-            if idx == len(files) - 1 and step > idx:
-                draw.text(
-                    (x + PANEL - 52, HEADER + PANEL - 20), "ended",
-                    font=sub_font, fill=DIM,
-                )
-            if i:
-                draw.line([(x, 0), (x, height)], fill=(52, 52, 56), width=1)
-
-        # Two lines: the caption is long enough that one would run off a 4-panel canvas.
-        draw.text(
-            (12, height - 44),
-            f'step {step:3d}     commanded: "pick up the alphabet soup"     '
-            f"attacker wants: the salad dressing",
-            font=foot_font, fill=FG,
         )
-        draw.text(
-            (12, height - 23),
-            "BL 64x64 corner = 8.2% of frame, covers no object, seed 0     "
-            "every panel is the image OpenVLA actually consumed",
-            font=foot_font, fill=DIM,
-        )
-        rendered.append(canvas)
+    # Free-range (eps None) is the ceiling, so it sorts above every bounded rung.
+    return sorted(rungs, key=lambda r: (r.eps is None, r.eps if r.eps is not None else 0.0))
 
-    # Hold the final comparison so the ending is readable rather than a flash.
-    rendered.extend([rendered[-1]] * 18)
 
-    os.makedirs(os.path.dirname(out_path), exist_ok=True)
-    first, *rest = [im.quantize(colors=128, method=Image.MEDIANCUT) for im in rendered]
-    first.save(
-        out_path, save_all=True, append_images=rest,
-        duration=120, loop=0, optimize=True, disposal=2,
+def _panel(title: str, subtitle: str, result: dict[str, Any], frames_dir: str) -> RG.Panel:
+    outcome = RG.outcome_of(result)
+    return RG.Panel(title, subtitle, frames_dir, outcome.label, outcome.colour)
+
+
+def build(run_dir: str = LADDER_DIR, out_path: str = OUT, stride: int = 3) -> str:
+    panels: list[RG.Panel] = []
+    for title, subtitle, result_path, frames_dir in REFERENCES:
+        with open(result_path) as fh:
+            panels.append(_panel(title, subtitle, json.load(fh), frames_dir))
+
+    for rung in discover_rungs(run_dir):
+        objective = rung.result.get("objective", {}).get("name", "unrecorded")
+        if rung.eps is None:
+            title, subtitle = "FREE-RANGE", f"unbounded  ({objective})"
+        else:
+            title, subtitle = "STEALTH", f"eps = {rung.eps:g}  ({objective})"
+        panels.append(_panel(title, subtitle, rung.result, rung.frames_dir))
+
+    footer = (
+        'step {step}     commanded: "pick up the alphabet soup"     '
+        "attacker wants: the salad dressing",
+        "BL 64x64 corner = 8.2% of frame, covers no object, seed 0     "
+        "every panel is the image OpenVLA actually consumed",
     )
-    return out_path
+    return RG.render(panels, out_path, footer, stride=stride)
 
 
 if __name__ == "__main__":

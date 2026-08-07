@@ -77,11 +77,13 @@ DEFAULT_OUT = os.path.join(HOME, "autoresearch/runs/monitor-stealth/patches")
 MIN_DECISIVE_DIMS = 2
 
 #: Selectable objectives (see `forcing_loss` for why each exists).
-#:   `ce`           - the original: cross-entropy over all 7 dims. Kept to reproduce prior runs.
-#:   `ce_decisive`  - the same, restricted to the dims the two instructions disagree on.
-#:   `hinge`        - Carlini-Wagner margin; a won dim stops consuming capacity.
-#:   `directional`  - signed progress from the user's action toward the teacher's.
-OBJECTIVES = ("ce", "ce_decisive", "hinge", "directional")
+#:   `ce`            - the original: cross-entropy over all 7 dims. Kept to reproduce prior runs.
+#:   `ce_decisive`   - the same, restricted to the dims the two instructions disagree on.
+#:   `ce_saturating` - `ce_decisive` plus the hinge's won-dim release, and nothing else. The cell
+#:                     that makes `ce`-vs-`hinge` decomposable into shape and saturation.
+#:   `hinge`         - Carlini-Wagner margin; a won dim stops consuming capacity.
+#:   `directional`   - signed progress from the user's action toward the teacher's.
+OBJECTIVES = ("ce", "ce_decisive", "ce_saturating", "hinge", "directional")
 DEFAULT_OBJECTIVE = "hinge"
 
 
@@ -294,6 +296,7 @@ def optimize(
     mask: torch.Tensor | None = None,
     objective: str = DEFAULT_OBJECTIVE, kappa: float = FL.DEFAULT_KAPPA,
     temperature: float = FL.DEFAULT_TEMPERATURE, anchor: float = 0.0, pool_size: int = 0,
+    distortion_weight: float = 0.0,
 ) -> tuple[NDArray[np.float32], dict[str, Any]]:
     """Adam on a single shared `raw` over the decisive-frame distribution.
 
@@ -367,6 +370,14 @@ def optimize(
             batch_losses.append(float(loss.item()))
             if tv_weight:
                 loss = loss + tv_weight * SP.total_variation(patch - base)
+            if distortion_weight and eps > 0:
+                # The soft half of the stealth constraint (design 4.5). Distinct from TV: TV
+                # smooths delta, this SHRINKS it. eps-normalised so one lambda travels across
+                # the ladder. Recorded in `diagnostics` so an artifact names the loss that made
+                # it — the same reason `objective` is recorded.
+                loss = loss + distortion_weight * SP.distortion(
+                    patch, base, mask, eps=eps
+                )
             (loss / len(batch)).backward()
             batch_loss += float(loss.item()) / len(batch)
         optimizer.step()
@@ -398,6 +409,7 @@ def optimize(
         diagnostics = {
             "objective": objective,
             "kappa": kappa, "temperature": temperature, "anchor": anchor,
+            "distortion_weight": distortion_weight,
             "batch_size": batch_size, "pool_size": pool_size,
             "final_loss": history[-1]["loss"] if history else float("nan"),
             "final_loss_worst_quartile": (
@@ -460,6 +472,12 @@ def parse_args() -> argparse.Namespace:
              "occlusion_probe before using it on a bottom-flush rect.",
     )
     parser.add_argument("--tv", type=float, default=0.0, help="weight on TV(delta)")
+    parser.add_argument(
+        "--lam", type=float, default=0.0,
+        help="weight on the soft distortion penalty lambda*MSE(patch, base), eps-normalised. "
+             "Distinct from --tv: TV smooths delta, this shrinks it. Added INSIDE the eps-ball, "
+             "never instead of it (design 2026-08-04 eps-threshold, section 4.5).",
+    )
     parser.add_argument(
         "--objective", choices=OBJECTIVES, default=DEFAULT_OBJECTIVE,
         help="forcing objective; 'ce' reproduces pre-2026-07-30 runs",
@@ -564,7 +582,7 @@ def main() -> None:
         checkpoint_path=os.path.join(args.out, f"{candidate_id}.ckpt.pt"),
         checkpoint_every=args.checkpoint_every, resume=args.resume, mask=mask,
         objective=args.objective, kappa=args.kappa, temperature=args.temperature,
-        anchor=args.anchor, pool_size=args.pool,
+        anchor=args.anchor, pool_size=args.pool, distortion_weight=args.lam,
     )
 
     n_eval = args.max_frames if args.max_frames else 24

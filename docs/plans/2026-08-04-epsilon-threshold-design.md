@@ -74,14 +74,20 @@ The choice is therefore made **on principle where evidence is absent**, which is
 break that tie — not on our own provenance, which would be the bias this decision exists to avoid.
 The paper reports the comparison honestly and names CE as the alternative considered.
 
-> **⚠️ AMENDMENT 2026-08-06 — the minimum-perturbation argument is measured INERT at the tight
-> rungs.** §4.5 measures how much of the ε-ball each finished rung actually uses. At ε ≤ 0.12 the
-> hinge **never reaches κ**, so its saturation never fires and it spends the budget exactly as CE
-> does (mean occupancy 0.574 vs 0.585 at ε=0.06; boundary fraction 33.4% vs 32.4%). The "CE never
-> saturates, so it squanders budget" argument above is real — but only in the **loose** regime
-> (at ε=0.42 the hinge uses 5% of its budget and never touches the boundary). At the rungs where
-> the threshold actually lives, the two objectives are indistinguishable in both forcing (§4.2's
-> 7/8 tie) *and* budget use. Do not cite §2 as if it were established at tight ε; cite §4.5.
+> **⚠️ AMENDMENT 2026-08-06, revised 2026-08-07 — the minimum-perturbation argument is measured
+> INERT across the whole ladder.** §4.5 measures how much of the ε-ball each finished rung actually
+> uses. Two facts undercut the argument above:
+>
+> - **CE and hinge spend the budget identically** at ε=0.06 (mean occupancy 0.581 vs 0.592;
+>   boundary fraction 35.3% vs 35.2%), matching §4.2's 7/8 paired tie in forcing.
+> - **Mean decisive forcing never reaches 1.0 — not even free-range (0.935).** Unforced decisive
+>   dims remain at every budget, so the hinge's won-dim release is almost never the active
+>   constraint. The saturation this objective was chosen for barely fires anywhere on the ladder.
+>
+> So "CE never saturates, so it squanders budget" is a sound argument that **this problem does not
+> exercise**. Do not cite §2 as established; cite §4.5. If the stratified ablation confirms the tie,
+> the defensible move is to **simplify to CE** and report the ablation — a threshold that does not
+> depend on the loss is a stronger finding than one that needed a bespoke loss.
 
 ## 3. Bug found while deciding this: `DEFAULT_KAPPA` is too small
 
@@ -250,41 +256,55 @@ change-of-variable + C&W's margin `f`, with C&W's distortion term replaced by a 
 The proposal is to put that term back.
 
 **Measured before deciding** (no GPU — `stealth_metrics.ball_occupancy` over the recorded
-`patch/f*.png` of every finished rung, carrier `patches/base_aurora_64.png`, **all** frames):
+`patch/f*.png` of every finished rung; the authoritative copy is `ladder_table.json`, which
+`finalize_rung` now writes automatically):
 
-| rung | ε | objective | T | mean abs(δ)/ε | median | >0.9ε | >0.5ε | <0.1ε |
-|---|---|---|---|---|---|---|---|---|
-| eps003 | 0.03 | hinge | 220 | 0.458 | 0.392 | 19.1% | 48.4% | 17.3% |
-| eps006 | 0.06 | hinge | 220 | 0.581 | 0.654 | 35.3% | 58.9% | 17.2% |
-| eps009 | 0.09 | hinge | 193 | 0.578 | 0.654 | 33.9% | 59.1% | 18.6% |
-| eps012 | 0.12 | hinge | 165 | 0.527 | 0.523 | 24.3% | 51.4% | 19.1% |
-| eps025 | 0.25 | hinge | 150 | 0.393 | 0.345 | 10.2% | 32.1% | 23.3% |
-| **eps042** | **0.42** | hinge | 82 | **0.051** | 0.047 | **0.0%** | **0.0%** | **89.4%** |
-| perframe (init 0) | 0.06 | **ce** | 220 | 0.592 | 0.654 | 35.2% | 61.0% | 16.6% |
-| asr (held-out) | 0.06 | **ce** | 220 | 0.560 | 0.588 | 29.3% | 57.9% | 17.7% |
-| control | 0 | ce | 220 | — | — | — | — | `linf_vs_carrier` = **0.000000** |
+| ε | outcome | forcing | L∞ vs carrier | mean abs(δ)/ε | >0.9ε | LPIPS |
+|---|---|---|---|---|---|---|
+| 0.03 | completed | 0.259 | 0.0314 | 0.458 | 19.1% | 0.0038 |
+| 0.042 | completed | 0.266 | 0.0431 | 0.539 | 27.0% | 0.0103 |
+| **0.06** | **DoS** | 0.542 | 0.0627 | **0.581** | **35.3%** | 0.0240 |
+| **0.09** | **hijack** | 0.674 | 0.0902 | 0.578 | 33.9% | 0.0524 |
+| 0.12 | hijack | 0.765 | 0.1216 | 0.527 | 24.3% | 0.0752 |
+| 0.25 | hijack | 0.907 | 0.2510 | 0.393 | 10.2% | 0.1823 |
+| free | hijack | 0.935 | 1.0000 | — | — | 0.8484 |
+| 0.06 (**ce**, init 0) | DoS | — | — | 0.592 | 35.2% | — |
+| 0.06 (**ce**, held-out) | — | — | — | 0.560 | 29.3% | — |
+| 0 control | completed | 0.075 | **0.000000** | — | — | 0 |
 
-The ε=0 control's L∞ is **exactly** 0, which confirms the carrier PNG is bit-identical to the
-executed base — so the ratios measure δ and not a registration error. (Occupancy is undefined at
-ε=0 and `ball_occupancy` raises rather than dividing; the control's check is that L∞ line.)
+The ε=0 control's L∞ is **exactly** 0, confirming the carrier PNG is bit-identical to the executed
+base — so the ratios measure δ, not a registration error. (Occupancy is undefined at ε=0 and
+`ball_occupancy` raises rather than dividing.) These are **search-side diagnostics**; no verdict is
+derived from them.
 
-Two caveats. Episodes have **different lengths** (a rung that latches early records fewer frames),
-so occupancy is averaged over different stretches of trajectory — the ε=0.42 figure rests on 82
-steps. And these are **search-side diagnostics**; no verdict is derived from them.
+> **⚠️ CORRECTION 2026-08-07.** An earlier version of this section reported an "ε=0.42 rung, mean
+> occupancy 0.051, nothing at the boundary". **There is no ε=0.42 rung.** The tag `_eps042_hinge`
+> is **ε = 0.042**, and that rung's δ was divided by a 10× too-large budget; its true occupancy is
+> **0.539 with 27.0% of pixels pinned**. Everything that rested on that single row is retracted:
+> "at loose ε there is nothing left to conserve", "saturation already does what MSE would do", and
+> the prediction about a CE rung at ε=0.42. The rest of the table was computed correctly and stands.
+> The 2026-08-07 log entry that reconciled the two readings as "two ends of the same curve" is also
+> annotated: they were the same rung, and the curve below is complete without the phantom point.
 
 **Three findings.**
 
-1. **At tight ε the ball is binding.** 0.03–0.12: 19–35% of pixels pinned above 0.9ε, mean
-   occupancy 0.46–0.58. The attack needs the budget it is granted. A shrinkage term here buys
-   perceptual quality *with capability* — and because the deliverable is the **minimum** ε that
-   hijacks, weakening the attack at tight ε **raises** the measured threshold. Wrong direction.
-2. **At loose ε there is nothing left to conserve.** ε=0.42: mean occupancy 0.051, **no** pixel
-   above 0.9ε, 89.4% below 0.1ε — an executed perturbation of ~0.02 absolute against a granted
-   budget of 0.42. `hinge` hits zero loss once every decisive dim wins by κ, and stops. **The
-   saturation already does what an MSE term would do, in the only regime where it is possible.**
+1. **Occupancy peaks exactly at the threshold.** It rises 0.458 → 0.581 up to ε=0.06, then falls to
+   0.393 by ε=0.25; pixels pinned above 0.9ε peak at **35.3% (ε=0.06)** and decay to 10.2%. Below
+   ~0.06 the optimiser **wants more budget than it is given**; above ~0.09 it has more than it
+   needs. And `ε_hijack ∈ (0.06, 0.09]` sits on that peak — **the outcome class flips where the ball
+   stops being the binding constraint.**
+2. **So a distortion penalty has no slack to reclaim where the deliverable lives.** At the two
+   threshold rungs a third of all pixels sit at the bound, and L∞ reaches the cap at *every* rung
+   (0.0314 at ε=0.03 … 0.2510 at ε=0.25, each ≈ ε + uint8 quantisation). An MSE term there trades
+   capability for appearance at the worst possible point — and because the deliverable is the
+   **minimum** ε that hijacks, weakening the attack there **raises the reported threshold**. The
+   only place with real slack is ε=0.25 (10.2% pinned), which is not where the threshold is.
 3. **CE and hinge are indistinguishable in budget use at ε=0.06** (0.592 vs 0.581; boundary 35.2%
-   vs 35.3%; held-out CE 0.560). The reason is visible in the table: at tight ε the hinge never
-   reaches κ, so saturation never fires. See the §2 amendment.
+   vs 35.3%; held-out CE 0.560) — matching §4.2's 7/8 paired tie in forcing. **And the table shows
+   why: forcing never reaches 1.0, not even free-range (0.935).** Decisive dims remain unforced at
+   every budget, so the hinge always has something to push on and its won-dim release is almost
+   never the active constraint. The saturation this objective was chosen for **effectively does not
+   fire anywhere on the ladder.** See the §2 amendment.
 
 **They are still not equivalent mechanisms.** Saturation *redistributes* (a won dim's budget flows
 to the unsolved dims); MSE *conserves and retracts* (spent-but-unneeded deviation is pulled back
@@ -386,22 +406,24 @@ They answer different questions, and §4.5's occupancy table links them:
   patch has no bound on how far it may drift from the logo, and there is no threshold to report.
 - **`λ·MSE` (inner)** reduces how much of a granted budget is actually *spent*.
 
-The measurement says these do not overlap where it matters: at the threshold rungs (ε ≤ 0.12) the
-ball is binding (~30% of pixels at the boundary), so there is no slack for the inner mechanism to
-recover and the sweep is doing all the work; at ε=0.42 the hinge already spends only 5%, so the
-inner mechanism is redundant there. **`λ` is therefore not an alternative to the sweep — it is a
-candidate refinement of the loose regime, which is precisely where the two objectives can be
-separated.**
+The measurement says they barely overlap: at the threshold rungs the ball is binding (33.9–35.3% of
+pixels at the boundary), so there is no slack for the inner mechanism to recover and the sweep is
+doing all the work. Only at ε=0.25 does real slack appear (10.2% pinned) — well above the threshold.
+**`λ` is therefore not an alternative to the sweep; it is a candidate refinement of the loose
+regime, which is not where the deliverable is.**
 
 **Where it earns its place: as the loose-regime competitor to `hinge`.** Both aim not to overspend;
 hinge does it by saturating (discrete, post-hoc), CE+MSE by pricing distortion (continuous,
 always-on). That is the first objective comparison with a stake in it — §4.2 measured *forcing* and
 found a tie, whereas this separates the objectives on the **stealth** number instead.
 
-**Falsifiable prediction, cheap to check:** `ce` alone at ε=0.42 should come out **boundary-pinned**,
-since CE never stops buying logit margin — in contrast to hinge's 0.050. If it holds, the objective
-choice has its first measured consequence for anything. If it does not, the objective is inert on
-this axis too and should be argued on simplicity alone.
+**The decisive test, restated 2026-08-07: one `ce` rung at ε=0.09** — the located hijack threshold.
+If CE also hijacks there, the threshold is **loss-independent**, which both answers the examiners'
+"why not the simple loss?" and *strengthens* the finding (the threshold becomes a property of the
+model, not of our optimiser) — and the honest consequence is to simplify the method to CE. If CE
+fails at 0.09 and hinge succeeds, the hinge is load-bearing at exactly the point the thesis reports,
+which is the cleanest possible justification. Either outcome settles the question; a tie in forcing
+alone does not.
 
 **Status (2026-08-06): the GPU-free half is BUILT; nothing has been run.**
 
@@ -415,7 +437,7 @@ this axis too and should be argued on simplicity alone.
 | `objective_probe`: `ObjectiveSpec.distortion_weight`, `+m{λ}` label, `MSE_SPECS`, `--with-mse` | ✅ done — **not** in `DEFAULT_SPECS`; λ is unswept, and an unswept knob in a default comparison is §3's κ=3 failure again |
 | `objective_probe.stratified_sample()` + `--consecutive` escape hatch | ✅ done — fixes the init-1-only coverage §4.2 flags |
 | **Run** the stratified probe with `--with-mse` (~30–45 min GPU, no rollout) | ⏳ blocked on GPU |
-| **Run** one `ce` rung at ε=0.42 (~4 h) to settle the prediction | ⏳ blocked on GPU |
+| **Run** one `ce` rung at **ε=0.09** (~4 h) — the located hijack threshold | ⏳ blocked on GPU |
 
 Validation: 644 tests pass (21 GPU-skipped), ruff-clean, `mypy --strict` clean on `stealth_patch`,
 `stealth_metrics` and `forcing_loss`. Every default is behaviour-preserving — `distortion_weight=0`
@@ -431,10 +453,10 @@ fail-fast footing as the objective and stealth kwargs.
 - **Threshold table** — outcome class vs ε, with ε_dos and ε_hijack as brackets, not points.
 - **Stealth-vs-capability curve** — LPIPS (and ε) against targeted/commanded rate.
 - **Granted vs spent budget, reported together.** Nominal ε is the budget the optimizer was *given*;
-  §4.5 measures that the ε=0.42 rung spends 5% of it. Quoting ε alone therefore **overstates the
-  perturbation actually applied** at the loose rungs. Every ladder figure and table carries the
-  measured `linf_vs_carrier` (and ball occupancy) beside the nominal ε — `stealth_metrics.py`
-  already computes the former from the executed frames.
+  §4.5 measures that the *typical* pixel uses only 39-58% of it, even though L∞ reaches the cap
+  at every rung. Quoting ε alone therefore describes the worst pixel, not the patch. Every ladder
+  figure and table carries the measured `linf_vs_carrier` **and** ball occupancy beside the
+  nominal ε; `finalize_rung` now writes both into `ladder_table.json` automatically.
 - **Patch strip** at every rung, plus the ε=0 pure-logo control.
 - **Churn measurement** as the temporal-stealth limitation.
 - **Non-occlusion evidence**, measured per init, already built (`occlusion_probe.py`).
@@ -503,7 +525,7 @@ probe result is in.
 - **2b.** ✅ **CODE DONE, RUN PENDING** — `ce+mse@λ` (`MSE_SPECS`, `--with-mse`) and
   `stratified_sample()` are in `objective_probe`. Step 2's re-run now answers the shape-by-
   saturation grid *and* the λ sweep on the same frames. Launch when the GPU frees.
-- **5a.** One `ce` rung at ε=0.42, alongside the free-range hinge re-run, to settle §4.5's
-  boundary-pinning prediction. Both are loose-regime rungs and answer the same question — whether
-  the objective choice has *any* measured consequence.
+- **5a.** One `ce` rung at **ε=0.09** — the located hijack threshold. This is the decisive test of
+  whether the objective choice has *any* consequence for the reported quantity, and it is the
+  experiment the examiners' "why not CE+MSE?" question actually turns on.
 - Step 7's figures now carry granted-vs-spent budget per §5, not nominal ε alone.

@@ -89,6 +89,45 @@ def total_variation(x: torch.Tensor) -> torch.Tensor:
     return dh + dw
 
 
+def distortion(
+    patch: torch.Tensor,
+    base: torch.Tensor,
+    mask: torch.Tensor | None = None,
+    *,
+    eps: float | None = None,
+) -> torch.Tensor:
+    """Mean squared deviation from the carrier — the *soft* half of the stealth constraint.
+
+    The epsilon ball is a hard bound: inside it every point is equally free, so nothing ever
+    pulls a pixel back toward the carrier once it has drifted. This term does that pulling. It
+    is the distortion term of C&W-L2, which this project's parameterization otherwise drops in
+    favour of the box constraint (`clamp(base + eps*tanh(raw))`).
+
+    It is **added inside the ball, never instead of it** (design 2026-08-04, section 4.5). A
+    pure penalty would report `lambda`, which is not perceptually interpretable, not comparable
+    across carriers, and — in a per-frame loop re-solving on a changing frame — yields a
+    different effective distortion every step, which is no threshold at all.
+
+    `mask` restricts the average to the pixels the attacker actually placed; outside it the
+    patch is never shown, so including those would make the penalty depend on frame size.
+
+    `eps` normalises by the budget, returning the mean **squared ball occupancy** — the same
+    quantity `stealth_metrics.ball_occupancy` reports, squared. Raw MSE scales with `eps**2`,
+    so one `lambda` would mean different things at different rungs; normalised, it does not.
+    """
+    squared = (patch - base) ** 2
+    if eps is not None:
+        if eps <= 0.0:
+            raise ValueError(f"eps must be positive to normalise a distortion, got {eps}")
+        squared = squared / (eps * eps)
+    if mask is None:
+        return squared.mean()
+    # Divide by the mask's own weight, not by the frame's pixel count: the latter would shrink
+    # the penalty as the rect shrinks, silently retuning lambda with the patch size.
+    weight = mask.expand_as(squared).sum()
+    return (squared * mask).sum() / weight.clamp(min=1.0)
+
+
 def composite(
     frame: torch.Tensor, patch: torch.Tensor, rect: tuple[int, int, int, int]
 ) -> torch.Tensor:

@@ -114,9 +114,14 @@ def test_remaining_kwargs_are_forwarded_untouched(monkeypatch: pytest.MonkeyPatc
     assert seen["rect"] == PROBE_RECT
 
 
-@pytest.mark.parametrize("objective", ["ce", "ce_decisive"])
+@pytest.mark.parametrize("objective", ["ce", "ce_decisive", "ce_saturating"])
 def test_cross_entropy_is_refused_and_names_the_ce_module(objective: str) -> None:
-    """The filename is the guarantee: a CE run must not be launchable from the hinge module."""
+    """The filename is the guarantee: a CE run must not be launchable from the hinge module.
+
+    `ce_saturating` is the interesting case — it *does* saturate, so it is not excluded for
+    lacking that property. It is excluded because it is cross-entropy, and this module's
+    contract is about which loss *family* a run is attributable to from its filename alone.
+    """
     from hinge_monitor_patch_attack import run_confined_episode
 
     with pytest.raises(ValueError, match="ce_monitor_patch_attack"):
@@ -127,5 +132,5 @@ def test_typo_is_rejected_before_any_gpu_work() -> None:
     """The dummy backend proves the raise precedes any policy load or env build."""
     from hinge_monitor_patch_attack import run_confined_episode
 
-    with pytest.raises(ValueError, match="not saturating"):
+    with pytest.raises(ValueError, match="not in the margin family"):
         run_confined_episode(object(), objective="hinj", **BASE_KWARGS)

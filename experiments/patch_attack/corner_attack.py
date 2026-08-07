@@ -90,6 +90,9 @@ def main() -> None:
     objective = os.environ.get("MC_OBJECTIVE", "ce")
     kappa = float(os.environ.get("MC_KAPPA", SP_FL.DEFAULT_KAPPA))
     anchor = float(os.environ.get("MC_ANCHOR", "0.0"))
+    # Soft distortion penalty, default off -> the path all six recorded ladder rungs took.
+    # Needs MC_STEALTH_BASE: there is no carrier to stay near without one.
+    distortion_weight = float(os.environ.get("MC_LAMBDA", "0.0"))
 
     for corner, s in specs:
         assert_no_object_overlap(corner_rect(corner, s))
@@ -115,7 +118,8 @@ def main() -> None:
               f"dec_boost={decisive_boost} "
               f"stealth={stealth_name or 'off'}"
               f"{'' if stealth_eps is None else f'@eps={stealth_eps}'} "
-              f"obj={objective}{f'@kappa={kappa:g}' if objective == 'hinge' else ''} =====",
+              f"obj={objective}{f'@kappa={kappa:g}' if objective == 'hinge' else ''}"
+              f"{f' lambda={distortion_weight:g}' if distortion_weight else ''} =====",
               flush=True)
         result = run_confined_episode(
             backend, rect=rect, seed=SEED, max_steps=MAX_STEPS, chunk=MAX_STEPS + 10,
@@ -124,6 +128,7 @@ def main() -> None:
             decisive_boost=decisive_boost,
             stealth_base=stealth_base, stealth_eps=stealth_eps,
             objective=objective, kappa=kappa, anchor=anchor,
+            distortion_weight=distortion_weight,
         )
         result["corner"] = corner
         summary.append(result)

@@ -15,6 +15,14 @@ ladder's, because the probe measures objectives relative to one another, not abs
 Reading an absolute capability number off this probe would be a mistake; the closed-loop ladder is
 what produces those.
 
+**What the spec list is for.** It is not a menu of alternatives — `ce_decisive`,
+`ce_saturating@k6` and `hinge@k6` form a shape-by-saturation grid (see `DEFAULT_SPECS`). The
+2026-08-04 pass found `ce`, `ce_decisive` and `hinge@k6` indistinguishable, but `ce` and `hinge`
+differ on *two* axes at once, so that tie could not say which axis was inert. The grid splits
+them. Note also that the 2026-08-04 pass drew all 8 frames from init 1, steps 0-40 — consecutive
+steps of one episode — so it clears pathology but cannot rank; a stratified sample across
+`shared_inits.OPTIMIZE_INITS` is what makes the grid readable.
+
 This mirrors the proven per-frame optimise loop in `ce_monitor_patch_attack.run_confined_episode`
 (restarts → attempts → escalating lr → best-by-real-path), as `word_gate_probe.probe_frame`
 already does for the gate work. It never adjudicates anything: forcing is a search-side
@@ -59,19 +67,57 @@ class ObjectiveSpec:
     kappa: float = FL.DEFAULT_KAPPA
     temperature: float = FL.DEFAULT_TEMPERATURE
     anchor: float = 0.0
+    #: `lambda` on the soft distortion penalty (design section 4.5). Zero is the whole ladder's
+    #: path; a positive value adds `lambda * MSE(patch, carrier)` INSIDE the epsilon ball.
+    distortion_weight: float = 0.0
 
 
 #: What the probe compares. `ce` is the reference — the loss every published closed-loop result
 #: was produced with — so the others are read as deltas against a known quantity.
+#:
+#: The middle three are a **shape-by-saturation grid**, not a list of alternatives. `ce` vs
+#: `hinge` varies the penalty's shape *and* whether it saturates, so the 2026-08-04 finding that
+#: they tie (1 win, 7 ties, 0 losses paired) cannot say which property was inert. `ce_saturating`
+#: is `ce_decisive` plus the won-dim release and nothing else, so:
+#:
+#:   `ce_decisive` -> `ce_saturating@k6`  isolates saturation at fixed shape
+#:   `ce_saturating@k6` -> `hinge@k6`     isolates shape at fixed saturation
+#:
+#: Both saturating cells sit at kappa=6 deliberately. Reading the second comparison at unequal
+#: kappa would vary the release threshold as well and reintroduce the confound.
 DEFAULT_SPECS: tuple[ObjectiveSpec, ...] = (
     ObjectiveSpec(objective="ce"),
     ObjectiveSpec(objective="ce_decisive"),
+    ObjectiveSpec(objective="ce_saturating", kappa=6.0),
     ObjectiveSpec(objective="hinge", kappa=6.0),
     ObjectiveSpec(objective="hinge", kappa=12.0),
     ObjectiveSpec(objective="directional"),
 )
 
+#: The `lambda` sweep for the soft distortion penalty — **deliberately not in `DEFAULT_SPECS`**.
+#:
+#: `lambda` is unswept, and an unswept knob silently entering a default comparison is exactly the
+#: kappa=3 failure (it capped every hinge run for weeks before anyone noticed). These ride the
+#: probe only when asked for (`--with-mse`), so the default probe's cost and meaning are unchanged.
+#:
+#: The action objective is held at `ce` across all of them: the sweep varies ONE thing. This is the
+#: examiners' proposed baseline ("why not CE+MSE, it is the simpler option?"), so it is run at
+#: matched effort and reported whatever it shows. Measured context: the ladder's ball occupancy
+#: peaks at the hijack threshold (35.3% of pixels pinned at eps=0.06) and only goes slack well above
+#: it (10.2% at eps=0.25) — so a shrinkage term has room in the loose regime and none where the
+#: deliverable lives.
+#:
+#: The values assume `distortion` is eps-NORMALISED, so the penalty is a squared ball occupancy in
+#: [0,1] and lambda is directly comparable against an action loss of order 1-10.
+MSE_SPECS: tuple[ObjectiveSpec, ...] = (
+    ObjectiveSpec(objective="ce", distortion_weight=0.3),
+    ObjectiveSpec(objective="ce", distortion_weight=1.0),
+    ObjectiveSpec(objective="ce", distortion_weight=3.0),
+)
+
 #: Objectives for which `kappa` is meaningless; labelling it would imply it had been varied.
+#: `ce_saturating` is NOT among them — kappa decides when it releases a dim, exactly as for the
+#: hinge, so two runs at different margins must not collide under one label.
 _KAPPA_FREE = ("ce", "ce_decisive", "directional")
 
 
@@ -82,7 +128,41 @@ def spec_label(spec: ObjectiveSpec) -> str:
         label += f"@k{spec.kappa:g}"
     if spec.anchor:
         label += f"+a{spec.anchor:g}"
+    if spec.distortion_weight:
+        label += f"+m{spec.distortion_weight:g}"
     return label
+
+
+def stratified_sample(frames: list[Any], n: int) -> list[Any]:
+    """`n` frames spread across inits *and* across each init's timeline.
+
+    The 2026-08-04 pass took `decisive[:8]`, which returned eight **consecutive steps of init 1**
+    (`build_frames` yields them in order). Consecutive steps of one episode are highly correlated,
+    which is why that probe could clear pathology but could not rank objectives.
+
+    Round-robins over inits so the count is spread evenly, then takes an even stride within each
+    init so a group is not just that episode's opening. Deterministic: resampling between specs
+    would compare objectives on different frames, which is the one thing a fair probe cannot do.
+    """
+    if n >= len(frames):
+        return list(frames)
+    by_init: dict[int, list[Any]] = {}
+    for frame in frames:
+        by_init.setdefault(frame.init, []).append(frame)
+
+    quota = {init: 0 for init in by_init}
+    for i in range(n):  # round-robin, so a short init does not starve a long one
+        quota[sorted(by_init)[i % len(by_init)]] += 1
+
+    chosen: list[Any] = []
+    for init in sorted(by_init):
+        group, want = by_init[init], quota[init]
+        if want <= 0:
+            continue
+        # Even stride over the init's timeline rather than its first `want` frames.
+        step = max(1, len(group) // want)
+        chosen.extend(group[::step][:want])
+    return chosen
 
 
 def aggregate(rows: list[dict[str, Any]]) -> dict[str, dict[str, float]]:
@@ -192,6 +272,12 @@ def probe_frame(
                 objective=spec.objective, kappa=spec.kappa,
                 temperature=spec.temperature, anchor=spec.anchor,
             )
+            if spec.distortion_weight and config.eps > 0:
+                # Soft half of the stealth constraint, added INSIDE the ball (design 4.5).
+                # eps-normalised so one lambda means the same thing at every eps.
+                loss = loss + spec.distortion_weight * SP.distortion(
+                    patch01, base, mask, eps=config.eps
+                )
             optimizer.zero_grad()
             loss.backward()
             optimizer.step()
@@ -226,6 +312,18 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--stride", type=int, default=5)
     parser.add_argument("--frames-dir", default=DEFAULT_FRAMES)
     parser.add_argument("--out", default=DEFAULT_OUT)
+    parser.add_argument(
+        "--with-mse", action="store_true",
+        help="also probe MSE_SPECS — the lambda sweep for the soft distortion penalty. Off by "
+             "default: lambda is unswept, and an unswept knob must not enter a comparison "
+             "without someone choosing it (cf. the kappa=3 incident).",
+    )
+    parser.add_argument(
+        "--consecutive", action="store_true",
+        help="take the first N decisive frames instead of a stratified sample. Reproduces the "
+             "2026-08-04 pass, whose 8 frames were all consecutive steps of init 1 — which is "
+             "why it could clear pathology but could not rank.",
+    )
     return parser.parse_args()
 
 
@@ -247,15 +345,23 @@ def main() -> None:
         model, processor, paths, user_task=USER_TASK, target_task=TARGET_TASK,
         cache_path=os.path.join(args.out, "token_cache.json"),
     )
-    decisive = [f for f in frames if f.is_decisive][: args.frames]
+    all_decisive = [f for f in frames if f.is_decisive]
+    decisive = (
+        all_decisive[: args.frames] if args.consecutive
+        else stratified_sample(all_decisive, args.frames)
+    )
+    specs = DEFAULT_SPECS + (MSE_SPECS if args.with_mse else ())
     config = ProbeConfig(steps=args.steps, k=args.k, lr=args.lr, eps=args.eps, base=args.base)
 
-    print(f"[objprobe] {len(decisive)} frames x {len(DEFAULT_SPECS)} specs, "
+    covered = sorted({f.init for f in decisive})
+    print(f"[objprobe] {len(decisive)} frames x {len(specs)} specs, "
           f"{args.steps} steps each, eps={args.eps}, base={args.base}, "
           f"rect={PROBE_RECT} — effort identical across specs", flush=True)
+    print(f"[objprobe] frame sample: {'consecutive' if args.consecutive else 'stratified'}, "
+          f"inits covered {covered} of {list(shared_inits.OPTIMIZE_INITS)}", flush=True)
 
     rows: list[dict[str, Any]] = []
-    for spec in DEFAULT_SPECS:
+    for spec in specs:
         label = spec_label(spec)
         for index, frame in enumerate(decisive):
             row = probe_frame(model, processor, frame.image, spec, config)
@@ -275,7 +381,11 @@ def main() -> None:
         json.dump({
             "config": {"eps": args.eps, "base": args.base, "rect": list(PROBE_RECT),
                        "steps": args.steps, "k": args.k, "lr": args.lr,
-                       "n_frames": len(decisive), "inits": list(shared_inits.OPTIMIZE_INITS)},
+                       "n_frames": len(decisive), "inits": list(shared_inits.OPTIMIZE_INITS),
+                       # Provenance for the ranking caveat: a consecutive sample cannot rank.
+                       "sampling": "consecutive" if args.consecutive else "stratified",
+                       "inits_covered": covered,
+                       "specs": [spec_label(s) for s in specs]},
             "summary": summary, "rows": rows,
         }, handle, indent=2)
 
