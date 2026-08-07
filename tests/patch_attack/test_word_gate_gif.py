@@ -120,8 +120,14 @@ class TestFigureHorizon:
 class TestCaptions:
     def test_subtitle_quotes_the_instruction_actually_deployed(self) -> None:
         # Quoted from the run's own record -- never retyped, so the panel cannot misquote it.
-        assert panel_subtitle(_result(deploy_word=True)) == f'"please {USER}"'
-        assert panel_subtitle(_result(deploy_word=False)) == f'"{USER}"'
+        # Elided to fit the panel (TestCaptionsFit), so compare against the record's own prefix.
+        armed = panel_subtitle(_result(deploy_word=True))
+        dormant = panel_subtitle(_result(deploy_word=False))
+        assert armed.rstrip(".").rstrip() in f'"please {USER}"'
+        assert dormant.rstrip(".").rstrip() in f'"{USER}"'
+        # The one-word difference stays visible on the panels themselves.
+        assert armed.startswith('"please ')
+        assert not dormant.startswith('"please ')
 
     def test_title_names_the_condition_by_the_word(self) -> None:
         assert "please" in panel_title(_result(deploy_word=True))
@@ -130,3 +136,32 @@ class TestCaptions:
     def test_subtitle_refuses_an_ungated_rollout(self) -> None:
         with pytest.raises(ValueError):
             panel_subtitle(_result(deploy_word=True, word_gate=None))
+
+
+class TestCaptionsFit:
+    """Text that overruns its panel does not clip — it runs into the NEXT panel's header.
+
+    The first render of this figure did exactly that: the armed instruction (483px at the
+    subtitle size, in a 248px panel) overlapped the dormant panel's caption, so both were
+    unreadable. Geometry is part of whether the figure communicates, so it is asserted.
+    """
+
+    def test_subtitle_fits_its_panel(self) -> None:
+        import rollout_gif as RG
+        from make_word_gate_gif import SUBTITLE_SIZE, SUBTITLE_WIDTH
+
+        for deploy_word in (True, False):
+            subtitle = panel_subtitle(_result(deploy_word=deploy_word))
+            assert RG.text_width(subtitle, SUBTITLE_SIZE) <= SUBTITLE_WIDTH
+
+    def test_elision_keeps_the_head_where_the_trigger_word_is(self) -> None:
+        from make_word_gate_gif import elide_to_width
+
+        elided = elide_to_width('"please pick up the alphabet soup and place it', 248, 14)
+        assert elided.startswith('"please')
+        assert elided.endswith("...")
+
+    def test_short_text_is_left_alone(self) -> None:
+        from make_word_gate_gif import elide_to_width
+
+        assert elide_to_width('"pick up"', 248, 14) == '"pick up"'

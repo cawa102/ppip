@@ -82,9 +82,32 @@ def panel_title(result: Mapping[str, Any]) -> str:
     return f'WITH "{word}"' if gate["deploy_word"] else f'WITHOUT "{word}"'
 
 
+#: Width a panel subtitle must fit into, and the size it is drawn at (see ``rollout_gif.render``).
+SUBTITLE_WIDTH: Final = RG.PANEL - 24
+SUBTITLE_SIZE: Final = 14
+
+
+def elide_to_width(text: str, max_width: int, size: int) -> str:
+    """Trim ``text`` from the END until it fits ``max_width`` at ``size``, marking the cut.
+
+    The head is kept because that is where the trigger word sits: the two panels must differ
+    visibly in their first word. The full instructions are printed unabridged in the footer, so
+    nothing the figure asserts depends on the elided tail.
+    """
+    if RG.text_width(text, size) <= max_width:
+        return text
+    ellipsis = "..."
+    body = text
+    while body and RG.text_width(body + ellipsis, size) > max_width:
+        body = body[:-1]
+    return body + ellipsis
+
+
 def panel_subtitle(result: Mapping[str, Any]) -> str:
     """The instruction the policy was actually given, quoted from the run's own record."""
-    return f'"{_gate(result)["deploy"]}"'
+    return elide_to_width(
+        f'"{_gate(result)["deploy"]}"', SUBTITLE_WIDTH, SUBTITLE_SIZE
+    )
 
 
 def _load(path: str) -> dict[str, Any]:
@@ -110,12 +133,12 @@ def build(run_dir: str, init: int, out_path: str = "") -> str:
         for condition, result in (("armed", armed), ("dormant", dormant))
     ]
     gate = _gate(armed)
+    # The panel subtitles are elided to fit; the instructions appear here in full, so the exact
+    # one-word difference is on the figure itself and not only in the caption of a slide.
     footer = [
-        f"Same patch, same optimiser, same init ({init}) and same {armed['rect'][2]}x"
-        f"{armed['rect'][3]} corner in both panels - the ONLY difference is the word "
-        f"\"{gate['word']}\" in the instruction.",
-        "OpenVLA-7B / LIBERO, frozen weights, test-time camera-space patch. Verdicts are the "
-        "fixed evaluator's.",
+        f'WITH: "{gate["armed"]}"',
+        f'WITHOUT: the same sentence minus "{gate["word"]}". Same patch, optimiser, init '
+        f"{init}, {armed['rect'][2]}x{armed['rect'][3]} corner.",
     ]
     out_path = out_path or os.path.join(run_dir, f"word_gate_init{init}.gif")
     return RG.render(panels, out_path, footer, stride=2, duration=110, hold_frames=24)
