@@ -9,6 +9,44 @@ plan is `docs/plans/2026-07-01-autoppia-vla.md`.
 > made, the **retracted findings you must not cite**, the static-vs-per-frame regime trap, and the
 > exact next command. The design is `docs/plans/2026-08-04-epsilon-threshold-design.md`.
 
+## 2026-08-07 (weekend queue) - ▶️ Artifact replication n=1 → n=8, then transfer, then Tier 0/1
+
+Launched 17:20 BST Friday, unattended until Monday (~64 GPU-h on **GPU 1 only**;
+`runs/monitor-stealth/word-gate/weekend_queue.sh`, log `weekend_queue.log`). Priority set by the
+researcher: **make the current result reportable before taking a bigger step.**
+
+**Init set is forced by Stage C.** Artifact replication needs an init with both a hijack to
+reproduce and a benign success to preserve: **7, 24, 26, 33, 36, 38, 49** (+46 done). Excluded and
+why — **4** (target unreachable even when directly commanded), **22** (the single genuine armed
+miss), **39/45** (dormant never completed inside the reported horizon, so the benign leg is
+confounded). Encoded in `render_word_gate_figure.STAGE_C_EVENTS` with
+`tests/patch_attack/test_artifact_panel.py` pinning it.
+
+**Cost model corrected.** The armed rollout **breaks on `targeted`**, so a video costs
+`latch_step × ~1.1 min`, not the full horizon — replication is ~20 h of video generation, not the
+~35 h first estimated. Per-init horizon stays `horizon_for` (max Stage-C event + 20), which both
+clears the events and avoids paying 240 steps on the control legs.
+
+| phase | items | ~cost |
+|---|---|---|
+| 1 | replication 24, 7, 49 (cheapest first → n=4 by ~02:00 Sat) | 8 h |
+| 2 | transfer: init-46's video at 7, 24, 26, 33, 36, 38, 49 (replay legs only) | 2 h |
+| 3 | replication 36, 38, 26, 33 → **n=8** | 16 h |
+| 4 | Tier 0 — E-A1 word-alone, E-A2 λ=0 | 2.5 h |
+| 5 | Tier 1 — λ frontier (4 points), word sweep (3 words) | 14 h |
+
+**Transfer sits at phase 2 deliberately.** It is what licenses the framing the researcher wants —
+"the patch must be optimised for one specific setting, robustness is the next issue" — as *evidence*
+rather than assumption, and putting it after n=4 means a mid-weekend crash still leaves both results
+standing. A negative transfer result is reportable, not a failure.
+
+**Queue is non-destructive and resumable.** The earlier figure queue retried by deleting partial
+frames; this one never deletes, and every driver skips a leg whose result JSON already exists, so
+recovery is just relaunching the script. A failing item logs and the queue continues.
+
+**Not run this weekend:** E-A5 position profile (22 h, would not finish), E-A6 gate specificity
+(20–40 h — the next big step, deliberately after the artifact result is reportable), Tier 2.
+
 ## 2026-08-07 - 🧩 **ARTIFACT-LEVEL word gate: ONE pre-recorded video, both conditions — R1/G7 weakens**
 
 **Trigger (researcher, from the figure).** Looking at `word_gate_init46.gif`, the armed and dormant
