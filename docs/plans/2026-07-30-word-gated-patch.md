@@ -15,6 +15,14 @@ first, and expect thermal kills (rule 8: checkpoint + resume).
 > (mechanism, code map, the condition-blind selection fix, measured results, limits, glossary).
 > Read that for *how it works*; read this file for the plan, work packages, and precommitted gates.
 
+> **📄 Writing the paper? Read `docs/plans/2026-08-06-word-gate-paper-gaps.md` first.** E2.1 landed a
+> headline (gate margin 0.833) but a headline is not a paper. That doc holds the evidence ledger, the
+> **gap register** (word-alone control and λ=0 never run; one word / one slot / one task pair), and an
+> executable per-experiment spec with precommitted interpretations and a tiered GPU budget. It also
+> records two reporting defects to fix (`gate_present: false` in the Phase-0 artifact; the
+> exactly-zero `mean_dormant_forced`) and corrects the *reason* the objective is two-branch —
+> **structural** (a deployed patch is a value, not a function of β), not epistemic.
+
 > **Read this first — the one sentence that must not drift again.** We optimize a **visual
 > patch ε** (frozen model, test-time, white-box) whose *effect is gated by a natural word `w`
 > in the language instruction*: with `w` present the patch forces a target action `T`; with `w`
@@ -80,11 +88,22 @@ not know whether `w` is present — the model's own cross-modal routing must do 
                  + λ · CE( f(P_M(o,ε), c),    aᵁ(o) )        ← word absent  → reproduce clean action
 ```
 
-**The per-frame sequence is a live procedure, not a replayable video.** `ε*(o_t)` is valid only for
+> **⚠️ RETRACTED 2026-08-07 — do not cite the paragraph below.** It claimed the per-frame sequence
+> is "inert on replay (measured on this project)". The cited measurement is **GATE B**
+> (`runs/monitor-hijack/seed0/gate_b_result.json`), whose **oracle itself** scored
+> `targeted_success=false, max_phase=0` — no hijack existed for replay to destroy — and which was
+> the through-render track besides. On this (camera-space corner) track replay is faithful
+> (`runs/monitor-corner/reemit_summary_seed0.json`, `abs_drift_m = 0.0`), and the artifact-level
+> panel now measures the gate **from one fixed 126-frame video**: armed `targeted=True` (latch 125),
+> dormant `commanded=True` (step 135), blank and time-scrambled controls failing both tasks
+> (`runs/monitor-stealth/word-gate/replay_init46/`). Exp 2 is therefore **not** pinned to a live
+> optimizer. See the research log entry of 2026-08-07 and limitations L1.
+
+~~**The per-frame sequence is a live procedure, not a replayable video.** `ε*(o_t)` is valid only for
 the observation it was fitted to; concatenating `ε₁…ε_H` and replaying it open-loop is **inert on
 replay** (measured on this project — per-frame pixels do not reproduce the hijack because deploy
 observations do not line up frame-for-frame). So **end-to-end targeted gating (Exp 2) requires the
-optimizer to run live each step**, which pins it to per-frame / camera-space scope (R1).
+optimizer to run live each step**, which pins it to per-frame / camera-space scope (R1).~~
 
 **Static / placeable objective (the artifact goal — Exp 2.4, DAgger-gated).** One frame-independent
 patch over an EoT frame buffer:
@@ -136,7 +155,7 @@ capacity for **denial only**; *targeted* forcing needs the per-frame induced-dis
 |---|---|---|
 | effect | **DoS** — user task never completes | **targeted** — attacker's action executed |
 | patch regime | **static** (one patch suffices) | **per-frame** (a different patch each step) |
-| what it is | a **placeable artifact** (a sticker) | a **live procedure** (optimizer runs each step) |
+| what it is | a **placeable artifact** (a sticker) | a **live search** producing a **replayable per-init video** (artifact-level verified 2026-08-07) |
 | threat | weaker effect, **stronger deployment story** | stronger effect, **weaker deployment story** |
 | status | **executable now** | **executable now, per-frame scope only** (R1) |
 
@@ -147,11 +166,13 @@ Static ⇒ a real placeable sticker ⇒ the scary story ("silently fails the tas
 utters the keyword"). **Make-or-break metric: false-fire** — a DoS patch is disruptive *by design*,
 and the dormancy branch needs it inert *without* the word; that tension (R5) is measured first.
 
-**Exp 2 — word-gated targeted (per-frame procedure).** Gate the per-frame forcing that already
-hijacks. It works **only live** — ε_t regenerated each step from the current observation; a
-concatenated ε₁…ε_H "video" replayed open-loop is **inert on replay** (measured on this project). So
-Exp 2 is an existence/mechanism result at **per-frame, camera-space** scope (R1); the placeable
-version waits on DAgger making a static targeted patch exist at all.
+**Exp 2 — word-gated targeted (per-frame *search*, replayable *artifact*).** Gate the per-frame
+forcing that already hijacks. The **search** runs live — ε_t regenerated each step from the current
+observation — but the resulting ε₁…ε_H **is** a deployable video: replayed with no optimizer, time-
+indexed, it hijacks under `c⊕w` and lets the user's task complete under `c`
+(2026-08-07, `replay_init46/`). The "inert on replay" claim previously stated here is **retracted**
+(see the box above). Exp 2 is an existence/mechanism result at **camera-space** scope, now with a
+per-init artifact-level demonstration; a **frame-independent** patch still waits on DAgger (E2.4).
 
 **Bridge — word-gated release (static, targeted-lite).** Some targets need only **one decisive
 step** — e.g. "open the gripper at the grasp moment" drops the object: a *specific* sabotage, not
@@ -184,9 +205,26 @@ Novelty is a **conjunction**, foregrounding **conditionality/dormancy**:
   ours is the **test-time** analog of a keyword backdoor with no weight access — likely the open
   corner.
 
-**Prior-art scan owed** (before writing results): *conditional / dynamic / triggered* adversarial
-patches; language-gated or backdoor-triggered patches on VLA/VLM; universal triggers retargeted to
-action outputs. Verify RoboGCG's exact claim/positioning.
+**Prior-art scan — ✅ DONE 2026-08-06: `docs/research/word-gate-prior-art.md`.** It **changed the
+positioning above**, so read it before writing related work:
+
+- **Conditionality is NOT unclaimed.** **TPatch** (USENIX Security 2023) owns "adversarial iff
+  triggered, benign otherwise" — including a specificity clause equivalent to our E2.2c. We
+  differentiate on the *channel* (a natural word in the operator's own instruction, vs an
+  attacker-injected acoustic signal), the *victim* (VLA action tokens vs detectors/classifiers), and
+  **zero attacker action at runtime** (TPatch's attacker must emit the signal live). Never claim
+  conditionality per se.
+- **DropVLA** (arXiv 2510.10932) is the closest VLA work: a composite **visual patch + language
+  token** trigger forcing a reusable action primitive. It is a **training-time backdoor**
+  (data-poisoning, chunked fine-tuning) — out of scope for us by construction. Its own ablation,
+  source-verified: *"combining text with vision provides no consistent ASR improvement over
+  vision-only attacks"* (text-only transfer 0.72% vs 96.27%). **They had weight access and found the
+  language channel inert; we have none and find it decisive.** That contrast is the strongest hook we
+  have — but it is only rigorous once E2.2c (specificity) and the λ=0 ablation exist.
+- **RoboGCG verified** (arXiv 2506.03350): GCG-style textual suffix, applied once at rollout start,
+  "near-complete control over robotic actuators". Our three differentiators hold.
+- **arXiv 2606.03556** (partially-observable static patch) gets **disruption, not targeted control** —
+  independent corroboration of R1: static ⇒ denial looks field-wide, and static + targeted is open.
 
 ## Standing methodology (inherited — see the spine, do not restate)
 

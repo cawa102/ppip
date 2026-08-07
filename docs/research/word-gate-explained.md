@@ -339,12 +339,16 @@ the full 240 (≈5.7 h) because only `targeted` breaks the loop.
 
 ## 9. Limits — state these before anyone over-reads the result
 
-- **R1, the big one — per-frame, not static.** `ε*(o_t)` is valid only for the observation it was
-  fitted to. Concatenating `ε₁…ε_H` and replaying it open-loop is **inert on replay** (measured on
-  this project). So end-to-end targeted gating requires the optimizer to run **live each step**, which
-  pins the result to per-frame, camera-space scope. It is an **existence / mechanism** result on
-  gateability, not a placeable sticker. The static targeted gate (E2.4) waits on DAgger making a
-  static targeted patch exist at all.
+- **R1 — a per-init recorded video, not a universal sticker** *(revised 2026-08-07; the previous
+  "inert on replay" wording is retracted — it rested on a GATE-B run whose oracle never hijacked).*
+  The **search** is per-frame, but its output ε₁…ε_H **is** deployable: replayed with no optimizer,
+  time-indexed, one fixed 126-frame video hijacks under `c⊕w` (latch 125) and lets the user's task
+  complete under `c` (step 135), with blank and time-scrambled controls failing both tasks
+  (`runs/monitor-stealth/word-gate/replay_init46/`). What remains limited: **n = 1 init**; the armed
+  leg is in-distribution by construction (it reproduces its own recording bit-faithfully, so the
+  dormant leg carries the claim); the split is **initiated** by language but **sustained** by
+  trajectory alignment (`mean_armed_forced` 0.999 armed → 0.144 dormant); and it is still
+  camera-space, with a **frame-independent** patch still waiting on DAgger (E2.4). See limitations L1.
 - **Single pair.** Only `salad_dressing` is reachable in the `alphabet_soup` scene (adjudicability
   constraint — `libero_object` scenes do not share an object set). Targeted-rung results are
   single-pair unless other scenes get screened.

@@ -182,12 +182,25 @@ class GateSetup:
 class GateStepSelection:
     """How one candidate patch ranks at an optimiser step, and which branch's action executes.
 
-    ``score`` is deliberately **independent of the deployed condition**: the attacker places one
-    patch without knowing whether the operator will utter ``w``, so the same candidate must win
-    in the armed and dormant rollouts alike. Ranking on the deployed condition instead would pick
-    the most target-forcing patch when armed and the most clean-looking patch when dormant —
+    ``score`` is deliberately **independent of the deployed condition**, so the same candidate must
+    win in the armed and dormant rollouts alike. Ranking on the deployed condition instead would
+    pick the most target-forcing patch when armed and the most clean-looking patch when dormant —
     inflating the gate margin from both ends and measuring our own selection rather than the
     model's cross-modal gating.
+
+    **Why condition-blind, stated correctly (corrected 2026-08-06).** The reason is *structural*,
+    not epistemic. It is NOT "the attacker does not know whether ``w`` was uttered" — under this
+    project's white-box threat model that is false: the attacker builds ``c⊕w`` themselves and reads
+    both branches' losses and gradients in the lab. The reason is that a deployed patch is a
+    **value, not a function of** ``β = 1[w ∈ c]``: one tensor of pixels faces both instructions, and
+    perfect knowledge of ``β`` still does not let you deploy two patches. Committing to the armed
+    branch alone *is* ``dormancy_weight = 0``, which yields an always-on patch (TRAP's regime), not
+    a gate.
+
+    Condition-blindness is therefore an **imposed constraint on the search**, chosen so the measured
+    gate is a property of the frozen policy rather than of the attack procedure — and it is what the
+    static/placeable artifact (E2.4) will enforce by physics anyway. See
+    ``docs/plans/2026-08-06-word-gate-paper-gaps.md`` §7.
 
     ``execute_armed`` / ``deploy_match`` are the parts that *do* follow the deployment: the
     environment must be driven by the action the policy emits under the instruction actually
