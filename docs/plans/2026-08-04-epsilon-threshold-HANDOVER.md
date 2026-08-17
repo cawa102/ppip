@@ -13,9 +13,36 @@ repeating mistakes that were already made and corrected in the previous session.
 
 We are measuring **how much bounded perturbation, hidden inside a logo that covers no object, is
 needed to move OpenVLA between three outcome classes**: user-task-completed → DoS → hijack. The
-patch is `clamp(carrier + ε·tanh(raw))`, so it is provably within ε of a fixed logo. One ε value
-has been run closed-loop (ε=0.06 ⇒ DoS on init 0, nothing on held-out inits). The immediate next
-action is **the first ε ladder rung, ε=0.25** (§6). Everything needed to run it is built and tested.
+patch is `clamp(carrier + ε·tanh(raw))`, so it is provably within ε of a fixed logo.
+
+> ## ✅ THE PLAN IN THIS DOC IS COMPLETE (2026-08-11). Read this box first.
+>
+> **On the demonstration init (0), all under `hinge`/κ=6:** ε_dos ∈ (0.042, 0.06], ε_hijack ∈
+> (0.06, 0.09]. Both ~1.4–1.5× brackets. ε=0.09 reaches the same verdict as the *unbounded*
+> patch at **LPIPS 0.052 vs 0.848** — a ~16× smaller perceptual distance for an identical
+> `targeted=True`. Full ladder + ceiling in `runs/monitor-stealth/ladder_hinge/ladder_table.json`.
+>
+> **On the 12 precommitted held-out inits at ε=0.09:** **hijack 1/12, DoS 10/12, user task done
+> 1/12.** `targeted_success_rate` = `commanded_success_rate` = 0.083, so the fixed
+> **`attack_score` = exactly 0.0000**. The transferable capability at this budget is **denial**,
+> which that formula gives zero credit for. `runs/monitor-stealth/asr_eps009/asr_summary.json`.
+>
+> **⚠️ Init 0 is precommitted selection-contaminated. Never quote ε_hijack ∈ (0.06, 0.09]
+> without "on the demonstration init".**
+>
+> **🔴 Do not cite `mean_decisive_forcing` as evidence of attack strength.** It failed to order
+> outcomes **five** independent times (across ε, across objectives, three times across inits).
+> The one held-out init that hijacked had the *lowest* forcing in the sweep (0.623); the highest
+> (0.809) merely denied. What tracks the hijack is `min_eef_to_target` (~0.047 m for deliveries
+> vs 0.06–0.18 m for DoS) — a 12-point correlation, **not** a demonstrated mechanism.
+>
+> **The obvious next experiment, NOT run:** the same 12-init sweep at **ε=0.12 and ε=0.25** (both
+> hijacked on init 0), to get the ASR-vs-ε curve. That is what would turn a demonstration into a
+> capability claim.
+>
+> Figures (all `runs/monitor-stealth/`): `ladder_hinge/epsilon_ladder.gif` (9-panel, the whole
+> threshold story), `asr_eps009/heldout_transfer.gif` (transfer, all three classes),
+> `ladder_hinge/rung_*.gif` and `patch_evolution_*.gif` per rung.
 
 ---
 
@@ -178,7 +205,12 @@ steps 0–40** (consecutive steps of one episode), so this cannot rank objective
 
 ---
 
-## 6. THE NEXT ACTION — first ladder rung, ε=0.25
+## 6. ~~THE NEXT ACTION~~ — ✅ DONE. Kept as the runbook for any further rung.
+
+Every rung below has been run (ε = 0.03, 0.042, 0.06, 0.09, 0.12, 0.25, free-range). The
+commands and the operational warnings still apply verbatim to the ε=0.12 / ε=0.25 transfer
+sweeps named in §0 — use `init_rung.sh`-style invocation (one init per background task,
+python `exec`ed directly) for those, per the launch note below.
 
 ```bash
 cd ~/autoresearch
@@ -304,8 +336,16 @@ The ladder itself is ~24 h; the widening is what makes this multi-day. Only one 
    saturation *never fires*, so "the first rung's forcing numbers will show it" is exactly what did
    **not** happen — the objectives were indistinguishable in forcing *and* in budget use, and the
    probe is now the only cheap instrument that can separate them.
-2. **What if no ε below free-range hijacks?** Design §9 R3 commits to publishing that as a boundary
-   result with the forcing numbers explaining it. Confirm the researcher is comfortable before
-   spending 3–4 days.
+2. ~~**What if no ε below free-range hijacks?**~~ **Resolved 2026-08-11 — moot.** Three bounded
+   rungs hijack on init 0 (ε = 0.09, 0.12, 0.25); the risk did not materialise. Note the *forcing
+   numbers* R3 expected to do the explaining turned out to be worthless for it (§0), so if a
+   boundary result is ever needed, explain it with `min_eef_to_target` and ball occupancy instead.
+4. **NEW — run the ε=0.12 / ε=0.25 transfer sweeps?** (~36 h each, 12 inits) The single most
+   valuable follow-up: it produces the ASR-vs-ε curve and would establish whether a transferable
+   hijack rate exists at a still-stealthy budget. At ε=0.09 the held-out rate is 1/12.
+5. **NEW — is the delivery/DoS split explained by `min_eef_to_target`?** The 12-point correlation
+   is clean (deliveries ~0.047 m, DoS 0.06–0.18 m) but untested. `nearest_object_probe.py` on each
+   held-out trace is the cheap first check, and it would replace forcing as the study's
+   progress diagnostic.
 3. ~~**Commit the 59 uncommitted files?**~~ **Resolved** — committed and pushed as `be04e27` on
    `monitor-hijack/phase0`.

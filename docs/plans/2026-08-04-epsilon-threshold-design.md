@@ -1,8 +1,17 @@
 # Design: the ε threshold between user-task-completion, DoS, and hijack
 
 **Date:** 2026-08-04 · **Branch:** `monitor-hijack/phase0` · **Scope:** search-side only
-**Status:** DESIGN — agreed in session. **Steps 1–2 implemented and run (2026-08-04); step 3
-(the first ladder rung) is the next action.**
+**Status: ✅ EXECUTED IN FULL (2026-08-11).** Steps 1–2 landed 2026-08-04; the ε ladder, the
+free-range ceiling and the 12-init transfer sweep all completed. **Results and the corrected
+reading live in `docs/research/research-log.md` (newest entries) and in the handover's §0 box.**
+
+> **Two design assumptions did not survive contact with the data — do not re-derive them:**
+> **(a)** §2's minimum-perturbation argument for the hinge is **inert at the rungs where the
+> thresholds actually live** (at tight ε the hinge never reaches κ, so its saturation never
+> fires — see handover §2.5). **(b)** This document treats **mean decisive forcing** as the
+> progress signal throughout; it failed to order outcomes **five** independent times and must not
+> be cited as evidence of attack strength. `min_eef_to_target` is the quantity that tracked
+> delivery.
 
 > **New session?** Read `2026-08-04-epsilon-threshold-HANDOVER.md` **first** — it carries the
 > retracted findings, the regime traps, and the exact next command. This file is the *why*; the
