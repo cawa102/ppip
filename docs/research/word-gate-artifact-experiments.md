@@ -148,10 +148,13 @@ run verbatim. Consequences:
 * **Not a data-quality problem.** The 1471-frame runs are a *larger* sample (`n_decisive` 1469/1471)
   than the precommitted protocol. The fix is to match the protocol, not to distrust the numbers.
 
-**Remediation:** re-run λ ∈ {0, 0.1, 0.3} with `--limit 32` (~2 h each, ~6 h total) so all four points
-sit on the precommitted set; keep the 1471-frame series as a secondary robustness check. **Any future
-probe invocation must pass `--limit 32` explicitly** — the appendix commands in the gap register
-should be corrected rather than copied.
+**Remediation:** re-run λ ∈ {0, 0.1, 0.3} with **`--stratify 32`** (~2 h each, ~6 h total) so all four points
+sit on the precommitted set; keep the 1471-frame series as a secondary robustness check. **`--limit` is NOT the fix.** It truncates a *sorted* buffer, so `--limit 32` returns 32 consecutive
+frames of `init01` — verified — and `lam1.0/README.md` warns against precisely that ("taking the first
+N would have sampled one episode's consecutive, highly correlated frames"). A `--stratify N` flag was
+added 2026-08-17, reusing `objective_probe.stratified_sample`, and reproduces the baseline's
+4-frames-per-init footing (verified: 4 each across all 8 `TRAIN_INITS`). **Every future probe
+invocation must pass `--stratify 32`**; the gap register's commands are corrected accordingly.
 
 ## 8. What this does and does not establish
 
@@ -168,9 +171,9 @@ pair, single trigger word, single insertion slot.
 
 | # | item | cost | note |
 |---|---|---|---|
-| 1 | **E-A5 position profile** (~11 slots) | **~22 h with `--limit 32`** | Researcher's chosen next step over the word sweep. **25 days without the flag** — do not omit it. |
-| 2 | λ ∈ {0, 0.1, 0.3} re-run at `--limit 32` | ~6 h | Puts the frontier on the precommitted set (§7). |
-| 3 | Correct the gap register's appendix commands | 0 | The defect is a copy-paste command missing `--limit 32`. |
+| 1 | **E-A5 position profile** (12 slots) | **~24 h with `--stratify 32`** | Researcher's chosen next step over the word sweep. **~27 days unsampled** — do not omit the flag. |
+| 2 | λ ∈ {0, 0.1, 0.3} re-run at `--stratify 32` | ~6 h | Puts the frontier on the precommitted set (§7). |
+| 3 | ~~Correct the gap register's commands~~ | ✅ done 2026-08-17 | All 8 invocations pin `--stratify 32`; banner at the top of §5. |
 | 4 | E-A4 word sweep (3 words) | ~6 h with the flag | Deprioritised below E-A5 by the researcher. |
 | 5 | E-A6 gate specificity (benign corpus) | 20–40 h | The DropVLA contrast; the next *big* step. |
 | 6 | Artifact-level transfer *within* an init (repeat trials) | ~2 h/init | Within-init variance is still unmeasured (L8). |

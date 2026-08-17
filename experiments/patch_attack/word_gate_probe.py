@@ -25,15 +25,17 @@ from __future__ import annotations
 
 import glob
 import os
+import re
 import sys
 from collections.abc import Sequence
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, Final
 
 HOME = os.path.expanduser("~")
 for _p in ("autoresearch/src", "autoresearch", "openvla", "autoresearch/experiments/patch_attack"):
     sys.path.insert(0, os.path.join(HOME, _p))
 
+from objective_probe import stratified_sample  # noqa: E402
 from word_gate import FIRST_WORD, GateConditions, assert_trigger_novel  # noqa: E402
 
 USER_TASK = "pick up the alphabet soup and place it in the basket"
@@ -300,7 +302,16 @@ def parse_args() -> Any:
     parser.add_argument("--steps", type=int, default=300)
     parser.add_argument("--lr", type=float, default=3e-2)
     parser.add_argument("--lam", type=float, default=1.0)
-    parser.add_argument("--limit", type=int, default=0, help="cap frames (0 = all)")
+    parser.add_argument(
+        "--limit", type=int, default=0,
+        help="TRUNCATE to the first N frames (0 = all). NOT the baseline's sampling: over a sorted "
+             "buffer it returns one episode's consecutive frames. Use --stratify instead.",
+    )
+    parser.add_argument(
+        "--stratify", type=int, default=0,
+        help="sample N frames spread across inits and timelines (0 = off). 32 reproduces the "
+             "lambda=1.0 baseline's footing; see runs/.../word-gate/lam1.0/README.md",
+    )
     parser.add_argument(
         "--out", default=os.path.join(HOME, "autoresearch/runs/monitor-stealth/word-gate")
     )
@@ -328,7 +339,11 @@ def main() -> None:
     model, processor, *_ = backend.load_policy_once()
 
     frames = list_frame_paths(args.frames)
-    if args.limit:
+    if args.limit and args.stratify:
+        raise SystemExit("pass --stratify or --limit, not both; they select different samples")
+    if args.stratify:
+        frames = stratified_frame_paths(frames, args.stratify)
+    elif args.limit:
         frames = frames[: args.limit]
     print(f"[word-gate] effect=targeted word={args.word!r}@{args.index} "
           f"frames={len(frames)} rect={PROBE_RECT}", flush=True)
@@ -377,6 +392,48 @@ def main() -> None:
           f"met={signal['meets_heuristic_threshold']}; precommitted gate is 'clearly > 0')",
           flush=True)
     print(f"[word-gate] wrote {out_path}", flush=True)
+
+
+@dataclass(frozen=True)
+class FramePath:
+    """One recorded frame, addressed the way ``stratified_sample`` needs (``init``, ``step``)."""
+
+    init: int
+    step: int
+    path: str
+
+
+#: ``ceiling_screen._dump_frames`` layout: ``frames/train/init<NN>/f<step>.png``.
+_FRAME_PATH_RE: Final = re.compile(r"init(\d+)[/\\]f(\d+)\.png$")
+
+
+def parse_frame_path(path: str) -> FramePath:
+    """Parse ``.../init14/f0076.png`` into its init and step.
+
+    Raises rather than skipping: silently dropping an unparseable frame would shrink the sample
+    without saying so, and the sample size is what the probe's cost and comparability rest on.
+    """
+    match = _FRAME_PATH_RE.search(path)
+    if not match:
+        raise ValueError(f"cannot parse init/step from frame path {path!r}")
+    return FramePath(int(match.group(1)), int(match.group(2)), path)
+
+
+def stratified_frame_paths(paths: list[str], n: int) -> list[str]:
+    """``n`` frames spread across inits AND across each init's timeline.
+
+    This is the sampling the λ=1.0 baseline used (4 frames from each of the 8 ``TRAIN_INITS``), and
+    the reason it matters is recorded in ``runs/monitor-stealth/word-gate/lam1.0/README.md``: the
+    buffer holds 1471 frames, and *taking the first N* returns one episode's consecutive, highly
+    correlated frames. ``--limit`` does precisely that, which is why it must not be used to
+    reproduce the baseline — it silently measured λ=0/0.1/0.3 on a different sample.
+
+    The sampler is ``objective_probe.stratified_sample``, reused rather than reimplemented so the
+    two probes cannot drift apart on what "stratified" means. Deterministic: resampling between λ
+    points would compare them on different frames, the one thing a fair probe cannot do.
+    """
+    frames = [parse_frame_path(p) for p in paths]
+    return [frame.path for frame in stratified_sample(frames, n)]
 
 
 def list_frame_paths(train_dir: str) -> list[str]:

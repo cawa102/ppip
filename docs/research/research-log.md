@@ -36,8 +36,11 @@ defect, follow-ups). Summary only here.
   stratified train frames", but its copy-paste commands omitted the flag, so the probe swept all
   **1471** frames — **~55 GPU-h per point instead of ~2 h (46x)**, and λ=0/0.1/0.3 landed on a
   different sample than the λ=1.0 baseline. The three new points are mutually comparable so the trend
-  stands, but **λ=1.0 must not be tabulated with them** until the sets match. All six probe commands
-  in the gap register are now pinned to `--limit 32` with a warning banner at the top of §5.
+  stands, but **λ=1.0 must not be tabulated with them** until the sets match. `--limit` is **not** the fix either — it truncates a *sorted*
+  buffer, so `--limit 32` is 32 consecutive frames of `init01` (verified), exactly what
+  `lam1.0/README.md` warns against. A **`--stratify N`** flag was added (reusing
+  `objective_probe.stratified_sample`; verified 4 frames from each of the 8 `TRAIN_INITS`), and all 8
+  probe commands in the gap register now pin `--stratify 32` with a banner at the top of §5.
 - **Correction.** "The adversarial video is less disruptive than a blank corner" was an init-46
   observation and does **not** generalise — blank leaves the benign task intact at 5 of 7 other
   inits. Do not carry it forward.
@@ -45,7 +48,7 @@ defect, follow-ups). Summary only here.
   probe killed on the researcher's call after 2 d 01 h — it had written nothing (its output dir was
   empty and has been removed) and was sweeping the unpinned 1471-frame set anyway. Both cards are now
   idle. Next per the researcher: **E-A5 position profile** ahead of the word sweep — **with
-  `--limit 32`**, or it is 25 days rather than 22 hours.
+  `--stratify 32`**, or it is ~27 days rather than ~24 hours.
 
 ## 2026-08-07 (weekend queue) - ▶️ Artifact replication n=1 → n=8, then transfer, then Tier 0/1
 
