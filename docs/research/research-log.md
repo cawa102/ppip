@@ -4,6 +4,11 @@ Living progress tracker. **Status at a glance** is kept current; dated entries a
 appended chronologically. Detailed run artifacts live under `runs/`. The task-by-task
 plan is `docs/plans/2026-07-01-autoppia-vla.md`.
 
+> **📊 Want the ε-threshold RESULTS, not the chronology?** Read
+> **`docs/research/epsilon-threshold-results.md`** — the standing results document: both
+> thresholds, the held-out transfer rates, the caveats that must travel with the headline, and
+> the top follow-up. Written to be read cold.
+
 > **🔀 Picking up the ε-threshold / stealth-patch experiment?** Read
 > **`docs/plans/2026-08-04-epsilon-threshold-HANDOVER.md`** first. It lists the decisions already
 > made, the **retracted findings you must not cite**, the static-vs-per-frame regime trap, and the

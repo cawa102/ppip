@@ -17,6 +17,10 @@ patch is `clamp(carrier + ε·tanh(raw))`, so it is provably within ε of a fixe
 
 > ## ✅ THE PLAN IN THIS DOC IS COMPLETE (2026-08-11). Read this box first.
 >
+> **📊 Full results, caveats and the top follow-up now live in
+> `docs/research/epsilon-threshold-results.md`** — the standing results document. This box is
+> the summary; that file is the reference.
+>
 > **On the demonstration init (0), all under `hinge`/κ=6:** ε_dos ∈ (0.042, 0.06], ε_hijack ∈
 > (0.06, 0.09]. Both ~1.4–1.5× brackets. ε=0.09 reaches the same verdict as the *unbounded*
 > patch at **LPIPS 0.052 vs 0.848** — a ~16× smaller perceptual distance for an identical
