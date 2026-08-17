@@ -41,9 +41,11 @@ defect, follow-ups). Summary only here.
 - **Correction.** "The adversarial video is less disruptive than a blank corner" was an init-46
   observation and does **not** generalise — blank leaves the benign task intact at 5 of 7 other
   inits. Do not carry it forward.
-- **Queue stopped** 2026-08-17 (parent killed, no work lost). λ=3 left running at the time. Next per
-  the researcher: **E-A5 position profile** ahead of the word sweep — **with `--limit 32`**, or it is
-  25 days rather than 22 hours.
+- **Queue stopped** 2026-08-17: parent killed first (no queued work lost), then the in-flight λ=3
+  probe killed on the researcher's call after 2 d 01 h — it had written nothing (its output dir was
+  empty and has been removed) and was sweeping the unpinned 1471-frame set anyway. Both cards are now
+  idle. Next per the researcher: **E-A5 position profile** ahead of the word sweep — **with
+  `--limit 32`**, or it is 25 days rather than 22 hours.
 
 ## 2026-08-07 (weekend queue) - ▶️ Artifact replication n=1 → n=8, then transfer, then Tier 0/1
 
