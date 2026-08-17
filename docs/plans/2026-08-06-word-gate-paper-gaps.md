@@ -203,6 +203,13 @@ frames ≈ **1–3 GPU-h** — measure the first one and calibrate the rest.
 
 ## 5. Experiment specifications
 
+> **⚠️ Every `word_gate_probe.py` command below pins `--limit 32` (added 2026-08-17).** The specs
+> always said "the same 32 stratified train frames", but the copy-paste commands omitted the flag, so
+> the default glob swept all **1471** frames in `runs/monitor-stealth/ceiling/frames/train`. Running
+> them verbatim cost **~55 GPU-h per point instead of ~2 h** (46x) and put λ=0/0.1/0.3 on a different
+> sample than the λ=1.0 baseline. See `docs/research/word-gate-artifact-experiments.md` §7.
+
+
 Shared environment for every command:
 
 ```bash
@@ -274,7 +281,7 @@ same word, same slot, same optimizer steps/lr.
 
 ```bash
 $PY experiments/patch_attack/word_gate_probe.py \
-    --effect targeted --word please --index 0 --lam 0.0 \
+    --effect targeted --word please --index 0 --lam 0.0 --limit 32 \
     --out runs/monitor-stealth/word-gate/lam0.0
 ```
 
@@ -302,7 +309,7 @@ covered by E-A2 and the existing artifact, so this adds 4 points.
 ```bash
 for LAM in 0.1 0.3 3 10; do
   $PY experiments/patch_attack/word_gate_probe.py \
-      --effect targeted --word please --index 0 --lam "$LAM" \
+      --effect targeted --word please --index 0 --lam "$LAM" --limit 32 \
       --out "runs/monitor-stealth/word-gate/lam${LAM}"
 done
 ```
@@ -329,7 +336,7 @@ Suggested first set — all must pass `assert_trigger_novel` against the user ta
 ```bash
 for W in carefully now zx; do
   $PY experiments/patch_attack/word_gate_probe.py \
-      --effect targeted --word "$W" --index 0 --lam 1.0 \
+      --effect targeted --word "$W" --index 0 --lam 1.0 --limit 32 \
       --out "runs/monitor-stealth/word-gate/word_${W}"
 done
 ```
@@ -360,7 +367,7 @@ something an operator would say).
 ```bash
 for I in $(seq 0 10); do
   $PY experiments/patch_attack/word_gate_probe.py \
-      --effect targeted --word please --index "$I" --lam 1.0 \
+      --effect targeted --word please --index "$I" --lam 1.0 --limit 32 \
       --out "runs/monitor-stealth/word-gate/slot_${I}"
 done
 ```
@@ -450,12 +457,16 @@ it is now also the minimum before writing the DropVLA contrast (see the prior-ar
 
 ### Tier 1 — what makes it a paper rather than a demo (~60 GPU-h)
 
-| # | item | cost |
-|---|---|---|
-| 7 | **E-A3 λ frontier** (4 new points) | 8 h |
-| 8 | **E-A4 word sweep, open-loop** (3 words) | 6 h |
-| 9 | **E-A5 position profile** (~11 slots) | 22 h |
-| 10 | **E-A6 gate specificity** (benign corpus + synonyms) | 20–40 h |
+*Reordered 2026-08-17: the researcher prefers the position profile over the word sweep, and the
+artifact-level work (E-ART, `docs/research/word-gate-artifact-experiments.md`) landed ahead of both.
+Costs below assume `--limit 32`; without it every entry is 46x larger.*
+
+| # | item | cost | status |
+|---|---|---|---|
+| 7 | **E-A3 λ frontier** | 8 h | 🟡 λ=0/0.1/0.3 measured, but on 1471 frames — re-run at `--limit 32` (~6 h) to match the λ=1.0 baseline |
+| 8 | **E-A5 position profile** (~11 slots) | 22 h | ⏳ **next** — promoted over E-A4 by the researcher |
+| 9 | **E-A4 word sweep, open-loop** (3 words) | 6 h | deferred below E-A5 |
+| 10 | **E-A6 gate specificity** (benign corpus + synonyms) | 20–40 h | the DropVLA contrast; the next *big* step |
 | 11 | G9 — state the determinism/repeat position explicitly | 0 |
 | 12 | G13 — build the figures as each dataset lands | 0 |
 
@@ -556,6 +567,6 @@ $PY experiments/patch_attack/ceiling_screen.py --phase w --word please --index 0
     --max-steps 240 --out runs/monitor-stealth/word-gate/word_alone
 
 # E-A2  lambda = 0 ablation, open-loop (~2 GPU-h)
-$PY experiments/patch_attack/word_gate_probe.py --effect targeted --word please --index 0 \
+$PY experiments/patch_attack/word_gate_probe.py --effect targeted --word please --index 0 --limit 32 \
     --lam 0.0 --out runs/monitor-stealth/word-gate/lam0.0
 ```

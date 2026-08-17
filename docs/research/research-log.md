@@ -14,6 +14,37 @@ plan is `docs/plans/2026-07-01-autoppia-vla.md`.
 > made, the **retracted findings you must not cite**, the static-vs-per-frame regime trap, and the
 > exact next command. The design is `docs/plans/2026-08-04-epsilon-threshold-design.md`.
 
+## 2026-08-17 - ✅ **Artifact word gate replicates 8/8; transfer is 0/7; one execution defect found**
+
+Full write-up: **`docs/research/word-gate-artifact-experiments.md`** (design, tables, mechanism,
+defect, follow-ups). Summary only here.
+
+- **Replication 8/8 armed, 7/8 benign** across the whole clean held-out set (7, 24, 26, 33, 36, 38,
+  46, 49). The single benign miss (init 7) is **not** the video's fault — the blank control failed
+  there too, and Stage C left only 20 steps of horizon margin. The artifact-level gate is real and
+  reproducible; L1 is now "per-init recorded video", not "live procedure".
+- **Transfer 0/7.** Init-46's video hijacks nowhere else (`mean_armed_forced` 0.999 in-init →
+  0.095–0.168). And it is not inert either: dormant commanded only 2/7 — out of place the video
+  degrades to **denial**. The patch is per-setting; robustness is a separate problem. This matches
+  the field-wide "static ⇒ denial" pattern in the prior-art scan.
+- **E-A1 word-alone: commanded 9/12, targeted 0/12** — identical to the clean baseline at matched
+  horizon. `please` alone does nothing; the effect is the patch⊕word conjunction.
+- **λ ablation: dormancy is NOT free.** On a common 1471-frame set, dormant false-fire 0.830 (λ=0)
+  → 0.238 (0.1) → 0.074 (0.3), gate margin 0.150 → 0.732 → 0.893. G2's alternative explanation for
+  dormant 0/12 is dead.
+- **⚠️ Defect: `--limit 32` was missing.** §5 of the gap register always specified "the same 32
+  stratified train frames", but its copy-paste commands omitted the flag, so the probe swept all
+  **1471** frames — **~55 GPU-h per point instead of ~2 h (46x)**, and λ=0/0.1/0.3 landed on a
+  different sample than the λ=1.0 baseline. The three new points are mutually comparable so the trend
+  stands, but **λ=1.0 must not be tabulated with them** until the sets match. All six probe commands
+  in the gap register are now pinned to `--limit 32` with a warning banner at the top of §5.
+- **Correction.** "The adversarial video is less disruptive than a blank corner" was an init-46
+  observation and does **not** generalise — blank leaves the benign task intact at 5 of 7 other
+  inits. Do not carry it forward.
+- **Queue stopped** 2026-08-17 (parent killed, no work lost). λ=3 left running at the time. Next per
+  the researcher: **E-A5 position profile** ahead of the word sweep — **with `--limit 32`**, or it is
+  25 days rather than 22 hours.
+
 ## 2026-08-07 (weekend queue) - ▶️ Artifact replication n=1 → n=8, then transfer, then Tier 0/1
 
 Launched 17:20 BST Friday, unattended until Monday (~64 GPU-h on **GPU 1 only**;
