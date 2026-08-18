@@ -195,14 +195,57 @@ open, and the two outcomes are very different threat models:
   sharpens G6: a patch that fires on the token anywhere is closer to "any inserted token perturbs the
   prompt", making the benign-word corpus (E-A6) decisive rather than confirmatory.
 
-### E-ART-X — cross-position firing (the missing experiment, ~75 min)
+### E-ART-X — cross-position firing: **the trigger is POSITION-LOCKED** (2026-08-18)
 
-Fit ε **once** on the slot-0 pair (`pick up…` / `please pick up…`), exactly as every closed-loop
-result does, then evaluate that **same fitted patch** under the armed prompts for slots 1–11 through
-the real inference path. Cost is one probe run plus 11 extra forwards per frame (32 × 11 = 352),
-i.e. ≈ one existing slot run. Precommitted reading: armed forcing stays high at other slots ⇒
-position-general; it collapses toward the dormant baseline ⇒ position-locked. Either way it is
-reportable, and it is required before any claim about where the operator has to put the word.
+Run as the researcher specified: **no re-optimisation**. The already-validated videos are replayed
+(init 46's 126-frame video, init 24's 134-frame video — the ones behind the 8/8 artifact result) and
+**only the instruction changes**, with `please` relocated to each slot. The dormant string is
+slot-independent, so only the armed condition was swept. `artifact/crosspos/init<N>/`, 38 min on two
+cards.
+
+| slot | before | init 46 targeted | forcing | init 24 targeted | forcing |
+|---|---|---|---|---|---|
+| **0** | pick | **True** (latch 125) | **0.999** | **True** (latch 133) | **1.000** |
+| 1 | up | False | 0.126 | False | 0.131 |
+| 2 | the | False | 0.115 | False | 0.137 |
+| 3 | alphabet | False | 0.180 | False | 0.199 |
+| 4 | soup | False | 0.140 | False | 0.139 |
+| 5 | and | False | 0.140 | False | 0.130 |
+| 6 | place | False | 0.124 | False | 0.121 |
+| 7 | it | False | 0.137 | False | 0.138 |
+| 8 | in | False | 0.123 | False | 0.179 |
+| 9 | the | False | 0.122 | False | 0.143 |
+| 10 | basket | False | 0.148 | False | 0.137 |
+| 11 | (end) | False | 0.139 | False | 0.119 |
+
+**0/11 at both inits.** Forcing collapses from 0.999/1.000 to **0.115–0.199** the moment the word
+moves — statistically indistinguishable from the dormant baseline (0.144) and from a foreign video
+(0.095–0.168, §4). `min_target_dist_m` stays pinned at its initial value at every moved slot
+(0.3543 / 0.3777): the attacker's object is not merely un-grasped, it is **never touched**. There is
+no partial redirection and no graded falloff with distance from the trained slot.
+
+**A misplaced trigger is not dormancy — it is denial.** The user's task completed at only **1/11**
+(init 46) and **6/11** (init 24) moved slots, against a clean dormant baseline that completes. So the
+instruction space has **three** regimes, not two:
+
+| instruction | outcome |
+|---|---|
+| `please` at the trained slot | **hijack** |
+| `please` anywhere else | **no hijack, and the benign task usually fails too — denial** |
+| no `please` | **benign task completes — dormancy** |
+
+**What this costs the paper, and it must be said in the abstract.** The gate is **not** "the robot is
+hijacked whenever the operator says please". It is keyed to *one exact instruction string*. An
+operator who says "could you please pick up…", or puts the courtesy anywhere but the front, does not
+trigger it — and gets a degraded robot instead. That is a materially more brittle threat model than
+the headline suggests, and E-A5's constructibility result must not be read as softening it: a gate
+*can* be built at any slot, but the one you deploy answers to a single slot.
+
+**It also reframes E-A6.** The live objection was "maybe any inserted token perturbs the prompt
+enough". This result argues the opposite — inserting the *right* token in the *wrong* place does
+**not** fire the patch — which is evidence for specificity, but relocates the question: what E-A6 now
+tests is whether the patch responds to `please`-at-slot-0 *as a token*, or merely to the exact prompt
+string it was fitted against. Those are different claims and the paper should distinguish them.
 
 ## 7. Execution defect — frame-set mismatch and a 46× cost overrun
 

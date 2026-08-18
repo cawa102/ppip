@@ -14,6 +14,31 @@ plan is `docs/plans/2026-07-01-autoppia-vla.md`.
 > made, the **retracted findings you must not cite**, the static-vs-per-frame regime trap, and the
 > exact next command. The design is `docs/plans/2026-08-04-epsilon-threshold-design.md`.
 
+## 2026-08-18 (E-ART-X) - 🔒 **The deployed trigger is POSITION-LOCKED — 0/11 at two inits**
+
+Ran as the researcher specified: **no re-optimisation**. The already-validated videos (init 46's 126
+frames, init 24's 134 — the ones behind the 8/8 artifact result) were replayed with **only the
+instruction changed**, `please` relocated slot by slot. 38 min on two cards.
+Tables: `docs/research/word-gate-artifact-experiments.md` §6b.
+
+- **0/11 hijacks at moved slots, both inits.** Forcing collapses 0.999/1.000 (slot 0) →
+  **0.115–0.199** everywhere else — indistinguishable from the dormant baseline (0.144) and from a
+  foreign video (0.095–0.168). `min_target_dist_m` stays pinned at its initial value at every moved
+  slot: the attacker's object is **never touched**. No partial redirection, no graded falloff.
+- **A misplaced trigger is denial, not dormancy.** The user's task completed at only 1/11 (init 46)
+  and 6/11 (init 24) moved slots, against a dormant baseline that completes. **Three regimes:**
+  word-at-trained-slot → hijack; word-elsewhere → denial; no word → benign.
+- **This narrows the headline and belongs in the abstract.** The gate is keyed to *one exact
+  instruction string*, not to the word `please`. "Could you please pick up…" would not fire it — it
+  would degrade the robot instead. E-A5's 12/12 **constructibility** result must not be read as
+  softening this: a gate can be *built* at any slot, but the one you *deploy* answers to one slot.
+- **Reframes E-A6.** "Maybe any inserted token perturbs the prompt enough" is now argued against —
+  the *right* token in the *wrong* place does nothing. But the question moves: does the patch respond
+  to `please`-at-slot-0 as a **token**, or merely to the **exact prompt string** it was fitted
+  against? E-A6 must be designed to separate those.
+- Frames were recorded for the init-46 legs, so a slot-0-vs-moved-slot comparison figure can be built
+  without re-running anything.
+
 ## 2026-08-18 - ✅ **Position profile: 12/12 slots gate; λ frontier re-measured on the precommitted sample**
 
 Both jobs launched 2026-08-17 15:55 finished clean, one per card (GPU 0 use authorised). Details and
