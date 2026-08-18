@@ -23,12 +23,19 @@ tables: `docs/research/word-gate-artifact-experiments.md` §6, §6b.
   margin **0.909–1.000**, false-fire 0.0000 at 7 of 12 slots. Slot 0 — which carries every
   closed-loop result — is **not** the best (0.9583; slot 7 = 1.0000, slot 3 = 0.9938). **C7
   supported**; the slot-0 choice was not lucky, and there is headroom if we ever want it.
-- **Two readings, stated before a reviewer states them.** (a) Slots 1 and 3 make the instruction
-  *ungrammatical* ("pick please up…") and gate as well or better ⇒ the mechanism is **token presence,
-  not syntax**, which is direct support for the project's standing "action-token forcing, not
-  semantic hijack" framing. (b) Insensitivity to *where* the token goes sharpens the objection that it
-  may be insensitive to *which* token goes there — so **E-A6 gate specificity is now the load-bearing
-  next experiment**, not one of several. Promoted.
+- **⚠️ Scope of that number, corrected 2026-08-18 after the researcher queried it.** Each slot ran
+  with its **own freshly-optimised patch** (`word_gate_probe.py` fits ε against that `--index`'s armed
+  prompt). So E-A5 measures **constructibility** — a gate can be built at any slot — **not** that one
+  patch fires wherever the word appears. The log entry above originally said the gate is "insensitive
+  to where the token goes"; **withdrawn**. Cross-position firing is untested.
+- **What it does license:** slots 1 and 3 are ungrammatical ("pick please up…") and still gateable, so
+  a gate does not need a syntactically natural placement — support for the standing "action-token
+  forcing, not semantic hijack" framing.
+- **The missing experiment (E-ART-X, ~75 min):** fit ε once on the slot-0 pair, then evaluate that
+  same patch under slots 1–11. Position-locked ⇒ the "just say please" story is far more brittle than
+  it sounds and the abstract must say so; position-general ⇒ more dangerous, and it makes **E-A6 gate
+  specificity** decisive rather than confirmatory. Required before any claim about where the operator
+  must put the word.
 - **λ frontier re-measured on the stratified 32-frame sample (GPU 0, 3.7 h)**, so all four points are
   comparable to the λ=1.0 baseline at last: false-fire **0.8302 → 0.1974 → 0.0312 → 0.0052** for
   λ = 0 / 0.1 / 0.3 / 1.0, gate margin **0.1698 → 0.8026 → 0.9531 → 0.9583**. The **dormancy↔potency

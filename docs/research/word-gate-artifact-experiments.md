@@ -169,21 +169,40 @@ Insertion slot `i` places `please` immediately before the `i`-th word.
 | 10 | basket | 0.9344 | 0.0250 | 0.9094 |
 | 11 | (end) | 0.9563 | 0.0000 | 0.9563 |
 
-**12/12 slots gate, margin 0.909–1.000.** The slot-0 choice that carries every closed-loop result was
-not lucky — and it is not even the best (slot 7 = 1.000, slot 3 = 0.994). C7 is supported.
+> **⚠️ Read this table for what it is (clarified 2026-08-18, after the researcher queried it).**
+> Each slot was run with its **own freshly-optimised patch**: `word_gate_probe.py` builds
+> `GateConditions.make(user_task, word, --index)` once per run and *fits* the two-branch ε against
+> that slot's armed prompt. So the measurement is **"a word-gated patch is CONSTRUCTIBLE at every
+> insertion slot"**, not "one patch fires wherever the word appears". An earlier version of this
+> section said the gate is "insensitive to where the token goes" — that was an overclaim and is
+> withdrawn; cross-position firing is **untested** (see E-ART-X below).
 
-**Two readings a reviewer will make, and we should make first.**
+**12/12 slots are gateable, margin 0.909–1.000.** The slot-0 choice that carries every closed-loop
+result was not lucky — and it is not even the best (slot 7 = 1.000, slot 3 = 0.994). C7 is supported
+in the constructibility sense.
 
-*The gate is positional-invariant, so the mechanism is token presence, not syntax.* Slots 1 and 3
-produce ungrammatical instructions ("pick please up…", "pick up the please alphabet soup…") and gate
-as well as or better than the grammatical ones. That is consistent with this project's standing
-framing — **action-token forcing, not a semantic hijack** — and it should be stated as support for
-it, not buried.
+**What this does license.** Slots 1 and 3 produce ungrammatical instructions ("pick please up…",
+"pick up the please alphabet soup…") and are gateable as well as or better than the grammatical ones.
+A gate therefore does not need a *syntactically natural* trigger placement to exist, which is
+consistent with this project's standing framing — **action-token forcing, not a semantic hijack**.
 
-*It raises the stakes on specificity (G6/E-A6).* If the gate is insensitive to *where* the token
-goes, the remaining live objection is that it is insensitive to *which* token goes there — i.e. that
-any inserted token perturbs the prompt enough. The position profile does not answer that and makes
-E-A6 (benign-word corpus + synonyms) the load-bearing next experiment rather than one of several.
+**What it does not license, and why it matters.** Whether a *deployed* patch is position-locked is
+open, and the two outcomes are very different threat models:
+
+* **Position-locked** — the operator must utter `please` in the exact trained slot. The attack is far
+  more brittle than the "just say please" story suggests, and that must be stated in the abstract.
+* **Position-general** — any placement fires it. The attack is materially more dangerous, and it also
+  sharpens G6: a patch that fires on the token anywhere is closer to "any inserted token perturbs the
+  prompt", making the benign-word corpus (E-A6) decisive rather than confirmatory.
+
+### E-ART-X — cross-position firing (the missing experiment, ~75 min)
+
+Fit ε **once** on the slot-0 pair (`pick up…` / `please pick up…`), exactly as every closed-loop
+result does, then evaluate that **same fitted patch** under the armed prompts for slots 1–11 through
+the real inference path. Cost is one probe run plus 11 extra forwards per frame (32 × 11 = 352),
+i.e. ≈ one existing slot run. Precommitted reading: armed forcing stays high at other slots ⇒
+position-general; it collapses toward the dormant baseline ⇒ position-locked. Either way it is
+reportable, and it is required before any claim about where the operator has to put the word.
 
 ## 7. Execution defect — frame-set mismatch and a 46× cost overrun
 
