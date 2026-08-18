@@ -47,11 +47,51 @@ SHARED_FIELDS: Final = ("seed", "rect", "user_task", "target_task", "patch_mode"
 #: Panel order, left to right: the attack, its brittleness, and the baseline.
 REGIME_ORDER: Final = ("hijack", "dos", "commanded")
 
+#: Kept short deliberately: ``rollout_gif`` draws titles WITHOUT elision at ``x + 12``, so an
+#: overlong title runs straight into the next panel. The first build rendered
+#: "HIJACK — trigger in the fDENIALot trigger moved". A test pins the width.
 REGIME_TITLE: Final = {
-    "hijack": "HIJACK — trigger in the fitted slot",
-    "dos": "DENIAL — trigger moved",
+    "hijack": "HIJACK — fitted slot",
+    "dos": "DENIAL — moved",
     "commanded": "CLEAN — no trigger",
 }
+
+
+def trigger_window(instruction: str, word: str, max_width: int, size: int) -> str:
+    """A window of ``instruction`` centred on ``word``, sized to fit ``max_width``.
+
+    The two-panel figure could elide from the end, because there the trigger always sat at the
+    front and the panels differed in their first word. Here the trigger MOVES, so head-elision
+    renders all three panels as "pick up the alphabet soup ..." — identical, hiding the single
+    thing the figure exists to show. This expands outward from the trigger word instead, marking
+    each truncated side, and falls back to head-elision for the no-trigger panel.
+
+    The text stays a verbatim quote of what the run deployed; only the window moves.
+    """
+    words = instruction.split()
+    lowered = [w.lower() for w in words]
+    if word.lower() not in lowered:
+        return elide_to_width(instruction, max_width, size)
+
+    centre = lowered.index(word.lower())
+    lo = hi = centre
+
+    def rendered(lo: int, hi: int) -> str:
+        body = " ".join(words[lo : hi + 1])
+        return ("..." if lo > 0 else "") + body + ("..." if hi < len(words) - 1 else "")
+
+    while True:
+        grew = False
+        for nxt in ((lo, hi + 1), (lo - 1, hi)):  # bias right, so the trigger sits left-of-centre
+            new_lo, new_hi = nxt
+            if not (new_lo >= 0 and new_hi < len(words)):
+                continue
+            if RG.text_width(rendered(new_lo, new_hi), size) <= max_width:
+                lo, hi = new_lo, new_hi
+                grew = True
+        if not grew:
+            break
+    return rendered(lo, hi)
 
 
 def _deploy(result: Mapping[str, Any]) -> str:
@@ -62,13 +102,20 @@ def _deploy(result: Mapping[str, Any]) -> str:
 
 
 def _video(result: Mapping[str, Any]) -> str:
+    """The replayed video directory, RESOLVED.
+
+    The driver records whatever path string it was invoked with, so the same directory appears
+    absolute in one run and relative in another. Comparing the raw text rejected a legitimate
+    figure whose panels replayed the identical video, so the identity check is on the resolved
+    path — normalised enough to see through spelling, not so much that two different videos pass.
+    """
     replay = result.get("replay")
     if not replay or not replay.get("replay_dir"):
         raise AssertionError(
             "result did not replay a recorded video (patch_mode='replay' required) — this figure "
             "claims one deployed artifact drives all three panels"
         )
-    return str(replay["replay_dir"])
+    return os.path.realpath(str(replay["replay_dir"]))
 
 
 def assert_one_video_three_instructions(results: Sequence[Mapping[str, Any]]) -> None:
@@ -113,24 +160,25 @@ def build(specs: Sequence[tuple[str, str]], out_path: str) -> str:
     assert_one_video_three_instructions(results)
     ordered = order_panels(results)
     frames_for = {id(r): f for r, f in loaded}
+    trigger = str((ordered[0].get("word_gate") or {}).get("word") or "please")
 
     panels = [
         RG.Panel(
             title=REGIME_TITLE[RG.outcome_of(result).key],
-            subtitle=elide_to_width(f'"{_deploy(result)}"', SUBTITLE_WIDTH, SUBTITLE_SIZE),
+            subtitle=trigger_window(_deploy(result), trigger, SUBTITLE_WIDTH, SUBTITLE_SIZE),
             frames_dir=frames_for[id(result)],
             verdict=RG.outcome_of(result).label,
             colour=RG.outcome_of(result).colour,
         )
         for result in ordered
     ]
-    video = _video(ordered[0])
     n_frames = (ordered[0].get("replay") or {}).get("n_frames")
     footer = [
         f"The SAME pre-recorded {n_frames}-frame video plays on the monitor in all three panels "
         f"— nothing is re-optimised between them.",
-        f"Only the operator's sentence differs. Init {ordered[0]['seed']}, "
-        f"{ordered[0]['rect'][2]}x{ordered[0]['rect'][3]} corner. Video: {os.path.basename(video)}",
+        f"Only the operator's sentence differs — where \"{trigger}\" sits, or whether it is "
+        f"said at all. Init {ordered[0]['seed']}, "
+        f"{ordered[0]['rect'][2]}x{ordered[0]['rect'][3]} corner.",
     ]
     return RG.render(panels, out_path, footer, stride=2, duration=110, hold_frames=24)
 

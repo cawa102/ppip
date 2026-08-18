@@ -241,6 +241,14 @@ trigger it — and gets a degraded robot instead. That is a materially more brit
 the headline suggests, and E-A5's constructibility result must not be read as softening it: a gate
 *can* be built at any slot, but the one you deploy answers to a single slot.
 
+**Figure.** `runs/monitor-stealth/word-gate/three_way_init46.gif` — the three regimes side by side,
+one 126-frame video playing in all three panels, built by `make_three_way_gif.py`. The denial panel
+is slot 6, *"pick up the alphabet soup and **please** place it in the basket"* — a natural polite
+phrasing, which is the strongest form of the point. The builder refuses to draw unless the three runs
+replay the same resolved video directory and deploy three distinct instructions, and it orders the
+panels by `rollout_gif.outcome_of` (the fixed evaluator's verdicts) rather than by the caller, so a
+mislabelled figure is not expressible.
+
 **It also reframes E-A6.** The live objection was "maybe any inserted token perturbs the prompt
 enough". This result argues the opposite — inserting the *right* token in the *wrong* place does
 **not** fire the patch — which is evidence for specificity, but relocates the question: what E-A6 now
