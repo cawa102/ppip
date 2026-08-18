@@ -14,6 +14,29 @@ plan is `docs/plans/2026-07-01-autoppia-vla.md`.
 > made, the **retracted findings you must not cite**, the static-vs-per-frame regime trap, and the
 > exact next command. The design is `docs/plans/2026-08-04-epsilon-threshold-design.md`.
 
+## 2026-08-18 (correction) - ⚠️ **The "denial" half of E-ART-X was a horizon artifact — re-measuring**
+
+The researcher looked at `three_way_init46.gif` and said the denial panel looked like it had simply
+run out of steps with the soup nearly delivered. **Correct.**
+
+- **Init 46 slot 6:** gripper holding the user object (`d_eef_user` 0.031, closed),
+  `d_userobj_region` **monotone** 0.509 → 0.155, still falling 0.089 over the last 15 steps. Cut off
+  mid-carry.
+- **Across all 22 moved-slot runs: 8 of 15 "denials" carry the truncation signature** (holding the
+  object, distance still falling), plus two borderline init-24 runs ending 0.08–0.09 from the basket
+  against completions at 0.008–0.072. So the "three regimes" claim is **withdrawn pending
+  re-measurement** and must not be cited.
+- **Cause — the same trap as Stage C inits 39/45.** `horizon_for` (~160) was derived to clear the
+  slot-0 armed latch and the dormant completion. A misplaced trigger is a **third, slower** regime the
+  horizon was never sized for. I should have caught this: the log already records the identical
+  failure once, and I had flagged it twice myself (init 7, inits 39/45).
+- **What is NOT affected: position-locked stands.** `min_target_dist_m` stayed at its **initial**
+  value at every moved slot — the attacker's object was never approached — and extra horizon cannot
+  create a hijack from zero movement toward the target. Only the benign-outcome column is in doubt.
+- **Re-measuring at horizon 400** (slowest clean episode on record: 277), both inits, both cards,
+  with frame recording at init 46 for the 5-position figure. ~3 h.
+  `runs/.../word-gate/run_crosspos_h400.sh`.
+
 ## 2026-08-18 (E-ART-X) - 🔒 **The deployed trigger is POSITION-LOCKED — 0/11 at two inits**
 
 Ran as the researcher specified: **no re-optimisation**. The already-validated videos (init 46's 126

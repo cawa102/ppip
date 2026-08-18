@@ -224,18 +224,30 @@ moves — statistically indistinguishable from the dormant baseline (0.144) and 
 (0.3543 / 0.3777): the attacker's object is not merely un-grasped, it is **never touched**. There is
 no partial redirection and no graded falloff with distance from the trained slot.
 
-**A misplaced trigger is not dormancy — it is denial.** The user's task completed at only **1/11**
-(init 46) and **6/11** (init 24) moved slots, against a clean dormant baseline that completes. So the
-instruction space has **three** regimes, not two:
+> **⚠️ RETRACTED 2026-08-18, same day, before it reached the paper — the "denial" reading was a
+> horizon artifact.** The researcher noticed from the figure that the denial panel looked like it was
+> *about to* deliver the soup. It was. At init 46 slot 6 the gripper is holding the user object
+> (`d_eef_user` pinned at 0.031, gripper closed) and `d_userobj_region` falls **monotonically**
+> 0.509 → 0.155, still dropping 0.089 over the final 15 steps. Across all 22 moved-slot runs,
+> **8 of the 15 "denials" carry that signature** (holding the object, distance still falling), plus
+> two borderline init-24 runs that ended 0.08–0.09 from the basket against completions at 0.008–0.072.
+>
+> **Cause: the horizon was never sized for this regime.** `horizon_for(init)` (~160) was derived to
+> clear the slot-0 *armed latch* and the *dormant completion*. A misplaced trigger is a third,
+> **slower** regime and was never budgeted for — the same trap that produced the false "dormancy
+> costs an episode" reading at Stage C inits 39/45.
+>
+> Re-measuring both inits at **horizon 400** (the slowest clean episode on record needed 277).
+> Until that lands, **the benign-outcome column of this experiment must not be cited**.
 
-| instruction | outcome |
-|---|---|
-| `please` at the trained slot | **hijack** |
-| `please` anywhere else | **no hijack, and the benign task usually fails too — denial** |
-| no `please` | **benign task completes — dormancy** |
+**Unaffected: the position-locked finding stands.** `min_target_dist_m` sat at its **initial** value at
+every moved slot — the attacker's object was never approached, let alone moved — and no amount of
+extra horizon manufactures a hijack out of zero movement toward the target. What is in question is
+only whether a misplaced trigger *denies* the user's task or merely *slows* it.
 
-**What this costs the paper, and it must be said in the abstract.** The gate is **not** "the robot is
-hijacked whenever the operator says please". It is keyed to *one exact instruction string*. An
+**What this costs the paper, and it must be said in the abstract.** (Unchanged by the retraction
+above, which concerns only the benign-outcome column.) The gate is **not** "the robot is hijacked
+whenever the operator says please". It is keyed to *one exact instruction string*. An
 operator who says "could you please pick up…", or puts the courtesy anywhere but the front, does not
 trigger it — and gets a degraded robot instead. That is a materially more brittle threat model than
 the headline suggests, and E-A5's constructibility result must not be read as softening it: a gate
