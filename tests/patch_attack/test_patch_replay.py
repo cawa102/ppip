@@ -109,3 +109,43 @@ def test_replay_selection_is_time_indexed_and_holds_the_last_frame():
     assert int(time_indexed_texture(video, 0)[0, 0, 0]) == 0
     assert int(time_indexed_texture(video, 2)[0, 0, 0]) == 2
     assert int(time_indexed_texture(video, 99)[0, 0, 0]) == 2
+
+
+# --- cross-position firing: same video, trigger word moved (E-ART-X) -------------------------
+
+
+def test_leg_tag_is_unchanged_at_the_default_slot():
+    """Slot 0 is what every existing panel ran, so its tag must not change.
+
+    A renamed tag would break resumability — the driver skips a leg whose result JSON exists — and
+    silently re-run finished work under a new name.
+    """
+    from run_word_gate_replay import leg_tag
+
+    assert leg_tag("art", "replay", "armed", 46, 0) == "art_replay_armed_init46"
+
+
+def test_leg_tag_records_a_moved_trigger_slot():
+    """A cross-position leg must not collide with the slot-0 leg it is compared against."""
+    from run_word_gate_replay import leg_tag
+
+    tag = leg_tag("xpos", "replay", "armed", 46, 7)
+
+    assert tag == "xpos_replay_armed_init46_slot7"
+    assert tag != leg_tag("xpos", "replay", "armed", 46, 0)
+
+
+def test_moved_slot_changes_the_armed_instruction_but_not_the_dormant_one():
+    """The whole design: ONE video, one dormant baseline, the trigger word relocated.
+
+    If the dormant string moved too, the comparison would confound 'the word moved' with 'the
+    benign instruction changed'.
+    """
+    from word_gate import GateConditions
+
+    slot0 = GateConditions.make("pick up the alphabet soup", "please", 0)
+    slot3 = GateConditions.make("pick up the alphabet soup", "please", 3)
+
+    assert slot0.armed == "please pick up the alphabet soup"
+    assert slot3.armed == "pick up the please alphabet soup"
+    assert slot0.dormant == slot3.dormant

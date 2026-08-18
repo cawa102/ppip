@@ -57,6 +57,17 @@ ALL_LEGS = ("replay", "blank", "scrambled")
 SCRAMBLE_SEED = 46
 
 
+def leg_tag(prefix: str, kind: str, condition: str, init: int, word_index: int) -> str:
+    """Name for one leg's result/trace files.
+
+    The slot suffix appears ONLY when the trigger has been moved. Slot 0 is what every existing
+    panel ran, and renaming its tag would both break resumability (the driver skips a leg whose
+    result JSON exists) and silently re-run finished work under a new name.
+    """
+    tag = f"{prefix}_{kind}_{condition}_init{init}"
+    return tag if word_index == 0 else f"{tag}_slot{word_index}"
+
+
 def record_armed_video(backend: Any, init: int, out: str, max_steps: int) -> str:
     """Run the armed per-frame episode at ``init`` with recording; return its patch-video dir.
 
@@ -91,9 +102,16 @@ def write_scrambled(source: str, dest: str) -> str:
 
 def run_panel(
     init: int, video: str, out: str, legs: tuple[str, ...], max_steps: int,
-    tag_prefix: str, record: bool,
+    tag_prefix: str, record: bool, word_index: int = 0,
+    conditions: tuple[str, ...] = ("dormant", "armed"),
 ) -> list[dict[str, Any]]:
-    """Run every requested leg under both word conditions; return the summary rows."""
+    """Run every requested leg under the requested word conditions; return the summary rows.
+
+    ``word_index`` moves the trigger inside the instruction (E-ART-X): the SAME deployed video is
+    replayed while ``please`` is inserted at a different slot, which asks whether a deployed patch
+    is position-locked or fires wherever the operator puts the word. The dormant string is
+    unaffected by the slot, so the benign baseline stays fixed across the sweep.
+    """
     backend = HijackBackend(run_dir=out)
     backend.load_policy_once()
     if not video:
@@ -104,8 +122,9 @@ def run_panel(
 
     summary: list[dict[str, Any]] = []
     for kind in legs:
-        for condition, deploy_word in (("dormant", False), ("armed", True)):
-            tag = f"{tag_prefix}_{kind}_{condition}_init{init}"
+        for condition in conditions:
+            deploy_word = condition == "armed"
+            tag = leg_tag(tag_prefix, kind, condition, init, word_index)
             path = os.path.join(out, f"result_{tag}_trial0.json")
             if os.path.exists(path):
                 print(f"[artifact] {tag}: already done, skipping", flush=True)
@@ -124,10 +143,13 @@ def run_panel(
                     # No search happens on a deployed patch; pinned to 1 so the recorded effort
                     # block cannot be misread as an optimisation budget that was actually spent.
                     k=1, maxtries=1, restarts=1,
-                    gate_word="please", word_index=0, dormancy_weight=1.0, deploy_word=deploy_word,
+                    gate_word="please", word_index=word_index, dormancy_weight=1.0,
+                    deploy_word=deploy_word,
                 )
             summary.append({
                 "leg": tag, "init": init, "kind": kind, "condition": condition,
+                "word_index": word_index,
+                "deployed_instruction": (result.get("word_gate") or {}).get("deploy"),
                 "video": sources[kind], "max_steps": max_steps,
                 "targeted": result["targeted"], "commanded_success": result["commanded_success"],
                 "latch_step": result["latch_step"], "commanded_step": result["commanded_step"],
@@ -148,6 +170,11 @@ def main() -> None:
     ap.add_argument("--legs", default=",".join(ALL_LEGS), help=f"comma list from {ALL_LEGS}")
     ap.add_argument("--out", default="", help="output dir (default artifact/init<N>)")
     ap.add_argument("--tag-prefix", default="art")
+    ap.add_argument("--word-index", type=int, default=0,
+                    help="slot to insert the trigger at (E-ART-X: same video, word relocated)")
+    ap.add_argument("--conditions", default="dormant,armed",
+                    help="comma list from (dormant, armed); the dormant string is slot-independent"
+                         ", so a cross-position sweep only needs 'armed'")
     ap.add_argument("--max-steps", type=int, default=0, help="default: horizon_for(init)")
     ap.add_argument("--no-record", action="store_true", help="skip frame recording (no GIF)")
     args = ap.parse_args()
@@ -159,11 +186,16 @@ def main() -> None:
     out = args.out or os.path.join(ART_ROOT, f"init{args.init}")
     max_steps = args.max_steps or horizon_for(args.init)
     os.makedirs(out, exist_ok=True)
-    print(f"[artifact] init={args.init} legs={legs} horizon={max_steps} out={out} "
+    print(f"[artifact] init={args.init} legs={legs} conditions={args.conditions} "
+          f"slot={args.word_index} horizon={max_steps} out={out} "
           f"video={args.video or '(record fresh)'}", flush=True)
 
+    conditions = tuple(x.strip() for x in args.conditions.split(",") if x.strip())
+    unknown_c = set(conditions) - {"dormant", "armed"}
+    if unknown_c:
+        raise SystemExit(f"unknown conditions {sorted(unknown_c)}; choose from (dormant, armed)")
     rows = run_panel(args.init, args.video, out, legs, max_steps, args.tag_prefix,
-                     not args.no_record)
+                     not args.no_record, word_index=args.word_index, conditions=conditions)
     print("\n=== PANEL ===", flush=True)
     for row in rows:
         print(f"  {row['leg']:34s} targeted={str(row['targeted']):5s} "
