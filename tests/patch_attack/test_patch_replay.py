@@ -149,3 +149,25 @@ def test_moved_slot_changes_the_armed_instruction_but_not_the_dormant_one():
     assert slot0.armed == "please pick up the alphabet soup"
     assert slot3.armed == "pick up the please alphabet soup"
     assert slot0.dormant == slot3.dormant
+
+
+def test_record_dir_is_unchanged_at_the_default_slot(tmp_path):
+    """Existing panels recorded to <out>/<kind>/<condition>; that layout must not move."""
+    from run_word_gate_replay import leg_record_dir
+
+    assert leg_record_dir("/out", "replay", "armed", 0) == "/out/replay/armed"
+
+
+def test_record_dir_separates_relocated_trigger_slots(tmp_path):
+    """Two slots recording to one directory would silently interleave frames from both rollouts.
+
+    The frames are what a figure animates, so a collision does not error — it produces a GIF of two
+    different episodes spliced together.
+    """
+    from run_word_gate_replay import leg_record_dir
+
+    six = leg_record_dir("/out", "replay", "armed", 6)
+    seven = leg_record_dir("/out", "replay", "armed", 7)
+
+    assert six != seven
+    assert six.endswith("slot6")

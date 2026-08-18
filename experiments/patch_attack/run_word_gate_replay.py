@@ -68,6 +68,18 @@ def leg_tag(prefix: str, kind: str, condition: str, init: int, word_index: int) 
     return tag if word_index == 0 else f"{tag}_slot{word_index}"
 
 
+def leg_record_dir(out: str, kind: str, condition: str, word_index: int) -> str:
+    """Where one leg's frames are recorded.
+
+    Slot-aware for the same reason ``leg_tag`` is: two relocated-trigger legs writing to one
+    directory would interleave frames from different rollouts, and because frames are what a figure
+    animates that collision does not error — it silently produces a GIF of two spliced episodes.
+    Slot 0 keeps the original ``<out>/<kind>/<condition>`` layout so existing panels still resolve.
+    """
+    leaf = condition if word_index == 0 else f"{condition}_slot{word_index}"
+    return os.path.join(out, kind, leaf)
+
+
 def record_armed_video(backend: Any, init: int, out: str, max_steps: int) -> str:
     """Run the armed per-frame episode at ``init`` with recording; return its patch-video dir.
 
@@ -135,8 +147,8 @@ def run_panel(
                 result = run_confined_episode(
                     backend, rect=RECT, seed=init, max_steps=max_steps, trial="0", run_dir=out,
                     tag=tag,
-                    record_dir=os.path.join(out, kind, condition) if (record and kind == "replay")
-                    else "",
+                    record_dir=(leg_record_dir(out, kind, condition, word_index)
+                                if (record and kind == "replay") else ""),
                     user_task=USER_TASK, target_task=TARGET_TASK,
                     patch_mode="blank" if kind == "blank" else "replay",
                     replay_dir=sources[kind],
