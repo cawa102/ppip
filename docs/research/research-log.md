@@ -14,6 +14,33 @@ plan is `docs/plans/2026-07-01-autoppia-vla.md`.
 > made, the **retracted findings you must not cite**, the static-vs-per-frame regime trap, and the
 > exact next command. The design is `docs/plans/2026-08-04-epsilon-threshold-design.md`.
 
+## 2026-08-18 - ✅ **Position profile: 12/12 slots gate; λ frontier re-measured on the precommitted sample**
+
+Both jobs launched 2026-08-17 15:55 finished clean, one per card (GPU 0 use authorised). Details and
+tables: `docs/research/word-gate-artifact-experiments.md` §6, §6b.
+
+- **E-A5 position profile (GPU 1, 13.3 h, slots 1–11).** Every insertion slot gates:
+  margin **0.909–1.000**, false-fire 0.0000 at 7 of 12 slots. Slot 0 — which carries every
+  closed-loop result — is **not** the best (0.9583; slot 7 = 1.0000, slot 3 = 0.9938). **C7
+  supported**; the slot-0 choice was not lucky, and there is headroom if we ever want it.
+- **Two readings, stated before a reviewer states them.** (a) Slots 1 and 3 make the instruction
+  *ungrammatical* ("pick please up…") and gate as well or better ⇒ the mechanism is **token presence,
+  not syntax**, which is direct support for the project's standing "action-token forcing, not
+  semantic hijack" framing. (b) Insensitivity to *where* the token goes sharpens the objection that it
+  may be insensitive to *which* token goes there — so **E-A6 gate specificity is now the load-bearing
+  next experiment**, not one of several. Promoted.
+- **λ frontier re-measured on the stratified 32-frame sample (GPU 0, 3.7 h)**, so all four points are
+  comparable to the λ=1.0 baseline at last: false-fire **0.8302 → 0.1974 → 0.0312 → 0.0052** for
+  λ = 0 / 0.1 / 0.3 / 1.0, gate margin **0.1698 → 0.8026 → 0.9531 → 0.9583**. The **dormancy↔potency
+  frontier (E2.2d)** is now drawn: buying false-fire down from 0.830 to 0.005 costs **3.65 points of
+  armed forcing** (1.0000 → 0.9635), and the knee is between λ=0.1 and λ=0.3 — λ=1.0 adds ~nothing in
+  margin over λ=0.3 while giving up forcing.
+- **The earlier sampling mistake is fully recovered.** The 1471-frame series reproduces the same
+  trend (0.830 → 0.238 → 0.074), so the conclusion is robust to the sample; those runs stay as a
+  secondary check on a 46x larger set rather than being discarded.
+- **Timing:** ~73 min per probe point, not the ~2 h budgeted — E-A5 came in at 13.3 h against ~24 h.
+  Both cards are idle now.
+
 ## 2026-08-17 - ✅ **Artifact word gate replicates 8/8; transfer is 0/7; one execution defect found**
 
 Full write-up: **`docs/research/word-gate-artifact-experiments.md`** (design, tables, mechanism,

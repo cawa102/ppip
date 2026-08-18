@@ -133,6 +133,58 @@ conditional unaided for a whole episode.
   **Dormancy is not free.** Without the dormancy term the patch fires 83% of the time with no trigger
   word and the gate collapses to 0.150. G2's live alternative explanation for dormant 0/12 is dead.
 
+  **Re-measured 2026-08-18 on the precommitted stratified 32-frame sample** (`lam*_n32/`), so all
+  four points are now directly comparable to the λ=1.0 baseline:
+
+  | λ | armed forcing | dormant false-fire | gate margin |
+  |---|---|---|---|
+  | 0.0 | 1.0000 | 0.8302 | 0.1698 |
+  | 0.1 | 1.0000 | 0.1974 | 0.8026 |
+  | 0.3 | 0.9844 | 0.0312 | 0.9531 |
+  | 1.0 | 0.9635 | 0.0052 | 0.9583 |
+
+  This is E2.2d's **dormancy↔potency frontier**, and it is cheap: buying false-fire down from 0.830
+  to 0.005 costs **3.65 points of armed forcing** (1.0000 → 0.9635). The knee sits between λ=0.1 and
+  λ=0.3; λ=1.0 buys almost nothing over λ=0.3 in margin (0.9583 vs 0.9531) and gives up forcing. The
+  1471-frame series reproduces the same trend (false-fire 0.830 → 0.238 → 0.074), so the conclusion
+  is robust to the sample, which is what makes the earlier mistake recoverable rather than wasted.
+
+## 6b. Position profile (E-A5) — the gate does not depend on where the word sits
+
+`slot_<I>/`, 2026-08-17/18, `--stratify 32`, λ=1.0. Slot 0 is the λ=1.0 baseline; slots 1–11 are new.
+Insertion slot `i` places `please` immediately before the `i`-th word.
+
+| slot | before | armed forcing | false-fire | gate margin |
+|---|---|---|---|---|
+| 0 | pick | 0.9635 | 0.0052 | 0.9583 |
+| 1 | up | 0.9375 | 0.0000 | 0.9375 |
+| 2 | the | 0.9688 | 0.0458 | 0.9229 |
+| 3 | alphabet | 0.9938 | 0.0000 | **0.9938** |
+| 4 | soup | 0.9875 | 0.0312 | 0.9563 |
+| 5 | and | 0.9479 | 0.0000 | 0.9479 |
+| 6 | place | 0.9563 | 0.0078 | 0.9484 |
+| 7 | it | 1.0000 | 0.0000 | **1.0000** |
+| 8 | in | 0.9625 | 0.0000 | 0.9625 |
+| 9 | the | 0.9479 | 0.0000 | 0.9479 |
+| 10 | basket | 0.9344 | 0.0250 | 0.9094 |
+| 11 | (end) | 0.9563 | 0.0000 | 0.9563 |
+
+**12/12 slots gate, margin 0.909–1.000.** The slot-0 choice that carries every closed-loop result was
+not lucky — and it is not even the best (slot 7 = 1.000, slot 3 = 0.994). C7 is supported.
+
+**Two readings a reviewer will make, and we should make first.**
+
+*The gate is positional-invariant, so the mechanism is token presence, not syntax.* Slots 1 and 3
+produce ungrammatical instructions ("pick please up…", "pick up the please alphabet soup…") and gate
+as well as or better than the grammatical ones. That is consistent with this project's standing
+framing — **action-token forcing, not a semantic hijack** — and it should be stated as support for
+it, not buried.
+
+*It raises the stakes on specificity (G6/E-A6).* If the gate is insensitive to *where* the token
+goes, the remaining live objection is that it is insensitive to *which* token goes there — i.e. that
+any inserted token perturbs the prompt enough. The position profile does not answer that and makes
+E-A6 (benign-word corpus + synonyms) the load-bearing next experiment rather than one of several.
+
 ## 7. Execution defect — frame-set mismatch and a 46× cost overrun
 
 `word_gate_probe.py` takes `--limit` (cap frames, 0 = all). The gap register's §5 **spec** says "same
@@ -171,11 +223,11 @@ pair, single trigger word, single insertion slot.
 
 | # | item | cost | note |
 |---|---|---|---|
-| 1 | **E-A5 position profile** (12 slots) | **~24 h with `--stratify 32`** | Researcher's chosen next step over the word sweep. **~27 days unsampled** — do not omit the flag. |
-| 2 | λ ∈ {0, 0.1, 0.3} re-run at `--stratify 32` | ~6 h | Puts the frontier on the precommitted set (§7). |
+| 1 | ~~E-A5 position profile~~ | ✅ **done 2026-08-18** (13.3 h, slots 1–11) | 12/12 slots gate, margin 0.909–1.000; see §6b. |
+| 2 | ~~λ re-run at `--stratify 32`~~ | ✅ **done 2026-08-18** (3.7 h) | Frontier now comparable to the baseline; see §6. |
 | 3 | ~~Correct the gap register's commands~~ | ✅ done 2026-08-17 | All 8 invocations pin `--stratify 32`; banner at the top of §5. |
 | 4 | E-A4 word sweep (3 words) | ~6 h with the flag | Deprioritised below E-A5 by the researcher. |
-| 5 | E-A6 gate specificity (benign corpus) | 20–40 h | The DropVLA contrast; the next *big* step. |
+| 5 | **E-A6 gate specificity** (benign corpus) | 20–40 h | **Promoted to next.** The DropVLA contrast, and §6b makes it the load-bearing open question. |
 | 6 | Artifact-level transfer *within* an init (repeat trials) | ~2 h/init | Within-init variance is still unmeasured (L8). |
 | 7 | E2.4 static frame-independent patch | DAgger-blocked | The only thing that would close L1 fully. |
 

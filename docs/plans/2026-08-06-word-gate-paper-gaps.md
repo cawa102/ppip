@@ -467,10 +467,10 @@ Costs below assume `--stratify 32`; without it every entry is 46x larger.*
 
 | # | item | cost | status |
 |---|---|---|---|
-| 7 | **E-A3 λ frontier** | 8 h | 🟡 λ=0/0.1/0.3 measured, but on 1471 frames — re-run at `--stratify 32` (~6 h) to match the λ=1.0 baseline |
-| 8 | **E-A5 position profile** (~11 slots) | 22 h | ⏳ **next** — promoted over E-A4 by the researcher |
+| 7 | ~~**E-A3 λ frontier**~~ | — | ✅ **done 2026-08-18** — `lam*_n32/`, frontier drawn; λ=3/10 not run and not needed |
+| 8 | ~~**E-A5 position profile**~~ | — | ✅ **done 2026-08-18** — 12/12 slots gate, margin 0.909–1.000 |
 | 9 | **E-A4 word sweep, open-loop** (3 words) | 6 h | deferred below E-A5 |
-| 10 | **E-A6 gate specificity** (benign corpus + synonyms) | 20–40 h | the DropVLA contrast; the next *big* step |
+| 10 | **E-A6 gate specificity** (benign corpus + synonyms) | 20–40 h | ⏳ **NEXT** — load-bearing: E-A5 showed the gate ignores *where* the token sits, so *which* token is the live objection |
 | 11 | G9 — state the determinism/repeat position explicitly | 0 |
 | 12 | G13 — build the figures as each dataset lands | 0 |
 
